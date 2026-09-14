@@ -10,9 +10,9 @@ Every source is isolated: one source's failure produces an error row, never a de
 terminal status is written in a finally block, because a Run left at status="running" is invisible
 to the dashboard's poll loop and never resolves.
 """
-from datetime import datetime
 from typing import Optional
 
+from pipeline.clock import utcnow
 from pipeline.config_store import load_config
 from pipeline.db import Run, SourceHealth, get_session, has_running_run, item_counts_for_run
 from pipeline.health import HealthResult, check_all_configured
@@ -75,7 +75,7 @@ def execute_run(trigger: str = "manual") -> Run:
             for r in results:
                 session.add(SourceHealth(run_id=run_id, source=r.source, status=r.status, detail=r.detail))
 
-            run.finished_at = datetime.utcnow()
+            run.finished_at = utcnow()
             run.status = status
             run.summary = summary
             run.error = error

@@ -6,6 +6,9 @@ services:
     container_name: signalslate-api
     restart: unless-stopped
     env_file: .env
+    environment:
+      # Also sets the container clock, so logs and the scheduler agree.
+      TZ: "${TZ:-UTC}"
     volumes:
       - ./data:/app/data
       - ./tokens:/app/tokens

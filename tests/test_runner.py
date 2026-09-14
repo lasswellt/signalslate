@@ -15,6 +15,7 @@ from sqlmodel import SQLModel, create_engine, select
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from pipeline import db, runner  # noqa: E402
+from pipeline.clock import utcnow  # noqa: E402
 from pipeline.health import HealthResult  # noqa: E402
 
 
@@ -147,7 +148,7 @@ def test_item_counts_group_by_source(temp_db):
                         source=source,
                         item_type="message",
                         external_id=f"{source}-{i}",
-                        occurred_at=datetime.utcnow(),
+                        occurred_at=utcnow(),
                         payload="{}",
                     )
                 )
@@ -195,3 +196,43 @@ def test_cursor_survives_a_failed_run(temp_db, no_config, monkeypatch):
     runner.execute_run()
 
     assert db.get_cursor("zoom").last_success_at == watermark
+
+
+# --- schedule timezone ---------------------------------------------------------------
+
+
+def test_schedule_timezone_reads_env(monkeypatch):
+    from api import scheduler
+
+    monkeypatch.setenv("TZ", "America/New_York")
+    assert str(scheduler.schedule_timezone()) == "America/New_York"
+
+
+def test_schedule_timezone_none_when_unset(monkeypatch, tmp_path):
+    from api import scheduler
+
+    monkeypatch.delenv("TZ", raising=False)
+    monkeypatch.setattr(scheduler, "ROOT", tmp_path)  # .env absent
+    assert scheduler.schedule_timezone() is None
+
+
+def test_bad_timezone_falls_back_instead_of_crashing(monkeypatch):
+    from api import scheduler
+
+    monkeypatch.setenv("TZ", "Not/AZone")
+    assert scheduler.schedule_timezone() is None
+
+
+def test_cron_fires_in_configured_timezone(monkeypatch):
+    """0 6 * * * in New York is 10:00 or 11:00 UTC, never 06:00 UTC."""
+    from datetime import datetime, timezone as dt_timezone
+
+    from apscheduler.triggers.cron import CronTrigger
+
+    from api import scheduler
+
+    monkeypatch.setenv("TZ", "America/New_York")
+    trigger = CronTrigger.from_crontab("0 6 * * *", timezone=scheduler.schedule_timezone())
+    after = datetime(2026, 9, 13, 0, 0, tzinfo=dt_timezone.utc)
+    fire = trigger.get_next_fire_time(None, after)
+    assert fire.astimezone(dt_timezone.utc).hour == 10  # EDT, UTC-4

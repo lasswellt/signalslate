@@ -9,6 +9,8 @@ from typing import Optional
 from sqlalchemy import event
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
+from pipeline.clock import utcnow
+
 ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = ROOT / "data" / "digest.db"
 
@@ -32,7 +34,7 @@ class Run(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     trigger: str  # "manual" | "scheduled"
     status: str = "running"  # running | success | partial | failed
-    started_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: datetime = Field(default_factory=utcnow)
     finished_at: Optional[datetime] = None
     summary: Optional[str] = None  # short human-readable outcome
     error: Optional[str] = None
@@ -45,7 +47,7 @@ class SourceHealth(SQLModel, table=True):
     source: str  # "m365_<alias>" | "zoom" | "slack_<label>"
     status: str  # "ok" | "error"
     detail: Optional[str] = None
-    checked_at: datetime = Field(default_factory=datetime.utcnow)
+    checked_at: datetime = Field(default_factory=utcnow)
 
 
 class CollectedItem(SQLModel, table=True):
