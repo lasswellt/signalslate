@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
 
-from pipeline.db import get_run, list_runs, source_health_for_run
+from pipeline.db import get_run, has_running_run, list_runs, source_health_for_run
 from pipeline.runner import execute_run
 
 router = APIRouter(tags=["runs"])
@@ -43,6 +43,10 @@ def get_run_detail(run_id: int):
 
 @router.post("/runs/trigger")
 def trigger_run(background_tasks: BackgroundTasks):
+    # Checked here as well as inside execute_run: an exception raised in a background task is
+    # swallowed by Starlette, so the user would get {"accepted": true} and no run.
+    if has_running_run():
+        raise HTTPException(409, "A run is already in progress")
     # Runs synchronously in a background task so the request returns immediately;
     # the frontend polls GET /api/status for progress.
     background_tasks.add_task(execute_run, trigger="manual")
