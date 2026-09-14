@@ -153,6 +153,27 @@ def set_cursor(source: str, last_success_at: datetime, cursor: Optional[str] = N
         session.commit()
 
 
+def reap_orphaned_runs() -> int:
+    """
+    Mark any run still flagged "running" at startup as failed. Returns how many.
+
+    execute_run's finally block covers exceptions inside the process, but not a container restart,
+    an OOM kill, or a compose down mid-collection. Without this, one such interruption strands a
+    row at "running" forever — and since that state hard-blocks every future run (409 from the API,
+    a swallowed tick in the scheduler), the digest would stop silently and need hand-edited SQLite
+    to recover.
+    """
+    with get_session() as session:
+        stranded = list(session.exec(select(Run).where(Run.status == "running")))
+        for run in stranded:
+            run.status = "failed"
+            run.error = "Interrupted — the process stopped before this run finished."
+            run.finished_at = run.finished_at or utcnow()
+            session.add(run)
+        session.commit()
+    return len(stranded)
+
+
 def has_running_run() -> bool:
     """True if a run is already in flight — the guard against the scheduler and a manual trigger overlapping."""
     with get_session() as session:

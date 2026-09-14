@@ -150,12 +150,13 @@ def execute_run(trigger: str = "manual") -> Run:
                 continue
 
             collected[source] = _persist(run_id, result)
-            if result.status == "error":
-                failures.append(f"{source}: {result.detail}")
-            else:
-                # Only advance the watermark on a clean-enough collection, so a partial failure
-                # re-reads its window next time instead of stepping over the gap.
+            if result.status == "ok":
+                # Only a clean collection advances the watermark. A partial one must re-read its
+                # window next time — otherwise a catch-up run that half-failed moves the cursor to
+                # now and the rest of the backfill gap is lost for good.
                 set_cursor(source, until)
+            else:
+                failures.append(f"{source}: {result.detail}")
     except Exception as exc:  # noqa: BLE001 — a dead run is worse than a broad except
         fatal = f"{type(exc).__name__}: {exc}"
     finally:

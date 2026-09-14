@@ -98,6 +98,11 @@ def get_pages(token: str, url: str, params: Optional[dict] = None) -> Iterator[d
         next_url = body.get("@odata.nextLink")
         first = False
 
+    if next_url is not None:
+        # Silently returning a truncated collection would under-report exactly when it matters
+        # most: a backfill window after an outage.
+        raise GraphError(f"more than {MAX_PAGES} pages — window too large, results truncated")
+
 
 def _collect(token: str, url: str, params: dict) -> list[dict]:
     out: list[dict] = []
@@ -188,6 +193,13 @@ def collect_chat(token: str, since: datetime, until: datetime) -> list[Item]:
 
     items = []
     for chat in chats:
+        # Chats come back newest-activity-first, so the first one whose last message predates the
+        # window means every chat after it does too. Without this, a busy account costs one request
+        # per chat ever opened — hundreds of calls a day, and a 429 kills the whole collector.
+        last_activity = parse_iso((chat.get("lastMessagePreview") or {}).get("createdDateTime", ""))
+        if last_activity is not None and last_activity < since:
+            break
+
         rows = _collect(
             token,
             f"{GRAPH}/chats/{chat['id']}/messages",

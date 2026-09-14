@@ -273,3 +273,73 @@ def test_scheduler_timezone_is_explicit_not_guessed():
 
     assert scheduler._scheduler.timezone is not None
     assert not [w for w in caught if "Timezone offset does not match" in str(w.message)]
+
+
+# --- orphan reaping + partial semantics (from the code review) ------------------------
+
+
+def test_reap_marks_stranded_runs_failed(temp_db):
+    """A container restart mid-run would otherwise block every future run forever."""
+    with db.get_session() as session:
+        session.add(db.Run(trigger="scheduled", status="running"))
+        session.add(db.Run(trigger="manual", status="success"))
+        session.commit()
+
+    assert db.reap_orphaned_runs() == 1
+    assert db.has_running_run() is False
+
+    with db.get_session() as session:
+        reaped = session.exec(select(db.Run).where(db.Run.trigger == "scheduled")).first()
+    assert reaped.status == "failed"
+    assert "Interrupted" in reaped.error
+    assert reaped.finished_at is not None
+
+
+def test_reap_is_a_noop_when_nothing_stranded(temp_db):
+    assert db.reap_orphaned_runs() == 0
+
+
+def test_reap_unblocks_a_deadlocked_trigger(temp_db, no_config, monkeypatch):
+    with db.get_session() as session:
+        session.add(db.Run(trigger="manual", status="running"))
+        session.commit()
+
+    with pytest.raises(runner.RunAlreadyInProgress):
+        runner.execute_run()
+
+    db.reap_orphaned_runs()
+    stub_checks(monkeypatch, [HealthResult("zoom", "ok", "")])
+    assert runner.execute_run().status == "success"
+
+
+def test_partial_collection_does_not_advance_the_cursor(temp_db, no_config, monkeypatch):
+    """A half-failed catch-up run must re-read its window, not skip the rest of the gap."""
+    from pipeline.collectors import CollectionResult
+
+    stub_checks(monkeypatch, [HealthResult("zoom", "ok", "")])
+    stub_collect(monkeypatch, {"zoom": CollectionResult("zoom", "partial", "3 of 8 channels failed")})
+
+    run = runner.execute_run()
+    assert db.get_cursor("zoom") is None  # never advanced
+    assert run.status == "partial"
+
+
+def test_partial_collection_is_reported_not_called_healthy(temp_db, no_config, monkeypatch):
+    from pipeline.collectors import CollectionResult
+
+    stub_checks(monkeypatch, [HealthResult("zoom", "ok", "")])
+    stub_collect(monkeypatch, {"zoom": CollectionResult("zoom", "partial", "chat collector 500'd")})
+
+    run = runner.execute_run()
+    assert "healthy" not in (run.summary or "")
+    assert "chat collector" in (run.error or "")
+
+
+def test_clean_collection_does_advance_the_cursor(temp_db, no_config, monkeypatch):
+    from pipeline.collectors import CollectionResult
+
+    stub_checks(monkeypatch, [HealthResult("zoom", "ok", "")])
+    stub_collect(monkeypatch, {"zoom": CollectionResult("zoom", "ok", "all good")})
+
+    runner.execute_run()
+    assert db.get_cursor("zoom").last_success_at is not None

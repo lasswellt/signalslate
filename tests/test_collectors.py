@@ -8,7 +8,7 @@ The traps these pin, all from docs/_research/2026-09-13_phase2-collectors.md:
   - Zoom UUIDs containing "/" must be double-encoded.
 """
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -157,11 +157,50 @@ def test_pagination_follows_nextlink_without_resending_params(monkeypatch):
     assert calls[1]["params"] == {}  # second call sends none
 
 
-def test_pagination_stops_at_max_pages(monkeypatch):
+def test_pagination_raises_rather_than_truncating_silently(monkeypatch):
+    """Under-reporting without a signal is worst during a post-outage backfill."""
     route(monkeypatch, graph, lambda url, params: FakeResponse(
         {"value": [{"id": "x"}], "@odata.nextLink": "https://graph/next"}
     ))
-    assert len(list(graph.get_pages("tok", "https://graph/start"))) == graph.MAX_PAGES
+    with pytest.raises(graph.GraphError, match="truncated"):
+        list(graph.get_pages("tok", "https://graph/start"))
+
+
+def test_pagination_does_not_raise_when_it_finishes(monkeypatch):
+    route(monkeypatch, graph, lambda url, params: FakeResponse({"value": [{"id": "x"}]}))
+    assert len(list(graph.get_pages("tok", "https://graph/start"))) == 1
+
+
+def test_chat_enumeration_stops_at_first_stale_chat(monkeypatch):
+    """Newest-first ordering means one stale chat implies every later one is too."""
+    chats = [
+        {"id": "recent", "lastMessagePreview": {"createdDateTime": "2026-09-12T12:00:00Z"}},
+        {"id": "stale", "lastMessagePreview": {"createdDateTime": "2020-01-01T00:00:00Z"}},
+        {"id": "staler", "lastMessagePreview": {"createdDateTime": "2019-01-01T00:00:00Z"}},
+    ]
+
+    def handler(url, params):
+        if url.endswith("/me/chats"):
+            return FakeResponse({"value": chats})
+        return FakeResponse({"value": []})
+
+    calls = route(monkeypatch, graph, handler)
+    graph.collect_chat("tok", SINCE, UNTIL)
+
+    queried = [c["url"] for c in calls if "/messages" in c["url"]]
+    assert len(queried) == 1 and "recent" in queried[0]
+
+
+def test_chat_enumeration_continues_without_preview(monkeypatch):
+    """A chat with no lastMessagePreview must not end enumeration early."""
+    def handler(url, params):
+        if url.endswith("/me/chats"):
+            return FakeResponse({"value": [{"id": "no-preview"}, {"id": "second"}]})
+        return FakeResponse({"value": []})
+
+    calls = route(monkeypatch, graph, handler)
+    graph.collect_chat("tok", SINCE, UNTIL)
+    assert len([c for c in calls if "/messages" in c["url"]]) == 2
 
 
 def test_graph_429_raises_graph_error(monkeypatch):
@@ -319,7 +358,14 @@ def test_slack_missing_token(monkeypatch):
     assert slack.collect_slack("work", None, SINCE, UNTIL).status == "error"
 
 
-def test_slack_oldest_is_epoch_seconds(monkeypatch):
+def test_slack_oldest_is_utc_not_local(monkeypatch):
+    """
+    since is naive UTC; .timestamp() would read it as local time.
+
+    Under any non-UTC container TZ that shifts the window start by the UTC offset and silently
+    drops the first hours of every digest. The expected value is pinned to an explicit UTC epoch so
+    this test cannot drift with the machine running it.
+    """
     def handler(url, params):
         if "users.conversations" in url:
             return FakeResponse({"ok": True, "channels": [{"id": "C1"}]})
@@ -327,8 +373,47 @@ def test_slack_oldest_is_epoch_seconds(monkeypatch):
 
     calls = route(monkeypatch, slack, handler)
     slack.collect_slack("work", "xoxp-1", SINCE, UNTIL)
+
     history = [c for c in calls if "conversations.history" in c["url"]][0]
-    assert float(history["params"]["oldest"]) == pytest.approx(SINCE.timestamp())
+    expected = SINCE.replace(tzinfo=timezone.utc).timestamp()
+    assert float(history["params"]["oldest"]) == pytest.approx(expected)
+
+
+def test_slack_skips_dm_types_when_configured(monkeypatch, tmp_path):
+    """SLACK_SKIP_DMS must reach the types list, or users.conversations fails with missing_scope."""
+    (tmp_path / ".env").write_text("SLACK_SKIP_DMS=1")
+    monkeypatch.setattr(slack, "ROOT", tmp_path)
+
+    calls = route(monkeypatch, slack, lambda url, params: FakeResponse({"ok": True, "channels": []}))
+    slack.collect_slack("work", "xoxp-1", SINCE, UNTIL)
+
+    types = calls[0]["params"]["types"]
+    assert "im" not in types.split(",")
+    assert "mpim" not in types.split(",")
+    assert "public_channel" in types
+
+
+def test_slack_includes_dm_types_by_default(monkeypatch, tmp_path):
+    monkeypatch.setattr(slack, "ROOT", tmp_path)  # no .env
+    calls = route(monkeypatch, slack, lambda url, params: FakeResponse({"ok": True, "channels": []}))
+    slack.collect_slack("work", "xoxp-1", SINCE, UNTIL)
+    assert "im" in calls[0]["params"]["types"].split(",")
+
+
+def test_both_system_users_filtered(monkeypatch):
+    """USLACK is the post-2026-06-17 system user; USLACKBOT is legacy Slackbot. Both are noise."""
+    def handler(url, params):
+        if "users.conversations" in url:
+            return FakeResponse({"ok": True, "channels": [{"id": "C1"}]})
+        return FakeResponse({"ok": True, "messages": [
+            {"ts": slack_ts(UNTIL), "user": "USLACK", "text": "system"},
+            {"ts": slack_ts(UNTIL), "user": "USLACKBOT", "text": "slackbot"},
+            {"ts": slack_ts(UNTIL), "user": "U123", "text": "real"},
+        ]})
+
+    route(monkeypatch, slack, handler)
+    result = slack.collect_slack("work", "xoxp-1", SINCE, UNTIL)
+    assert [i.payload["text"] for i in result.items] == ["real"]
 
 
 # --- Zoom ---------------------------------------------------------------------------

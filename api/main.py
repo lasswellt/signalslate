@@ -5,12 +5,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.routers import config, runs, status
 from api.scheduler import start_scheduler
-from pipeline.db import init_db
+from pipeline.db import init_db, reap_orphaned_runs
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    # Before anything can be blocked by it: clear any run stranded by a previous process death.
+    reaped = reap_orphaned_runs()
+    if reaped:
+        print(f"[signalslate] marked {reaped} interrupted run(s) as failed")
     start_scheduler()
     yield
 

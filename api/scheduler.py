@@ -57,7 +57,9 @@ def _run_scheduled() -> None:
 
 def reschedule() -> None:
     config = load_config()
-    trigger = CronTrigger.from_crontab(config["schedule_cron"], timezone=schedule_timezone())
+    # "or UTC" is load-bearing: CronTrigger with timezone=None calls get_localzone() itself and
+    # does NOT inherit the scheduler's default, because add_job receives a built trigger instance.
+    trigger = CronTrigger.from_crontab(config["schedule_cron"], timezone=schedule_timezone() or UTC)
     if _scheduler.get_job(JOB_ID):
         _scheduler.reschedule_job(JOB_ID, trigger=trigger)
     else:

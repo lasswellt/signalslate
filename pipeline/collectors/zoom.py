@@ -98,9 +98,10 @@ def collect_zoom(since: datetime, until: datetime) -> CollectionResult:
     except Exception as exc:  # noqa: BLE001 — surfaced as an error row, never raised at the run
         return CollectionResult("zoom", "error", f"token fetch failed: {exc}")
 
-    # Enumerate over the wider window so late summaries are caught; the digest phase decides what
-    # actually belongs in today's page.
-    lookback_start = until - SUMMARY_LOOKBACK
+    # At least SUMMARY_LOOKBACK back so late-generated summaries are caught, but honour an earlier
+    # `since` when the cursor says a longer window is outstanding — otherwise an outage longer than
+    # 48h loses those meetings permanently, because the cursor still advances to now.
+    lookback_start = min(since, until - SUMMARY_LOOKBACK)
 
     try:
         summaries = list_summaries(token, lookback_start, until)
