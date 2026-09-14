@@ -140,7 +140,33 @@ and keep `rmapi.conf` under `tokens/`.
 
 ### Done when
 
-Every auth script exits 0 with no prompts on a second run.
+Every auth script exits 0 with no prompts on a second run. The health checks verify granted
+scopes, not just token validity, so a green run means the Phase 2 collectors have what they need.
+
+Sign-off, repeatable after any token revocation:
+
+```
+python auth/m365_bootstrap.py <alias>              # once per tenant, on a machine with a browser
+scp tokens/<alias>_cache.bin <host>:/path/to/signalslate/tokens/
+```
+
+then, on the server, twice in a row — no prompts, exit 0 both times:
+
+```
+python auth/m365_bootstrap.py <alias> && python auth/zoom_s2s_auth.py && python auth/slack_verify.py
+```
+
+`m365_bootstrap.py` short-circuits to the health check and exits 0 when the cache is still good,
+so it doubles as the second-run check. Set `SLACK_SKIP_DMS=1` in `.env` if you dropped
+`im:history` / `im:read`, or the Slack check will fail on the missing scopes.
+
+### Tests
+
+```
+pytest
+```
+
+Covers the `.env` parsing and the scope-verification paths in `pipeline/health.py`. No network.
 
 ## Web interface
 

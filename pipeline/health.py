@@ -19,6 +19,31 @@ TOKEN_DIR = ROOT / "tokens"
 # every tenant. MSAL adds offline_access/openid/profile itself — do not list them here.
 SCOPES = ["Mail.Read", "Calendars.Read", "Tasks.Read", "Chat.Read", "User.Read"]
 
+# What Phase 2's collectors will need. A valid token is not the same thing as a useful one:
+# Slack's auth.test says "ok" for any live xoxp regardless of its scope set, and a Zoom app whose
+# creator lacked the role to grant an admin scope still mints tokens. Check the grants here so a
+# misconfigured app fails in Phase 1 rather than on the first collector call.
+SLACK_SCOPES = {
+    "channels:history", "groups:history", "im:history", "mpim:history",
+    "channels:read", "groups:read", "im:read", "mpim:read",
+    "users:read",
+}
+# Dropped when SLACK_SKIP_DMS is set — the digest can be built without reading personal DMs.
+SLACK_DM_SCOPES = {"im:history", "im:read"}
+# cloud_recording:read:meeting_transcript:admin stays out: transcripts are optional.
+ZOOM_SCOPES = {
+    "meeting:read:list_summaries:admin",
+    "meeting:read:summary:admin",
+    "meeting:read:past_meeting:admin",
+    "meeting:read:list_past_participants:admin",
+    "report:read:user:admin",
+}
+
+
+def _missing(required: set[str], granted: set[str]) -> str:
+    """'' when every required scope is granted, else a stable, comma-separated list."""
+    return ", ".join(sorted(required - granted))
+
 
 @dataclass
 class HealthResult:
@@ -142,7 +167,13 @@ def check_zoom() -> HealthResult:
     except requests.RequestException as exc:
         return HealthResult("zoom", "error", str(exc))
 
-    return HealthResult("zoom", "ok", f"token valid, expires_in={data['expires_in']}s")
+    granted = set((data.get("scope") or "").split())
+    missing = _missing(ZOOM_SCOPES, granted)
+    if missing:
+        # Usually the app creator's role couldn't grant the admin scopes — recreate as account owner.
+        return HealthResult("zoom", "error", f"token valid but missing scopes: {missing}")
+
+    return HealthResult("zoom", "ok", f"token valid, expires_in={data['expires_in']}s, {len(granted)} scopes")
 
 
 def check_slack(label: str, token: Optional[str]) -> HealthResult:
@@ -156,13 +187,21 @@ def check_slack(label: str, token: Optional[str]) -> HealthResult:
             timeout=15,
         )
         data = resp.json()
+        # Slack returns the granted user-token scopes in a response header on any Web API call,
+        # so this needs no extra request and no scope of its own.
+        granted = set(h.strip() for h in resp.headers.get("x-oauth-scopes", "").split(",") if h.strip())
     except requests.RequestException as exc:
         return HealthResult(source, "error", str(exc))
 
     if not data.get("ok"):
         return HealthResult(source, "error", data.get("error", "unknown error"))
 
-    return HealthResult(source, "ok", f"user={data['user']} team={data['team']}")
+    required = SLACK_SCOPES - (SLACK_DM_SCOPES if _env().get("SLACK_SKIP_DMS") else set())
+    missing = _missing(required, granted)
+    if missing:
+        return HealthResult(source, "error", f"token valid but missing scopes: {missing} — reinstall the app")
+
+    return HealthResult(source, "ok", f"user={data['user']} team={data['team']}, {len(granted)} scopes")
 
 
 def known_sources() -> list[str]:
