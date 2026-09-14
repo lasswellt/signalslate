@@ -146,25 +146,42 @@ def check_m365(alias: str) -> HealthResult:
     return HealthResult(source, "ok", f"token valid, expires_in={result['expires_in']}s")
 
 
-def check_zoom() -> HealthResult:
+def zoom_token_response() -> dict:
+    """
+    Fetch a Zoom server-to-server token. Raises on any failure.
+
+    Separate from check_zoom so the collector can get a live token without re-implementing the
+    account_credentials dance. Tokens last an hour with no refresh, so every caller fetches its own.
+    """
     env = _env()
     account_id = env.get("ZOOM_ACCOUNT_ID")
     client_id = env.get("ZOOM_CLIENT_ID")
     client_secret = env.get("ZOOM_CLIENT_SECRET")
     if not all([account_id, client_id, client_secret]):
-        return HealthResult("zoom", "error", "Missing Zoom credentials in .env")
+        raise RuntimeError("Missing Zoom credentials in .env")
 
     basic = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+    resp = requests.post(
+        "https://zoom.us/oauth/token",
+        headers={"Authorization": f"Basic {basic}"},
+        params={"grant_type": "account_credentials", "account_id": account_id},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def zoom_token() -> str:
+    """Just the access token, for collectors."""
+    return zoom_token_response()["access_token"]
+
+
+def check_zoom() -> HealthResult:
     try:
-        resp = requests.post(
-            "https://zoom.us/oauth/token",
-            headers={"Authorization": f"Basic {basic}"},
-            params={"grant_type": "account_credentials", "account_id": account_id},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        data = resp.json()
+        data = zoom_token_response()
     except requests.RequestException as exc:
+        return HealthResult("zoom", "error", str(exc))
+    except RuntimeError as exc:
         return HealthResult("zoom", "error", str(exc))
 
     granted = set((data.get("scope") or "").split())

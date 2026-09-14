@@ -30,8 +30,20 @@ def temp_db(monkeypatch, tmp_path):
 
 @pytest.fixture
 def no_config(monkeypatch):
-    """execute_run only uses config for active_sources; the stubbed checker ignores it."""
+    """
+    Active sources, plus a collector stub.
+
+    _collect_source is stubbed by default so orchestration tests can never reach the network —
+    a test that wants collection behaviour opts in with stub_collect().
+    """
     monkeypatch.setattr(runner, "load_config", lambda: {"active_sources": {"zoom": True}})
+    monkeypatch.setattr(runner, "_active", lambda _config: [])
+
+
+def stub_collect(monkeypatch, results: dict):
+    """Make each source id collect a canned CollectionResult, and declare those sources active."""
+    monkeypatch.setattr(runner, "_active", lambda _config: list(results))
+    monkeypatch.setattr(runner, "_collect_source", lambda source, _until: results[source])
 
 
 def stub_checks(monkeypatch, results):
@@ -158,16 +170,22 @@ def test_item_counts_group_by_source(temp_db):
 
 
 def test_summary_reports_collected_count(temp_db, no_config, monkeypatch):
+    from pipeline.collectors import CollectionResult, Item
+
+    items = [Item("meeting", f"m{i}", utcnow(), {"n": i}) for i in range(7)]
     stub_checks(monkeypatch, [HealthResult("zoom", "ok", "")])
-    monkeypatch.setattr(runner, "item_counts_for_run", lambda _run_id: {"zoom": 7})
+    stub_collect(monkeypatch, {"zoom": CollectionResult("zoom", "ok", "7 meetings", items)})
+
     run = runner.execute_run()
+    assert run.status == "success"
     assert "Collected 7 items" in run.summary
+    assert "zoom=7" in run.summary
 
 
-def test_summary_omits_count_when_nothing_collected(temp_db, no_config, monkeypatch):
+def test_summary_says_nothing_new_when_empty(temp_db, no_config, monkeypatch):
     stub_checks(monkeypatch, [HealthResult("zoom", "ok", "")])
     run = runner.execute_run()
-    assert "Collected" not in run.summary
+    assert "nothing new" in run.summary
 
 
 def test_set_cursor_inserts_then_updates(temp_db):

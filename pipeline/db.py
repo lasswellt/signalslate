@@ -118,6 +118,24 @@ def item_counts_for_run(run_id: int) -> dict[str, int]:
     return counts
 
 
+def existing_external_ids(source: str, external_ids: list[str]) -> set[str]:
+    """
+    Which of these ids this source has already stored.
+
+    Scoped to the ids being offered rather than everything ever collected, so the query stays small
+    as history grows. Collection windows deliberately overlap, so this runs on every insert.
+    """
+    if not external_ids:
+        return set()
+    with get_session() as session:
+        rows = session.exec(
+            select(CollectedItem.external_id)
+            .where(CollectedItem.source == source)
+            .where(CollectedItem.external_id.in_(external_ids))
+        ).all()
+    return set(rows)
+
+
 def get_cursor(source: str) -> Optional[SourceCursor]:
     with get_session() as session:
         return session.get(SourceCursor, source)
