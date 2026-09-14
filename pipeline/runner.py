@@ -1,10 +1,11 @@
 """
 execute_run() is the one function both the scheduler and the manual-trigger API call.
 
-Today it checks every active source's auth health and records it. Phase 2 adds collection: the
-per-source seam below (_collect_source) is where the mail/calendar/todo/chat/Slack/Zoom collectors
-land. The Run/SourceHealth records, the API contract, and the web UI don't change when they do — a
-run just starts producing CollectedItem rows, a richer summary, and eventually a pdf_path.
+Today it checks every active source's auth health and records it. Phase 2 adds collection between
+the check_all_configured() call and the finally block below, writing CollectedItem rows and
+advancing each source's SourceCursor. The Run/SourceHealth records, the API contract, and the web
+UI don't change when it lands — a run just starts producing items, a richer summary, and eventually
+a pdf_path.
 
 Every source is isolated: one source's failure produces an error row, never a dead run. The
 terminal status is written in a finally block, because a Run left at status="running" is invisible
