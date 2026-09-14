@@ -236,3 +236,22 @@ def test_cron_fires_in_configured_timezone(monkeypatch):
     after = datetime(2026, 9, 13, 0, 0, tzinfo=dt_timezone.utc)
     fire = trigger.get_next_fire_time(None, after)
     assert fire.astimezone(dt_timezone.utc).hour == 10  # EDT, UTC-4
+
+
+def test_scheduler_timezone_is_explicit_not_guessed():
+    """
+    APScheduler left to itself asks tzlocal to guess from the system clock, which warns and picks
+    arbitrarily when a container's /etc/localtime disagrees with its actual offset.
+    """
+    import warnings
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        import importlib
+
+        from api import scheduler
+
+        importlib.reload(scheduler)
+
+    assert scheduler._scheduler.timezone is not None
+    assert not [w for w in caught if "Timezone offset does not match" in str(w.message)]

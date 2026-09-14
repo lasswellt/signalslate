@@ -18,14 +18,12 @@ from pipeline.config_store import load_config
 from pipeline.runner import RunAlreadyInProgress, execute_run
 
 ROOT = Path(__file__).resolve().parent.parent
-
-_scheduler = BackgroundScheduler()
-JOB_ID = "daily_digest_run"
+UTC = ZoneInfo("UTC")
 
 
 def schedule_timezone():
     """
-    ZoneInfo for TZ, or None to let APScheduler use the process's local time.
+    ZoneInfo for TZ, or None when TZ is unset or unparseable.
 
     Read from .env as well as the environment so local dev (uvicorn, no exported TZ) matches the
     container, where docker-compose's env_file puts it in the environment.
@@ -36,8 +34,16 @@ def schedule_timezone():
     try:
         return ZoneInfo(name)
     except (ZoneInfoNotFoundError, ValueError):
-        # A typo'd TZ must not take the scheduler down; fall back to local and keep running.
+        # A typo'd TZ must not take the scheduler down; fall back and keep running.
         return None
+
+
+# Explicit timezone, never inferred. Left to itself APScheduler asks tzlocal to guess from the
+# system clock, which warns and picks something arbitrary when a container's /etc/localtime and its
+# actual offset disagree. Only a default for jobs that don't carry their own zone — reschedule()
+# always sets one on the trigger — so UTC here is a safe floor, not the schedule.
+_scheduler = BackgroundScheduler(timezone=schedule_timezone() or UTC)
+JOB_ID = "daily_digest_run"
 
 
 def _run_scheduled() -> None:
