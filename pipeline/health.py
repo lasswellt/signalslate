@@ -4,6 +4,7 @@ GET /api/status and the pipeline runner. Each returns a plain result instead of 
 and exiting, so callers (API, scheduler) can handle failure without a crashed process.
 """
 import base64
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -53,7 +54,34 @@ class HealthResult:
 
 
 def _env() -> dict:
-    return dotenv_values(ROOT / ".env")
+    """
+    Config from .env, with the real environment taking precedence.
+
+    Both are needed. Local dev reads the file; the container has no .env at all — the Dockerfile
+    doesn't copy it and compose's `env_file:` injects it into the process environment instead — so
+    reading only the file made every tenant and workspace invisible once deployed.
+    """
+    merged = dict(dotenv_values(ROOT / ".env"))
+    for key, value in os.environ.items():
+        if key.startswith(("M365_", "SLACK_", "ZOOM_", "MSTODO_")) or key in _SINGLE_KEYS:
+            merged[key] = value
+    return merged
+
+
+# Non-prefixed keys worth picking up from the environment. Deliberately a fixed list rather than
+# merging all of os.environ, which would pull in hundreds of unrelated container variables.
+_SINGLE_KEYS = {"RMAPI_CONFIG", "LAN_HOST", "TZ"}
+
+
+def env_flag(key: str) -> bool:
+    """
+    A boolean .env setting, parsed rather than tested for emptiness.
+
+    SLACK_SKIP_DMS=false must mean false. Bare truthiness would read it as "skip DMs" and silently
+    drop every DM from the digest while the health check stayed green.
+    """
+    value = (_env().get(key) or "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
 
 
 _M365_ALIAS_KEY = re.compile(r"^M365_ORG(\d+)_ALIAS$")
@@ -213,7 +241,7 @@ def check_slack(label: str, token: Optional[str]) -> HealthResult:
     if not data.get("ok"):
         return HealthResult(source, "error", data.get("error", "unknown error"))
 
-    required = SLACK_SCOPES - (SLACK_DM_SCOPES if _env().get("SLACK_SKIP_DMS") else set())
+    required = SLACK_SCOPES - (SLACK_DM_SCOPES if env_flag("SLACK_SKIP_DMS") else set())
     missing = _missing(required, granted)
     if missing:
         return HealthResult(source, "error", f"token valid but missing scopes: {missing} — reinstall the app")

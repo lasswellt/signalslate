@@ -74,6 +74,10 @@ class SourceCursor(SQLModel, table=True):
     source: str = Field(primary_key=True)
     last_success_at: Optional[datetime] = None
     cursor: Optional[str] = None  # unused on filtered reads; present for a later delta/cursor source
+    # Runs since this source last collected cleanly. A permanent sub-resource failure (To Do not
+    # licensed, say) would otherwise freeze the watermark forever, re-fetching the full backfill
+    # window every day for good. See runner.MAX_STUCK_RUNS.
+    consecutive_failures: int = 0
 
 
 def init_db() -> None:
@@ -142,15 +146,28 @@ def get_cursor(source: str) -> Optional[SourceCursor]:
 
 
 def set_cursor(source: str, last_success_at: datetime, cursor: Optional[str] = None) -> None:
-    """Upsert — the row is created on a source's first successful collection."""
+    """Advance the watermark and clear the failure streak. Upserts on first collection."""
     with get_session() as session:
         row = session.get(SourceCursor, source)
         if row is None:
             row = SourceCursor(source=source)
         row.last_success_at = last_success_at
         row.cursor = cursor
+        row.consecutive_failures = 0
         session.add(row)
         session.commit()
+
+
+def record_failure(source: str) -> int:
+    """Count one non-clean collection for this source. Returns the new streak length."""
+    with get_session() as session:
+        row = session.get(SourceCursor, source)
+        if row is None:
+            row = SourceCursor(source=source)
+        row.consecutive_failures = (row.consecutive_failures or 0) + 1
+        session.add(row)
+        session.commit()
+        return row.consecutive_failures
 
 
 def reap_orphaned_runs() -> int:

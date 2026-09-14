@@ -21,10 +21,8 @@ from typing import Optional
 
 import requests
 
-from dotenv import dotenv_values
-
 from pipeline.collectors import CollectionResult, Item, parse_slack_ts
-from pipeline.health import ROOT
+from pipeline.health import env_flag
 
 SLACK = "https://slack.com/api"
 TIMEOUT = 15
@@ -121,7 +119,7 @@ def collect_slack(label: str, token: Optional[str], since: datetime, until: date
 
     # Must match what the health check requires, or a user who sets this gets a green check and
     # zero items: users.conversations rejects the whole call if any requested type lacks its scope.
-    skip_dms = bool(dotenv_values(ROOT / ".env").get("SLACK_SKIP_DMS"))
+    skip_dms = env_flag("SLACK_SKIP_DMS")
 
     # since is naive UTC (pipeline/clock.py). datetime.timestamp() reads a naive value as LOCAL
     # time, so without this the window start shifts by the container's UTC offset and the first

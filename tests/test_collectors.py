@@ -126,7 +126,7 @@ def test_chat_rejects_messages_outside_the_window(monkeypatch):
 
     route(monkeypatch, graph, handler)
     items = graph.collect_chat("tok", SINCE, UNTIL)
-    assert [i.external_id for i in items] == ["m-new"]
+    assert [i.external_id for i in items] == ["19:abc:m-new"]
 
 
 def test_chat_drops_system_event_messages(monkeypatch):
@@ -139,7 +139,7 @@ def test_chat_drops_system_event_messages(monkeypatch):
         ]})
 
     route(monkeypatch, graph, handler)
-    assert [i.external_id for i in graph.collect_chat("tok", SINCE, UNTIL)] == ["real"]
+    assert [i.external_id for i in graph.collect_chat("tok", SINCE, UNTIL)] == ["19:abc:real"]
 
 
 def test_pagination_follows_nextlink_without_resending_params(monkeypatch):
@@ -171,8 +171,53 @@ def test_pagination_does_not_raise_when_it_finishes(monkeypatch):
     assert len(list(graph.get_pages("tok", "https://graph/start"))) == 1
 
 
+def test_chat_list_requests_expand_for_the_preview(monkeypatch):
+    """
+    Ordering by lastMessagePreview does not return it — only $expand does.
+
+    Without this the cutoff below reads None on every chat and never fires, so the fan-out it
+    exists to prevent happens anyway, invisibly.
+    """
+    calls = route(monkeypatch, graph, lambda url, params: FakeResponse({"value": []}))
+    graph.collect_chat("tok", SINCE, UNTIL)
+    assert calls[0]["params"]["$expand"] == "lastMessagePreview"
+
+
+def test_chat_ids_are_scoped_to_their_chat(monkeypatch):
+    """chatMessage.id is unique only within its chat; two chats can produce the same id."""
+    def handler(url, params):
+        if url.endswith("/me/chats"):
+            return FakeResponse({"value": [{"id": "chatA"}, {"id": "chatB"}]})
+        return FakeResponse({"value": [
+            {"id": "1622853091207", "messageType": "message", "lastModifiedDateTime": "2026-09-12T12:00:00Z"},
+        ]})
+
+    route(monkeypatch, graph, handler)
+    ids = [i.external_id for i in graph.collect_chat("tok", SINCE, UNTIL)]
+    assert ids == ["chatA:1622853091207", "chatB:1622853091207"]
+    assert len(set(ids)) == 2  # would collapse to 1 unscoped
+
+
+def test_chat_cutoff_allows_a_grace_period_for_edits(monkeypatch):
+    """A chat whose last message is old but was edited in-window must still be scanned."""
+    edited_recently = {
+        "id": "m1", "messageType": "message", "lastModifiedDateTime": "2026-09-12T12:00:00Z",
+    }
+
+    def handler(url, params):
+        if url.endswith("/me/chats"):
+            # Created 3 days before the window — inside CHAT_SCAN_GRACE, so not skipped.
+            return FakeResponse({"value": [
+                {"id": "old-but-edited", "lastMessagePreview": {"createdDateTime": "2026-09-09T12:00:00Z"}},
+            ]})
+        return FakeResponse({"value": [edited_recently]})
+
+    route(monkeypatch, graph, handler)
+    assert len(graph.collect_chat("tok", SINCE, UNTIL)) == 1
+
+
 def test_chat_enumeration_stops_at_first_stale_chat(monkeypatch):
-    """Newest-first ordering means one stale chat implies every later one is too."""
+    """Newest-first ordering means one chat past the cutoff implies every later one is too."""
     chats = [
         {"id": "recent", "lastMessagePreview": {"createdDateTime": "2026-09-12T12:00:00Z"}},
         {"id": "stale", "lastMessagePreview": {"createdDateTime": "2020-01-01T00:00:00Z"}},
@@ -379,10 +424,9 @@ def test_slack_oldest_is_utc_not_local(monkeypatch):
     assert float(history["params"]["oldest"]) == pytest.approx(expected)
 
 
-def test_slack_skips_dm_types_when_configured(monkeypatch, tmp_path):
+def test_slack_skips_dm_types_when_configured(monkeypatch):
     """SLACK_SKIP_DMS must reach the types list, or users.conversations fails with missing_scope."""
-    (tmp_path / ".env").write_text("SLACK_SKIP_DMS=1")
-    monkeypatch.setattr(slack, "ROOT", tmp_path)
+    monkeypatch.setenv("SLACK_SKIP_DMS", "1")
 
     calls = route(monkeypatch, slack, lambda url, params: FakeResponse({"ok": True, "channels": []}))
     slack.collect_slack("work", "xoxp-1", SINCE, UNTIL)
@@ -393,8 +437,16 @@ def test_slack_skips_dm_types_when_configured(monkeypatch, tmp_path):
     assert "public_channel" in types
 
 
-def test_slack_includes_dm_types_by_default(monkeypatch, tmp_path):
-    monkeypatch.setattr(slack, "ROOT", tmp_path)  # no .env
+def test_slack_includes_dm_types_by_default(monkeypatch):
+    monkeypatch.delenv("SLACK_SKIP_DMS", raising=False)
+    calls = route(monkeypatch, slack, lambda url, params: FakeResponse({"ok": True, "channels": []}))
+    slack.collect_slack("work", "xoxp-1", SINCE, UNTIL)
+    assert "im" in calls[0]["params"]["types"].split(",")
+
+
+def test_slack_skip_dms_false_means_false(monkeypatch):
+    """Bare truthiness would read "false" as "skip", silently dropping every DM."""
+    monkeypatch.setenv("SLACK_SKIP_DMS", "false")
     calls = route(monkeypatch, slack, lambda url, params: FakeResponse({"ok": True, "channels": []}))
     slack.collect_slack("work", "xoxp-1", SINCE, UNTIL)
     assert "im" in calls[0]["params"]["types"].split(",")

@@ -7,7 +7,7 @@ none of these endpoints are metered.
 
 Deliberately no delta queries and no $batch; see this package's docstring.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Iterator, Optional
 
 import msal
@@ -23,6 +23,11 @@ TIMEOUT = 15
 PAGE_SIZE = 50
 # Stops a pathological filter (or a tenant with a decade of unread mail) from paging forever.
 MAX_PAGES = 40
+# Chats are ranked by when their last message was CREATED, but messages are filtered on when they
+# were last MODIFIED, to catch edits. A chat can therefore sort below the window while still
+# holding an in-window edit. This grace period is how far past the window we keep looking.
+# Edits to messages older than this are missed — the alternative is scanning every chat, forever.
+CHAT_SCAN_GRACE = timedelta(days=7)
 
 
 class GraphError(RuntimeError):
@@ -188,16 +193,23 @@ def collect_chat(token: str, since: datetime, until: datetime) -> list[Item]:
     chats = _collect(
         token,
         f"{GRAPH}/me/chats",
-        {"$top": PAGE_SIZE, "$orderby": "lastMessagePreview/createdDateTime desc"},
+        {
+            "$top": PAGE_SIZE,
+            "$orderby": "lastMessagePreview/createdDateTime desc",
+            # $expand is required to actually GET lastMessagePreview: ordering by it does not
+            # return it. Without this the cutoff below reads None every time and never fires.
+            "$expand": "lastMessagePreview",
+        },
     )
 
+    cutoff = since - CHAT_SCAN_GRACE
     items = []
     for chat in chats:
-        # Chats come back newest-activity-first, so the first one whose last message predates the
-        # window means every chat after it does too. Without this, a busy account costs one request
-        # per chat ever opened — hundreds of calls a day, and a 429 kills the whole collector.
+        # Chats arrive newest-activity-first, so once one falls past the cutoff every chat after it
+        # does too. Without this, a busy account costs one request per chat ever opened — hundreds
+        # of calls a day, and a single 429 takes the whole chat collector down.
         last_activity = parse_iso((chat.get("lastMessagePreview") or {}).get("createdDateTime", ""))
-        if last_activity is not None and last_activity < since:
+        if last_activity is not None and last_activity < cutoff:
             break
 
         rows = _collect(
@@ -221,7 +233,9 @@ def collect_chat(token: str, since: datetime, until: datetime) -> list[Item]:
             if occurred is None or not (since <= occurred <= until):
                 continue
             payload = {**row, "chatType": chat.get("chatType"), "chatTopic": chat.get("topic")}
-            items.append(Item("chat", row["id"], occurred, payload))
+            # chatMessage.id is a millisecond timestamp, unique only within its own chat — two
+            # chats can collide. Scope it, or the batch dedupe silently drops one of them.
+            items.append(Item("chat", f"{chat['id']}:{row['id']}", occurred, payload))
     return items
 
 

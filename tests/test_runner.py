@@ -320,7 +320,9 @@ def test_partial_collection_does_not_advance_the_cursor(temp_db, no_config, monk
     stub_collect(monkeypatch, {"zoom": CollectionResult("zoom", "partial", "3 of 8 channels failed")})
 
     run = runner.execute_run()
-    assert db.get_cursor("zoom") is None  # never advanced
+    # A cursor row now exists to hold the failure streak, but the watermark itself never moved.
+    assert db.get_cursor("zoom").last_success_at is None
+    assert db.get_cursor("zoom").consecutive_failures == 1
     assert run.status == "partial"
 
 
@@ -415,7 +417,7 @@ def test_items_kept_when_a_source_errors_midway(temp_db, no_config, monkeypatch)
     run = runner.execute_run()
     assert run.status == "failed"           # sole source failed to collect
     assert len(db.items_for_run(run.id)) == 1  # and the partial haul is kept
-    assert db.get_cursor("slack_a") is None    # but the window will be re-read
+    assert db.get_cursor("slack_a").last_success_at is None  # but the window will be re-read
 
 
 def test_all_sources_failing_collection_is_failed_not_partial(temp_db, no_config, monkeypatch):
@@ -456,3 +458,76 @@ def test_healthy_source_with_failed_collection_is_not_counted_ok(temp_db, no_con
     run = runner.execute_run()
     assert run.status == "partial"
     assert "1 ok, 1 failing" in run.summary
+
+
+def test_status_tiers_stay_disjoint_when_a_source_is_both_unhealthy_and_partial(temp_db):
+    """Not reachable today (collection is skipped for unhealthy sources) — pinned so it stays safe."""
+    status, summary, error = runner._summarize(
+        health=[HealthResult("zoom", "error", "dead token"), HealthResult("slack_a", "ok", "")],
+        collected={"slack_a": 2},
+        failures=["zoom: dead token"],
+        failed_sources={"zoom"},
+        partial_sources={"zoom"},   # contradictory input: must not be counted as good
+    )
+    assert status == "partial"
+    assert "1 ok" in summary
+    assert "2 ok" not in summary
+
+
+def test_watermark_advances_after_a_persistent_failure_streak(temp_db, no_config, monkeypatch):
+    """
+    A permanently-failing sub-resource must not freeze the watermark forever.
+
+    Holding it back assumes failures are transient. A tenant without To Do licensed 403s every run,
+    which would pin the window at MAX_BACKFILL and re-fetch a week of Graph daily, for good.
+    """
+    from pipeline.collectors import CollectionResult
+
+    stub_checks(monkeypatch, [HealthResult("zoom", "ok", "")])
+    stub_collect(monkeypatch, {"zoom": CollectionResult("zoom", "partial", "todo 403s every time")})
+
+    for expected_streak in range(1, runner.MAX_STUCK_RUNS):
+        runner.execute_run()
+        assert db.get_cursor("zoom").last_success_at is None
+        assert db.get_cursor("zoom").consecutive_failures == expected_streak
+
+    run = runner.execute_run()  # the MAX_STUCK_RUNS-th failure
+    assert db.get_cursor("zoom").last_success_at is not None  # unfrozen
+    assert "advancing watermark" in (run.error or "")
+
+
+def test_a_clean_run_resets_the_failure_streak(temp_db, no_config, monkeypatch):
+    from pipeline.collectors import CollectionResult
+
+    stub_checks(monkeypatch, [HealthResult("zoom", "ok", "")])
+    stub_collect(monkeypatch, {"zoom": CollectionResult("zoom", "partial", "flaky")})
+    runner.execute_run()
+    assert db.get_cursor("zoom").consecutive_failures == 1
+
+    stub_collect(monkeypatch, {"zoom": CollectionResult("zoom", "ok", "recovered")})
+    runner.execute_run()
+    assert db.get_cursor("zoom").consecutive_failures == 0
+
+
+def test_capped_backfill_is_reported_not_silently_skipped(temp_db, no_config, monkeypatch):
+    """Advancing past an unreachable month without saying so would hide a hole in the data."""
+    from pipeline.collectors import CollectionResult
+
+    db.set_cursor("zoom", utcnow() - timedelta(days=30))
+    stub_checks(monkeypatch, [HealthResult("zoom", "ok", "")])
+    stub_collect(monkeypatch, {"zoom": CollectionResult("zoom", "ok", "fine")})
+
+    run = runner.execute_run()
+    # A caveat on a successful run, not a failure — but it must be visible on the dashboard.
+    assert run.status == "success"
+    assert "backfill capped" in run.summary
+    assert "day(s) before the window were skipped" in run.summary
+
+
+def test_no_shortfall_reported_for_a_normal_run(temp_db, no_config, monkeypatch):
+    from pipeline.collectors import CollectionResult
+
+    db.set_cursor("zoom", utcnow() - timedelta(hours=26))
+    stub_checks(monkeypatch, [HealthResult("zoom", "ok", "")])
+    stub_collect(monkeypatch, {"zoom": CollectionResult("zoom", "ok", "fine")})
+    assert runner.execute_run().status == "success"

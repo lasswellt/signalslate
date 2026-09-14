@@ -236,3 +236,44 @@ def test_check_all_configured_skips_inactive_sources(env, monkeypatch):
 def test_check_all_configured_empty_when_nothing_active(env):
     env("M365_ORG1_ALIAS=work\nM365_ORG1_TENANT_ID=tid\n")
     assert health.check_all_configured({}) == []
+
+
+# --- environment reading (the container has no .env file) -----------------------------
+
+
+def test_env_reads_process_environment_when_no_dotenv(monkeypatch, tmp_path):
+    """
+    The deployed container has no .env: the Dockerfile doesn't copy it and compose's env_file
+    injects it into the environment. Reading only the file made every source invisible in Docker.
+    """
+    monkeypatch.setattr(health, "ROOT", tmp_path)  # no .env on disk
+    monkeypatch.setenv("M365_ORG1_ALIAS", "work")
+    monkeypatch.setenv("M365_ORG1_TENANT_ID", "tid")
+    monkeypatch.setenv("M365_CLIENT_ID", "cid")
+    monkeypatch.setenv("SLACK_ACME_TOKEN", "xoxp-1")
+
+    assert health.m365_aliases() == ["work"]
+    assert health.slack_workspaces() == {"acme": "xoxp-1"}
+    assert health.m365_tenant_config("work")["client_id"] == "cid"
+
+
+def test_process_environment_wins_over_dotenv(env, monkeypatch):
+    env("M365_ORG1_ALIAS=from-file\nM365_ORG1_TENANT_ID=tid\nM365_CLIENT_ID=cid\n")
+    monkeypatch.setenv("M365_ORG1_ALIAS", "from-env")
+    assert health.m365_aliases() == ["from-env"]
+
+
+def test_env_flag_parses_rather_than_testing_truthiness(env, monkeypatch):
+    env("")
+    for value in ("1", "true", "TRUE", "yes", "on"):
+        monkeypatch.setenv("SLACK_SKIP_DMS", value)
+        assert health.env_flag("SLACK_SKIP_DMS") is True
+    for value in ("0", "false", "False", "no", "off", ""):
+        monkeypatch.setenv("SLACK_SKIP_DMS", value)
+        assert health.env_flag("SLACK_SKIP_DMS") is False
+
+
+def test_env_flag_false_when_unset(env, monkeypatch):
+    env("")
+    monkeypatch.delenv("SLACK_SKIP_DMS", raising=False)
+    assert health.env_flag("SLACK_SKIP_DMS") is False

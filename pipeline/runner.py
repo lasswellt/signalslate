@@ -25,9 +25,17 @@ from pipeline.db import (
     get_cursor,
     get_session,
     has_running_run,
+    record_failure,
     set_cursor,
 )
 from pipeline.health import HealthResult, check_all_configured, m365_aliases, slack_workspaces
+
+
+# How many consecutive non-clean collections before a source's watermark advances anyway.
+# Holding it back forever assumes failures are transient; a permanently 403-ing sub-resource (To Do
+# not licensed) would otherwise pin the window at MAX_BACKFILL and re-fetch a week of Graph every
+# day, for good — and if that window ever exceeds the pagination cap, the source never recovers.
+MAX_STUCK_RUNS = 3
 
 
 class RunAlreadyInProgress(RuntimeError):
@@ -54,6 +62,21 @@ def collection_window(source: str, until: datetime) -> datetime:
         return default_start
 
     return max(floor, min(default_start, cursor.last_success_at - OVERLAP))
+
+
+def backfill_shortfall(source: str, until: datetime) -> Optional[int]:
+    """
+    Whole days the MAX_BACKFILL cap is about to skip, or None when nothing is skipped.
+
+    After a long outage the window floors at MAX_BACKFILL and the run then advances the watermark
+    past everything older. That data is unreachable from then on, so the run should say so rather
+    than report a clean success over a hole.
+    """
+    cursor = get_cursor(source)
+    if cursor is None or cursor.last_success_at is None:
+        return None
+    skipped = (until - MAX_BACKFILL) - cursor.last_success_at
+    return skipped.days if skipped.total_seconds() > 0 else None
 
 
 def _collect_source(source: str, until: datetime) -> CollectionResult:
@@ -116,6 +139,7 @@ def _summarize(
     failures: list[str],
     failed_sources: set[str],
     partial_sources: set[str],
+    notes: Optional[list[str]] = None,
 ) -> tuple[str, str, Optional[str]]:
     """
     (status, summary, error) from the health checks and what collection actually produced.
@@ -128,29 +152,42 @@ def _summarize(
     if not health:
         return "success", "No sources active in config — nothing checked.", None
 
+    # Derived in strict precedence — unhealthy beats partial beats good — so the three tiers are
+    # disjoint by construction. The earlier form could put a source that was both unhealthy and
+    # partial into "good"; unreachable today only because collection is skipped for unhealthy
+    # sources, which is too fragile a reason to rely on.
     checked = {r.source for r in health}
     unhealthy = {r.source for r in health if r.status != "ok"}
-    bad = (unhealthy | failed_sources) - partial_sources
-    partial = partial_sources - unhealthy
+    bad = unhealthy | (failed_sources - partial_sources)
+    partial = (partial_sources | failed_sources) - bad
     good = checked - bad - partial
+    assert not (bad & partial) and not (good & (bad | partial))
 
     total = sum(collected.values())
     breakdown = ", ".join(f"{s}={n}" for s, n in sorted(collected.items()) if n) or "nothing new"
     error = "; ".join(failures) or None
 
+    # Caveats ride on the summary, not the error: a capped backfill is not a failure, but a run
+    # that quietly skipped three weeks of history must not report an unqualified success.
+    caveat = (" " + " ".join(notes)) if notes else ""
+
     if not bad and not partial:
-        return "success", f"All {len(good)} sources healthy. Collected {total} items ({breakdown}).", None
+        return (
+            "success",
+            f"All {len(good)} sources healthy. Collected {total} items ({breakdown}).{caveat}",
+            None,
+        )
     if not good and not partial:
         return (
             "failed",
-            f"All {len(bad)} sources failed. Collected {total} items ({breakdown}).",
+            f"All {len(bad)} sources failed. Collected {total} items ({breakdown}).{caveat}",
             error or "All configured sources failed their health check.",
         )
     tiers = f"{len(good)} ok"
     if partial:
         tiers += f", {len(partial)} partial"
     tiers += f", {len(bad)} failing"
-    return "partial", f"{tiers}. Collected {total} items ({breakdown}).", error
+    return "partial", f"{tiers}. Collected {total} items ({breakdown}).{caveat}", error
 
 
 def execute_run(trigger: str = "manual") -> Run:
@@ -174,6 +211,7 @@ def execute_run(trigger: str = "manual") -> Run:
     failures: list[str] = []
     failed_sources: set[str] = set()
     partial_sources: set[str] = set()
+    notes: list[str] = []
     fatal: Optional[str] = None
 
     try:
@@ -185,6 +223,10 @@ def execute_run(trigger: str = "manual") -> Run:
             # slowly and report the same thing twice.
             if source not in healthy:
                 continue
+            shortfall = backfill_shortfall(source, until)
+            if shortfall:
+                notes.append(f"{source}: backfill capped — {shortfall} day(s) before the window were skipped.")
+
             try:
                 result = _collect_source(source, until)
             except Exception as exc:  # noqa: BLE001 — one source must never end the run
@@ -197,19 +239,31 @@ def execute_run(trigger: str = "manual") -> Run:
             # does not advance, so the window is re-read next time and the dedupe absorbs it.
             collected[source] = _persist(run_id, result)
             if result.status == "ok":
-                # Only a clean collection advances the watermark. A partial one must re-read its
-                # window next time — otherwise a catch-up run that half-failed moves the cursor to
-                # now and the rest of the backfill gap is lost for good.
+                # A clean collection advances the watermark and clears any failure streak.
                 set_cursor(source, until)
             else:
                 failures.append(f"{source}: {result.detail}")
                 failed_sources.add(source)
                 if result.status == "partial":
                     partial_sources.add(source)
+
+                # Normally a non-clean collection holds the watermark back so the window is
+                # re-read. But if a source has been failing this way for MAX_STUCK_RUNS, the
+                # failure is not transient and holding the line just re-fetches an ever-larger
+                # window forever. Advance, and say so.
+                streak = record_failure(source)
+                if streak >= MAX_STUCK_RUNS:
+                    set_cursor(source, until)
+                    failures.append(
+                        f"{source}: advancing watermark after {streak} failed runs — "
+                        f"any data still missing from that window will not be retried"
+                    )
     except Exception as exc:  # noqa: BLE001 — a dead run is worse than a broad except
         fatal = f"{type(exc).__name__}: {exc}"
     finally:
-        status, summary, error = _summarize(health, collected, failures, failed_sources, partial_sources)
+        status, summary, error = _summarize(
+            health, collected, failures, failed_sources, partial_sources, notes
+        )
         if fatal is not None:
             status, error = "failed", fatal
 
