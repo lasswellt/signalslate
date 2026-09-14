@@ -70,3 +70,25 @@ def parse_slack_ts(value: str) -> Optional[datetime]:
 def to_graph_time(value: datetime) -> str:
     """Naive UTC to the literal Graph wants in $filter and calendarView params."""
     return value.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def dispatch(source: str, since: datetime, until: datetime) -> "CollectionResult":
+    """
+    Run one source id's collector over an explicit window. No DB, no cursors, no side effects —
+    so the runner and the dry-run CLI share exactly one dispatch table.
+
+    Imports are local: importing this package must not drag in msal and every collector module.
+    """
+    from pipeline.collectors.graph import collect_m365
+    from pipeline.collectors.slack import collect_slack
+    from pipeline.collectors.zoom import collect_zoom
+    from pipeline.health import slack_workspaces
+
+    if source == "zoom":
+        return collect_zoom(since, until)
+    if source.startswith("m365_"):
+        return collect_m365(source[len("m365_"):], since, until)
+    if source.startswith("slack_"):
+        label = source[len("slack_"):]
+        return collect_slack(label, slack_workspaces().get(label), since, until)
+    return CollectionResult(source, "error", f"No collector for source id {source!r}")

@@ -405,3 +405,74 @@ def test_zoom_token_failure_is_error_result(monkeypatch):
     result = zoom.collect_zoom(SINCE, UNTIL)
     assert result.status == "error"
     assert "Missing Zoom credentials" in result.detail
+
+
+# --- dry-run CLI --------------------------------------------------------------------
+
+
+def test_cli_preview_prefers_a_human_field():
+    from pipeline.collect import preview
+
+    assert preview({"subject": "Budget review"}) == "Budget review"
+    assert preview({"text": "hello there"}) == "hello there"
+
+
+def test_cli_preview_falls_back_to_graph_body():
+    from pipeline.collect import preview
+
+    assert preview({"body": {"content": "message body"}}) == "message body"
+
+
+def test_cli_preview_handles_nothing_useful():
+    from pipeline.collect import preview
+
+    assert preview({"id": "x"}) == "(no preview field)"
+
+
+def test_cli_preview_collapses_newlines_and_truncates():
+    from pipeline.collect import preview
+
+    out = preview({"text": "a\nb" + "x" * 200})
+    assert "\n" not in out and len(out) <= 100
+
+
+def test_cli_report_writes_nothing(monkeypatch, capsys):
+    """The whole point of the dry run: no DB access at all."""
+    from pipeline import collect
+    from pipeline.collectors import CollectionResult
+
+    def exploding_session(*a, **k):
+        raise AssertionError("dry run must not touch the database")
+
+    monkeypatch.setattr("pipeline.db.get_session", exploding_session)
+    monkeypatch.setattr(
+        collect, "dispatch",
+        lambda source, since, until: CollectionResult(source, "ok", "2 things", [
+            Item("mail", "m1", SINCE, {"subject": "First"}),
+            Item("mail", "m2", SINCE, {"subject": "Second"}),
+        ]),
+    )
+
+    assert collect.report("m365_work", hours=24, limit=5, raw=False) is True
+    out = capsys.readouterr().out
+    assert "status: OK" in out
+    assert "First" in out and "mail=2" in out
+
+
+def test_cli_report_survives_a_collector_crash(monkeypatch, capsys):
+    from pipeline import collect
+
+    def boom(source, since, until):
+        raise RuntimeError("unexpected shape")
+
+    monkeypatch.setattr(collect, "dispatch", boom)
+    assert collect.report("zoom", hours=24, limit=5, raw=False) is False
+    assert "CRASHED" in capsys.readouterr().out
+
+
+def test_cli_report_returns_false_on_error_status(monkeypatch):
+    from pipeline import collect
+    from pipeline.collectors import CollectionResult
+
+    monkeypatch.setattr(collect, "dispatch", lambda s, a, b: CollectionResult(s, "error", "dead token"))
+    assert collect.report("zoom", hours=24, limit=5, raw=False) is False

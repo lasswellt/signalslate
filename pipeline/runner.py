@@ -15,10 +15,7 @@ from datetime import datetime
 from typing import Optional
 
 from pipeline.clock import utcnow
-from pipeline.collectors import DEFAULT_LOOKBACK, OVERLAP, CollectionResult
-from pipeline.collectors.graph import collect_m365
-from pipeline.collectors.slack import collect_slack
-from pipeline.collectors.zoom import collect_zoom
+from pipeline.collectors import DEFAULT_LOOKBACK, OVERLAP, CollectionResult, dispatch
 from pipeline.config_store import load_config
 from pipeline.db import (
     CollectedItem,
@@ -54,17 +51,8 @@ def collection_window(source: str, until: datetime) -> datetime:
 
 
 def _collect_source(source: str, until: datetime) -> CollectionResult:
-    """Dispatch one source id to its collector. Unknown ids are a config bug, not a crash."""
-    since = collection_window(source, until)
-
-    if source == "zoom":
-        return collect_zoom(since, until)
-    if source.startswith("m365_"):
-        return collect_m365(source[len("m365_"):], since, until)
-    if source.startswith("slack_"):
-        label = source[len("slack_"):]
-        return collect_slack(label, slack_workspaces().get(label), since, until)
-    return CollectionResult(source, "error", f"No collector for source id {source!r}")
+    """One source, over the window its cursor says is outstanding."""
+    return dispatch(source, collection_window(source, until), until)
 
 
 def _persist(run_id: int, result: CollectionResult) -> int:

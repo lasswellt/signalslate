@@ -18,15 +18,19 @@ one more block of environment variables; nothing in the code is fixed to a count
 
 ## Phases
 
-1. **Auth plumbing** — every token source works and survives unattended reuse. *(current)*
-2. Collectors — pull the last 24h from each source.
+1. **Auth plumbing** — every token source works and survives unattended reuse. *(code complete;
+   awaiting sign-off against live tenants)*
+2. **Collectors** — pull the last 24h from each source. *(built; never yet run against a live API)*
 3. Synthesis — digest + todo extraction.
 4. Render — PDF.
 5. Deliver — push to reMarkable.
 
-The web UI and API are already in place; a "run" today means "check every active source's auth
-and record the result". Later phases extend `pipeline/runner.py::execute_run()` without changing
-the API or UI.
+The web UI and API are already in place. A "run" today checks every active source's auth, then
+collects that source's last 24h into the `collecteditem` table. Later phases extend
+`pipeline/runner.py::execute_run()` without changing the API or UI.
+
+Every collector's knowledge of its API's response shape comes from documentation, not from live
+calls — see [Dry-running a collector](#dry-running-a-collector) before trusting a scheduled run.
 
 Design decisions and the research behind them: [`docs/_research/`](docs/_research/).
 
@@ -160,13 +164,31 @@ python auth/m365_bootstrap.py <alias> && python auth/zoom_s2s_auth.py && python 
 so it doubles as the second-run check. Set `SLACK_SKIP_DMS=1` in `.env` if you dropped
 `im:history` / `im:read`, or the Slack check will fail on the missing scopes.
 
+### Dry-running a collector
+
+Exercises one source against real credentials and prints what came back. Writes nothing — no items,
+no cursor advance, no run — so it's safe against production, repeatedly.
+
+```
+python -m pipeline.collect                 # list declared sources
+python -m pipeline.collect slack_work      # last 24h, one line per item
+python -m pipeline.collect m365_work --hours 2 --limit 3
+python -m pipeline.collect zoom --raw      # full JSON, for checking field names
+python -m pipeline.collect --all
+```
+
+Use `--raw` first on each source. The collectors parse fields named in vendor documentation
+(`summary_content`, `meeting_uuid`, `lastModifiedDateTime`), and the first live response is what
+confirms those names are right.
+
 ### Tests
 
 ```
 pytest
 ```
 
-Covers the `.env` parsing and the scope-verification paths in `pipeline/health.py`. No network.
+Covers `.env` parsing, scope verification, run orchestration, and every collector's parsing and
+pagination against stubbed responses. No network — which is exactly why the dry run above matters.
 
 ## Web interface
 
