@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Optional
 
 from pipeline.clock import utcnow
-from pipeline.collectors import DEFAULT_LOOKBACK, OVERLAP, CollectionResult, dispatch
+from pipeline.collectors import DEFAULT_LOOKBACK, MAX_BACKFILL, OVERLAP, CollectionResult, dispatch
 from pipeline.config_store import load_config
 from pipeline.db import (
     CollectedItem,
@@ -38,16 +38,22 @@ def collection_window(source: str, until: datetime) -> datetime:
     """
     Where to start collecting for this source.
 
-    Normally 24h back. But if the last successful run was longer ago than that — a failed run, a
-    box that was off — start from that watermark instead so the missed window is backfilled rather
-    than silently skipped. The overlap covers items that land slightly out of order; dedupe on
-    external_id makes re-reading them free.
+    Normally 24h back. If the last success was longer ago — a failed run, a box that was off —
+    start from that watermark instead so the missed window is backfilled rather than silently
+    skipped. The overlap covers items that land slightly out of order; dedupe on external_id makes
+    re-reading them free.
+
+    Bounded by MAX_BACKFILL. An unbounded window looks reasonable until a machine comes back after
+    a month off and the first run asks every API for a month of history.
     """
     default_start = until - DEFAULT_LOOKBACK
+    floor = until - MAX_BACKFILL
+
     cursor = get_cursor(source)
     if cursor is None or cursor.last_success_at is None:
         return default_start
-    return min(default_start, cursor.last_success_at - OVERLAP)
+
+    return max(floor, min(default_start, cursor.last_success_at - OVERLAP))
 
 
 def _collect_source(source: str, until: datetime) -> CollectionResult:
@@ -56,12 +62,29 @@ def _collect_source(source: str, until: datetime) -> CollectionResult:
 
 
 def _persist(run_id: int, result: CollectionResult) -> int:
-    """Store this source's new items. Returns how many were actually new."""
+    """
+    Store this source's new items. Returns how many were actually new.
+
+    Two dedupes, because there are two ways a duplicate arrives: the same item seen in an earlier
+    run (collection windows overlap deliberately), and the same item twice within one result — a
+    page boundary that shifts mid-pagination, or a message reachable through two paths. The
+    check-then-insert is not atomic, which is safe only because the overlap guard in execute_run
+    means two runs never collect concurrently. If that guard is ever relaxed, this needs a unique
+    constraint on (source, external_id) instead.
+    """
     if not result.items:
         return 0
 
-    known = existing_external_ids(result.source, [i.external_id for i in result.items])
-    fresh = [i for i in result.items if i.external_id not in known]
+    seen: set[str] = set()
+    unique = []
+    for item in result.items:
+        if item.external_id in seen:
+            continue
+        seen.add(item.external_id)
+        unique.append(item)
+
+    known = existing_external_ids(result.source, [i.external_id for i in unique])
+    fresh = [i for i in unique if i.external_id not in known]
     if not fresh:
         return 0
 
@@ -91,26 +114,43 @@ def _summarize(
     health: list[HealthResult],
     collected: dict[str, int],
     failures: list[str],
+    failed_sources: set[str],
+    partial_sources: set[str],
 ) -> tuple[str, str, Optional[str]]:
-    """(status, summary, error) from the health checks plus what collection actually produced."""
+    """
+    (status, summary, error) from the health checks and what collection actually produced.
+
+    Three tiers, because health alone isn't enough: judging on it would report "partial" for a run
+    where every source authenticated perfectly and then collected nothing, which reads as a minor
+    problem and isn't one. But a source that collected *some* of its window is not a hard failure
+    either — so a lone partially-collecting source gives a partial run, not a failed one.
+    """
     if not health:
         return "success", "No sources active in config — nothing checked.", None
 
-    ok_count = sum(1 for r in health if r.status == "ok")
-    error_count = len(health) - ok_count
+    checked = {r.source for r in health}
+    unhealthy = {r.source for r in health if r.status != "ok"}
+    bad = (unhealthy | failed_sources) - partial_sources
+    partial = partial_sources - unhealthy
+    good = checked - bad - partial
+
     total = sum(collected.values())
     breakdown = ", ".join(f"{s}={n}" for s, n in sorted(collected.items()) if n) or "nothing new"
+    error = "; ".join(failures) or None
 
-    if error_count == 0 and not failures:
-        return "success", f"All {ok_count} sources healthy. Collected {total} items ({breakdown}).", None
-    if ok_count == 0:
+    if not bad and not partial:
+        return "success", f"All {len(good)} sources healthy. Collected {total} items ({breakdown}).", None
+    if not good and not partial:
         return (
             "failed",
-            f"All {error_count} sources failed.",
-            "; ".join(failures) or "All configured sources failed their health check.",
+            f"All {len(bad)} sources failed. Collected {total} items ({breakdown}).",
+            error or "All configured sources failed their health check.",
         )
-    detail = f"{ok_count} ok, {error_count} failing. Collected {total} items ({breakdown})."
-    return "partial", detail, "; ".join(failures) or None
+    tiers = f"{len(good)} ok"
+    if partial:
+        tiers += f", {len(partial)} partial"
+    tiers += f", {len(bad)} failing"
+    return "partial", f"{tiers}. Collected {total} items ({breakdown}).", error
 
 
 def execute_run(trigger: str = "manual") -> Run:
@@ -132,6 +172,8 @@ def execute_run(trigger: str = "manual") -> Run:
     health: list[HealthResult] = []
     collected: dict[str, int] = {}
     failures: list[str] = []
+    failed_sources: set[str] = set()
+    partial_sources: set[str] = set()
     fatal: Optional[str] = None
 
     try:
@@ -147,8 +189,12 @@ def execute_run(trigger: str = "manual") -> Run:
                 result = _collect_source(source, until)
             except Exception as exc:  # noqa: BLE001 — one source must never end the run
                 failures.append(f"{source}: {type(exc).__name__}: {exc}")
+                failed_sources.add(source)
                 continue
 
+            # Items are kept even when the source errored: a run that got half of Slack before
+            # hitting the rate-limit canary should keep that half. Safe because the cursor below
+            # does not advance, so the window is re-read next time and the dedupe absorbs it.
             collected[source] = _persist(run_id, result)
             if result.status == "ok":
                 # Only a clean collection advances the watermark. A partial one must re-read its
@@ -157,10 +203,13 @@ def execute_run(trigger: str = "manual") -> Run:
                 set_cursor(source, until)
             else:
                 failures.append(f"{source}: {result.detail}")
+                failed_sources.add(source)
+                if result.status == "partial":
+                    partial_sources.add(source)
     except Exception as exc:  # noqa: BLE001 — a dead run is worse than a broad except
         fatal = f"{type(exc).__name__}: {exc}"
     finally:
-        status, summary, error = _summarize(health, collected, failures)
+        status, summary, error = _summarize(health, collected, failures, failed_sources, partial_sources)
         if fatal is not None:
             status, error = "failed", fatal
 

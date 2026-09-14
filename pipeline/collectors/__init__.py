@@ -18,6 +18,10 @@ from typing import Optional
 # (Zoom widens this further — its summaries are generated well after a meeting ends).
 DEFAULT_LOOKBACK = timedelta(hours=24)
 OVERLAP = timedelta(minutes=30)
+# Ceiling on catch-up after a long outage. Without it, a box off for a month asks Graph for a
+# month of mail on first boot — slow, far past MAX_PAGES (which now raises rather than truncating
+# silently), and useless anyway: a morning digest is about yesterday, not about March.
+MAX_BACKFILL = timedelta(days=7)
 
 
 @dataclass

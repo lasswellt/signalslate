@@ -6,7 +6,7 @@ re-point the module's globals — same monkeypatch-the-module-constants style as
 No network: check_all_configured is stubbed at the module boundary.
 """
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -343,3 +343,116 @@ def test_clean_collection_does_advance_the_cursor(temp_db, no_config, monkeypatc
 
     runner.execute_run()
     assert db.get_cursor("zoom").last_success_at is not None
+
+
+# --- window bounds + dedupe ----------------------------------------------------------
+
+
+def test_window_is_24h_with_no_cursor(temp_db):
+    until = datetime(2026, 9, 14, 6, 0, 0)
+    assert runner.collection_window("zoom", until) == until - runner.DEFAULT_LOOKBACK
+
+
+def test_window_backfills_from_a_lagging_cursor(temp_db):
+    until = datetime(2026, 9, 14, 6, 0, 0)
+    db.set_cursor("zoom", datetime(2026, 9, 11, 6, 0, 0))
+    # Three days back, minus the overlap — not the default 24h.
+    assert runner.collection_window("zoom", until) == datetime(2026, 9, 11, 5, 30, 0)
+
+
+def test_window_is_capped_for_a_very_stale_cursor(temp_db):
+    """A machine back after a month must not ask every API for a month of history."""
+    until = datetime(2026, 9, 14, 6, 0, 0)
+    db.set_cursor("zoom", datetime(2026, 1, 1, 0, 0, 0))
+
+    window = runner.collection_window("zoom", until)
+    assert window == until - runner.MAX_BACKFILL
+    assert (until - window).days == 7
+
+
+def test_window_never_shrinks_below_the_default(temp_db):
+    """A cursor from five minutes ago must not shorten the window to five minutes."""
+    until = datetime(2026, 9, 14, 6, 0, 0)
+    db.set_cursor("zoom", until - timedelta(minutes=5))
+    assert runner.collection_window("zoom", until) == until - runner.DEFAULT_LOOKBACK
+
+
+def test_persist_dedupes_within_one_batch(temp_db):
+    """Duplicates inside a single result — a shifting page boundary — must not double-insert."""
+    from pipeline.collectors import CollectionResult, Item
+
+    with db.get_session() as session:
+        session.add(db.Run(trigger="manual", status="running"))
+        session.commit()
+
+    dupe = Item("message", "same-id", utcnow(), {"text": "once"})
+    result = CollectionResult("slack_a", "ok", "", [dupe, dupe, Item("message", "other", utcnow(), {})])
+
+    assert runner._persist(1, result) == 2
+    assert len(db.items_for_run(1)) == 2
+
+
+def test_persist_dedupes_against_earlier_runs(temp_db):
+    from pipeline.collectors import CollectionResult, Item
+
+    with db.get_session() as session:
+        session.add(db.Run(trigger="manual", status="running"))
+        session.commit()
+
+    first = CollectionResult("slack_a", "ok", "", [Item("message", "m1", utcnow(), {})])
+    assert runner._persist(1, first) == 1
+    assert runner._persist(1, first) == 0  # same window re-read, nothing new
+
+
+def test_items_kept_when_a_source_errors_midway(temp_db, no_config, monkeypatch):
+    """Half of Slack before the rate-limit canary is better than none of it."""
+    from pipeline.collectors import CollectionResult, Item
+
+    partial_haul = [Item("message", "got-this-one", utcnow(), {"text": "kept"})]
+    stub_checks(monkeypatch, [HealthResult("slack_a", "ok", "")])
+    stub_collect(monkeypatch, {"slack_a": CollectionResult("slack_a", "error", "canary fired", partial_haul)})
+
+    run = runner.execute_run()
+    assert run.status == "failed"           # sole source failed to collect
+    assert len(db.items_for_run(run.id)) == 1  # and the partial haul is kept
+    assert db.get_cursor("slack_a") is None    # but the window will be re-read
+
+
+def test_all_sources_failing_collection_is_failed_not_partial(temp_db, no_config, monkeypatch):
+    """Health passing means nothing if every collection failed — that isn't a minor problem."""
+    from pipeline.collectors import CollectionResult
+
+    stub_checks(monkeypatch, [HealthResult("zoom", "ok", ""), HealthResult("slack_a", "ok", "")])
+    stub_collect(monkeypatch, {
+        "zoom": CollectionResult("zoom", "error", "dead"),
+        "slack_a": CollectionResult("slack_a", "error", "also dead"),
+    })
+
+    run = runner.execute_run()
+    assert run.status == "failed"
+
+
+def test_lone_partial_source_is_partial_not_failed(temp_db, no_config, monkeypatch):
+    """A source that collected some of its window is not a hard failure."""
+    from pipeline.collectors import CollectionResult
+
+    stub_checks(monkeypatch, [HealthResult("zoom", "ok", "")])
+    stub_collect(monkeypatch, {"zoom": CollectionResult("zoom", "partial", "1 of 3 lists failed")})
+
+    run = runner.execute_run()
+    assert run.status == "partial"
+    assert "1 partial" in run.summary
+
+
+def test_healthy_source_with_failed_collection_is_not_counted_ok(temp_db, no_config, monkeypatch):
+    from pipeline.collectors import CollectionResult
+
+    stub_checks(monkeypatch, [HealthResult("zoom", "ok", ""), HealthResult("slack_a", "ok", "")])
+    stub_collect(monkeypatch, {
+        "zoom": CollectionResult("zoom", "ok", "fine"),
+        "slack_a": CollectionResult("slack_a", "error", "canary fired"),
+    })
+
+    run = runner.execute_run()
+    assert run.status == "partial"
+    assert "1 ok, 1 failing" in run.summary
