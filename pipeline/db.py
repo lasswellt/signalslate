@@ -80,9 +80,43 @@ class SourceCursor(SQLModel, table=True):
     consecutive_failures: int = 0
 
 
+def _add_missing_columns() -> None:
+    """
+    Add columns that exist in the models but not yet on disk.
+
+    SQLModel.metadata.create_all() creates missing *tables* and silently no-ops on tables that
+    already exist — it never issues ALTER TABLE. data/ is bind-mounted and survives redeploys, so
+    without this a model gaining a column makes every query against that table raise
+    "no such column" on an existing install, and every run fails until someone edits SQLite by hand.
+
+    Deliberately minimal: adds columns, never drops or retypes them. Anything beyond that wants a
+    real migration tool.
+    """
+    with engine.connect() as conn:
+        for table_name, table in SQLModel.metadata.tables.items():
+            on_disk = {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table_name})")}
+            if not on_disk:
+                continue  # table doesn't exist yet; create_all will make it complete
+
+            for column in table.columns:
+                if column.name in on_disk:
+                    continue
+                ddl = f"{column.name} {column.type.compile(engine.dialect)}"
+                # SQLite refuses a NOT NULL column without a default on a populated table.
+                default = getattr(column.default, "arg", None)
+                if default is not None and not callable(default):
+                    ddl += f" DEFAULT {default!r}" if isinstance(default, str) else f" DEFAULT {default}"
+                elif not column.nullable:
+                    continue  # can't add safely; leave it for a real migration
+                conn.exec_driver_sql(f"ALTER TABLE {table_name} ADD COLUMN {ddl}")
+                print(f"[signalslate] migrated: added {table_name}.{column.name}")
+        conn.commit()
+
+
 def init_db() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     SQLModel.metadata.create_all(engine)
+    _add_missing_columns()
 
 
 def get_session() -> Session:

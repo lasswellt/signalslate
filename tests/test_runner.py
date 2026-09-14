@@ -5,6 +5,7 @@ The engine in pipeline.db is created at import time, so these tests rebuild it a
 re-point the module's globals — same monkeypatch-the-module-constants style as tests/test_health.py.
 No network: check_all_configured is stubbed at the module boundary.
 """
+import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -521,7 +522,7 @@ def test_capped_backfill_is_reported_not_silently_skipped(temp_db, no_config, mo
     # A caveat on a successful run, not a failure — but it must be visible on the dashboard.
     assert run.status == "success"
     assert "backfill capped" in run.summary
-    assert "day(s) before the window were skipped" in run.summary
+    assert "before the window were skipped" in run.summary
 
 
 def test_no_shortfall_reported_for_a_normal_run(temp_db, no_config, monkeypatch):
@@ -530,4 +531,42 @@ def test_no_shortfall_reported_for_a_normal_run(temp_db, no_config, monkeypatch)
     db.set_cursor("zoom", utcnow() - timedelta(hours=26))
     stub_checks(monkeypatch, [HealthResult("zoom", "ok", "")])
     stub_collect(monkeypatch, {"zoom": CollectionResult("zoom", "ok", "fine")})
-    assert runner.execute_run().status == "success"
+
+    run = runner.execute_run()
+    assert run.status == "success"
+    assert "backfill capped" not in run.summary  # must not fire spuriously
+
+
+def test_sub_day_shortfall_is_still_reported(temp_db, no_config, monkeypatch):
+    """A 20-hour hole truncates to 0 whole days — and a falsy 0 is silence."""
+    from pipeline.collectors import CollectionResult
+
+    db.set_cursor("zoom", utcnow() - (runner.MAX_BACKFILL + timedelta(hours=20)))
+    stub_checks(monkeypatch, [HealthResult("zoom", "ok", "")])
+    stub_collect(monkeypatch, {"zoom": CollectionResult("zoom", "ok", "fine")})
+
+    run = runner.execute_run()
+    assert "backfill capped" in run.summary
+    # ~20h plus the OVERLAP the window genuinely reaches back for; the point is it isn't silent,
+    # and specifically isn't the "0h" that whole-day truncation would have produced.
+    hours = int(re.search(r"capped — (\d+)h", run.summary).group(1))
+    assert 20 <= hours <= 21
+
+
+def test_raising_collector_also_counts_toward_the_streak(temp_db, no_config, monkeypatch):
+    """A collector that raises every run is the strongest case for eventually advancing."""
+    stub_checks(monkeypatch, [HealthResult("zoom", "ok", "")])
+    monkeypatch.setattr(runner, "_active", lambda _c: ["zoom"])
+
+    def always_raises(source, until):
+        raise ValueError("corrupt token cache")
+
+    monkeypatch.setattr(runner, "_collect_source", always_raises)
+
+    for _ in range(runner.MAX_STUCK_RUNS - 1):
+        runner.execute_run()
+        assert db.get_cursor("zoom").last_success_at is None
+
+    run = runner.execute_run()
+    assert db.get_cursor("zoom").last_success_at is not None
+    assert "repeated hard failures" in (run.error or "")

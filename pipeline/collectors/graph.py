@@ -28,6 +28,9 @@ MAX_PAGES = 40
 # holding an in-window edit. This grace period is how far past the window we keep looking.
 # Edits to messages older than this are missed — the alternative is scanning every chat, forever.
 CHAT_SCAN_GRACE = timedelta(days=7)
+# Chats whose last-activity time can't be read (no preview) before the scan gives up. Without a
+# bound, a single such chat reinstates the per-chat fan-out for everything ordered behind it.
+MAX_UNJUDGEABLE_CHATS = 25
 
 
 class GraphError(RuntimeError):
@@ -204,12 +207,20 @@ def collect_chat(token: str, since: datetime, until: datetime) -> list[Item]:
 
     cutoff = since - CHAT_SCAN_GRACE
     items = []
+    unjudgeable = 0
     for chat in chats:
         # Chats arrive newest-activity-first, so once one falls past the cutoff every chat after it
         # does too. Without this, a busy account costs one request per chat ever opened — hundreds
         # of calls a day, and a single 429 takes the whole chat collector down.
         last_activity = parse_iso((chat.get("lastMessagePreview") or {}).get("createdDateTime", ""))
-        if last_activity is not None and last_activity < cutoff:
+        if last_activity is None:
+            # No preview: a chat that has never held a message, or $expand not honoured. Graph
+            # sorts nulls last in a desc ordering, so one of these would otherwise disable the
+            # cutoff for every chat behind it. Scan a bounded number, then stop.
+            unjudgeable += 1
+            if unjudgeable > MAX_UNJUDGEABLE_CHATS:
+                break
+        elif last_activity < cutoff:
             break
 
         rows = _collect(

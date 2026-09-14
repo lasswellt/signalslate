@@ -11,7 +11,7 @@ terminal status is written in a finally block, because a Run left at status="run
 to the dashboard's poll loop and never resolves.
 """
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from pipeline.clock import utcnow
@@ -64,19 +64,23 @@ def collection_window(source: str, until: datetime) -> datetime:
     return max(floor, min(default_start, cursor.last_success_at - OVERLAP))
 
 
-def backfill_shortfall(source: str, until: datetime) -> Optional[int]:
+def backfill_shortfall(source: str, until: datetime) -> Optional[timedelta]:
     """
-    Whole days the MAX_BACKFILL cap is about to skip, or None when nothing is skipped.
+    How much history the MAX_BACKFILL cap is about to skip, or None when nothing is skipped.
 
     After a long outage the window floors at MAX_BACKFILL and the run then advances the watermark
-    past everything older. That data is unreachable from then on, so the run should say so rather
+    past everything older. That data is unreachable from then on, so the run must say so rather
     than report a clean success over a hole.
+
+    Returns a timedelta, not a day count: whole days truncate a 20-hour gap to 0, which a caller
+    testing truthiness then treats as "nothing skipped" — the exact silence this exists to break.
+    Measured against the real window start, which includes OVERLAP.
     """
     cursor = get_cursor(source)
     if cursor is None or cursor.last_success_at is None:
         return None
-    skipped = (until - MAX_BACKFILL) - cursor.last_success_at
-    return skipped.days if skipped.total_seconds() > 0 else None
+    skipped = collection_window(source, until) - (cursor.last_success_at - OVERLAP)
+    return skipped if skipped.total_seconds() > 0 else None
 
 
 def _collect_source(source: str, until: datetime) -> CollectionResult:
@@ -161,7 +165,6 @@ def _summarize(
     bad = unhealthy | (failed_sources - partial_sources)
     partial = (partial_sources | failed_sources) - bad
     good = checked - bad - partial
-    assert not (bad & partial) and not (good & (bad | partial))
 
     total = sum(collected.values())
     breakdown = ", ".join(f"{s}={n}" for s, n in sorted(collected.items()) if n) or "nothing new"
@@ -224,14 +227,22 @@ def execute_run(trigger: str = "manual") -> Run:
             if source not in healthy:
                 continue
             shortfall = backfill_shortfall(source, until)
-            if shortfall:
-                notes.append(f"{source}: backfill capped — {shortfall} day(s) before the window were skipped.")
+            if shortfall is not None:
+                hours = round(shortfall.total_seconds() / 3600)
+                notes.append(f"{source}: backfill capped — {hours}h before the window were skipped.")
 
             try:
                 result = _collect_source(source, until)
             except Exception as exc:  # noqa: BLE001 — one source must never end the run
                 failures.append(f"{source}: {type(exc).__name__}: {exc}")
                 failed_sources.add(source)
+                # Counts toward the streak exactly as a returned failure does. A collector that
+                # *raises* every run (a corrupt MSAL cache makes deserialize throw, which
+                # collect_m365 doesn't catch) is the strongest case for eventually advancing —
+                # missing it here left the watermark frozen forever in the worst scenario.
+                if record_failure(source) >= MAX_STUCK_RUNS:
+                    set_cursor(source, until)
+                    failures.append(f"{source}: advancing watermark after repeated hard failures")
                 continue
 
             # Items are kept even when the source errored: a run that got half of Slack before
