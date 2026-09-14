@@ -1,0 +1,37 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: signalslate-api
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./tokens:/app/tokens
+    ports:
+      - "8000:8000"
+    networks:
+      - digest
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: signalslate-web
+    restart: unless-stopped
+    environment:
+      # Must be the LAN-reachable Docker host, not the Docker service name "api" —
+      # this URL is called from the browser, not just server-to-server. Set LAN_HOST
+      # in .env (e.g. 192.168.1.50 or the host's LAN name).
+      NUXT_PUBLIC_API_BASE: "http://${LAN_HOST}:8000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    networks:
+      - digest
+
+networks:
+  digest:
+    driver: bridge

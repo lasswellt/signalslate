@@ -1,0 +1,12 @@
+.env
+tokens/
+data/
+__pycache__/
+*.pyc
+venv/
+.cc-sessions/
+.claude/settings.local.json
+web/node_modules/
+web/.nuxt/
+web/.output/
+docs/local/

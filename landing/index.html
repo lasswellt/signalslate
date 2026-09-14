@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SignalSlate — one page, every morning</title>
+<meta name="description" content="SignalSlate pulls mail, calendar, and chat across every account into one digest, rendered to PDF, delivered to your reMarkable. Self-hosted.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Intel+One+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #171B1E;
+    --bg-raised: #1D2226;
+    --fg: #E7E9E8;
+    --fg-soft: #8B9296;
+    --hairline: #2B3033;
+    --amber: #E0A458;
+    --amber-deep: #C98A3A;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Intel One Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+    -webkit-font-smoothing: antialiased;
+    font-size: 15px;
+  }
+
+  .wrap { max-width: 700px; margin: 0 auto; padding: 0 24px; }
+
+  header.site {
+    padding: 24px 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+  header.site .wrap {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .wordmark {
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: -0.01em;
+  }
+  .wordmark::before { content: "> "; color: var(--amber); }
+  .gh-link {
+    font-size: 13px;
+    color: var(--fg-soft);
+    text-decoration: none;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .gh-link:hover { color: var(--fg); border-color: var(--fg-soft); }
+
+  main { padding: 64px 0 96px; }
+
+  h1 {
+    font-weight: 700;
+    font-size: clamp(28px, 5vw, 40px);
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    margin: 0 0 20px;
+    max-width: 14ch;
+  }
+  h1 .cursor {
+    display: inline-block;
+    width: 0.5em;
+    background: var(--amber);
+    animation: blink 1.1s steps(1) infinite;
+    margin-left: 2px;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .lede {
+    font-size: 15px;
+    line-height: 1.75;
+    color: var(--fg-soft);
+    max-width: 56ch;
+    margin: 0 0 48px;
+  }
+
+  .mock {
+    background: var(--bg-raised);
+    border: 1px solid var(--hairline);
+    padding: 28px 26px;
+    max-width: 440px;
+    margin-bottom: 64px;
+  }
+  .mock-date { font-size: 12px; color: var(--fg-soft); margin-bottom: 8px; }
+  .mock-head { font-weight: 600; font-size: 15px; line-height: 1.6; margin: 0 0 22px; color: var(--fg); }
+  .mock-section-label { font-size: 11px; color: var(--amber); letter-spacing: 0.02em; margin-bottom: 10px; }
+  .mock-item {
+    display: flex;
+    gap: 10px;
+    padding: 9px 0;
+    border-top: 1px solid var(--hairline);
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--fg-soft);
+  }
+  .mock-item:first-of-type { border-top: none; }
+  .mock-item::before { content: "-"; color: var(--fg-soft); }
+  .mock-item.priority::before { content: "!"; color: var(--amber); }
+
+  section { margin-bottom: 68px; }
+
+  h2 { font-weight: 600; font-size: 16px; margin: 0 0 22px; }
+  h2::before { content: "# "; color: var(--fg-soft); }
+
+  .sources {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1px;
+    background: var(--hairline);
+    border: 1px solid var(--hairline);
+  }
+  .source { background: var(--bg); padding: 16px 18px; font-size: 13px; color: var(--fg-soft); line-height: 1.5; }
+  .source strong { display: block; color: var(--fg); font-weight: 600; margin-bottom: 3px; }
+
+  .pipeline { display: flex; flex-direction: column; }
+  .step {
+    display: grid;
+    grid-template-columns: 20px 1fr;
+    gap: 16px;
+    padding: 16px 0;
+    border-top: 1px solid var(--hairline);
+  }
+  .step:first-child { border-top: none; }
+  .step-mark { color: var(--amber); font-weight: 600; }
+  .step-title { font-weight: 600; margin-bottom: 3px; }
+  .step-body { color: var(--fg-soft); font-size: 13px; line-height: 1.6; max-width: 54ch; }
+
+  .principles { color: var(--fg-soft); font-size: 13.5px; line-height: 1.8; }
+  .principles p { margin: 0 0 14px; max-width: 58ch; }
+  .principles p:last-child { margin-bottom: 0; }
+
+  .cta { border-top: 1px solid var(--hairline); padding-top: 36px; }
+  .cta p { color: var(--fg-soft); font-size: 13.5px; margin: 0 0 20px; max-width: 50ch; }
+  .btn {
+    display: inline-block;
+    background: var(--amber);
+    color: #14171A;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    padding: 11px 20px;
+  }
+  .btn:hover { background: var(--amber-deep); }
+
+  footer { border-top: 1px solid var(--hairline); padding: 24px 0 40px; font-size: 12px; color: var(--fg-soft); }
+
+  @media (max-width: 520px) {
+    .sources { grid-template-columns: 1fr; }
+    .mock { padding: 22px 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <span class="wordmark">SignalSlate</span>
+    <a class="gh-link" href="https://github.com/lasswellt/signalslate">github ↗</a>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <h1>One page, every morning.<span class="cursor"></span></h1>
+    <p class="lede">
+      Three inboxes, two Slack workspaces, a Zoom calendar, and a task list — condensed into a
+      single digest and pushed to your reMarkable before you sit down with coffee.
+    </p>
+
+    <div class="mock">
+      <div class="mock-date">mon sep 14</div>
+      <h3 class="mock-head">A steady morning — three things worth a look before the 10 o'clock.</h3>
+      <div class="mock-section-label">NEEDS ATTENTION</div>
+      <div class="mock-item priority"><span>Reply to the vendor thread on the Q4 renewal — they're waiting on a number.</span></div>
+      <div class="mock-item priority"><span>Prep two talking points for the 2pm retro — you're leading it.</span></div>
+      <div class="mock-item"><span>Design review doc still open for comment — closes end of day.</span></div>
+    </div>
+
+    <section>
+      <h2>what it pulls together</h2>
+      <div class="sources">
+        <div class="source"><strong>mail &amp; calendar</strong>3 Microsoft 365 orgs</div>
+        <div class="source"><strong>chat</strong>any number of Slack workspaces</div>
+        <div class="source"><strong>meetings</strong>Zoom + AI Companion</div>
+        <div class="source"><strong>tasks</strong>Microsoft To Do</div>
+        <div class="source"><strong>rendering</strong>reMarkable-native PDF</div>
+        <div class="source"><strong>delivery</strong>straight to the device</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>how it runs</h2>
+      <div class="pipeline">
+        <div class="step">
+          <div class="step-mark">01</div>
+          <div>
+            <div class="step-title">collect</div>
+            <div class="step-body">Each source is queried in parallel through its own API — nothing routed through a third party.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-mark">02</div>
+          <div>
+            <div class="step-title">synthesize</div>
+            <div class="step-body">Raw items get sorted into what needs a response, what's already resolved, and what's worth knowing.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-mark">03</div>
+          <div>
+            <div class="step-title">render</div>
+            <div class="step-body">Laid out for e-ink — high contrast, no color dependence, sized to the device.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-mark">04</div>
+          <div>
+            <div class="step-title">deliver</div>
+            <div class="step-body">Lands in a dated folder on the reMarkable before the day starts. No app to open first.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>self-hosted, on your terms</h2>
+      <div class="principles">
+        <p>Runs in Docker on your own hardware. Every token lives in a file you control, not a
+        vendor's database. The scheduler, the config, and the run history are all local — nothing
+        phones home except the APIs it's built to call.</p>
+        <p>A small dashboard runs alongside it on your network: last run status, per-source auth
+        health, and a manual trigger, for the mornings you want it early.</p>
+      </div>
+    </section>
+
+    <section class="cta">
+      <p>Source available on GitHub. Built for a home server; runs anywhere Docker runs.</p>
+      <a class="btn" href="https://github.com/lasswellt/signalslate">view the repository</a>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">SignalSlate — self-hosted, LAN-only by default.</div>
+</footer>
+
+</body>
+</html>
