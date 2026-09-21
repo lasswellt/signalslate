@@ -1,10 +1,11 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 from api.routers import config, runs, status
 from api.scheduler import start_scheduler
+from api.security import install_security
+from pipeline import health
 from pipeline.db import init_db, reap_orphaned_runs
 
 
@@ -21,13 +22,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="SignalSlate API", lifespan=lifespan)
 
-# LAN-only deployment — Nuxt dev server and the built frontend both need this.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+install_security(app, allowed_origins=health.web_origins())
 
 app.include_router(status.router, prefix="/api")
 app.include_router(runs.router, prefix="/api")
