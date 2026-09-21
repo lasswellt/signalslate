@@ -63,7 +63,7 @@ def test_default_token_dir_is_repo_tokens_directory():
 
 
 @pytest.mark.parametrize("alias", [
-    "", "..", "../x", "a/b", "a\\b", "/etc/passwd", "a.b", "a b", "a\n", "a\0b", "é", "a_b",
+    "", "..", "../x", "a/b", "a\\b", "/etc/passwd", "a b", "a\n", "a\0b", "é",
 ])
 def test_cache_path_rejects_invalid_alias(token_dir, alias):
     with pytest.raises(ValueError) as exc:

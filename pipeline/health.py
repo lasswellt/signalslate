@@ -322,6 +322,13 @@ def check_m365(alias: str) -> HealthResult:
     if cfg is None:
         return HealthResult(source, "error", f"No usable .env entry for alias={alias!r} (tenant_id + client_id)")
 
+    # An alias is a filename component; one tokencache refuses (traversal, empty, too long) must become
+    # this source's error, not a ValueError that aborts check_all_configured for every other source.
+    try:
+        tokencache.cache_path(alias, token_dir=TOKEN_DIR)
+    except ValueError:
+        return HealthResult(source, "error", "Alias cannot name a token cache file: use 1-64 letters, digits, '_', '.' or '-', starting with a letter or digit")
+
     # The lock spans load -> refresh -> save: MSAL rotates the refresh token on use, so two
     # unserialized refreshes of one alias strand the loser's token.
     with tokencache.locked(alias, token_dir=TOKEN_DIR):

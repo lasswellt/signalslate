@@ -16,8 +16,12 @@ Design decisions:
   0600 and fsynced before the replace. A reader sees the old file or the new one, never a torn one.
 - A corrupt, truncated or unreadable file loads as None, the same as an absent one. The callers already
   turn "no cache" into a per-source "re-run the sign-in" error, which is the right degradation.
-- The alias becomes part of a filename, so it is validated against ^[A-Za-z0-9-]+$ before any path is
-  built (path traversal guard).
+- The alias becomes part of a filename, so it is validated before any path is built (path traversal
+  guard). The rule is a safe FILENAME class, ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$, not the stricter
+  [A-Za-z0-9-]+ that new UI-created connections must satisfy: installs that predate the UI have
+  aliases such as acme_corp or acme.com in .env and a matching <alias>_cache.bin on disk, and
+  narrowing this rule made check_all_configured raise for them even with no key configured. No
+  separator, no leading dot and a length cap keep every alias inside TOKEN_DIR.
 
 Stdlib plus msal only: this module must stay importable from pipeline.health without a cycle.
 """
@@ -37,7 +41,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # Module attribute, read at call time, so tests can point it at a tmp_path.
 TOKEN_DIR = ROOT / "tokens"
 
-_ALIAS_RE = re.compile(r"^[A-Za-z0-9-]+$")
+_ALIAS_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 _FILE_MODE = 0o600
 
 _log = logging.getLogger(__name__)
@@ -53,12 +57,13 @@ def cache_path(alias: str, *, token_dir: Optional[Path] = None) -> Path:
     directory setting (pipeline.health.TOKEN_DIR, which tests and deployments repoint) passes it
     explicitly; otherwise its cache would be read from one directory and written to another.
 
-    Raises ValueError for any alias outside [A-Za-z0-9-]+ (empty, separators, dots, whitespace, NUL):
-    the alias is interpolated into a filename, so anything else could escape TOKEN_DIR.
+    Raises ValueError for any alias outside [A-Za-z0-9][A-Za-z0-9_.-]{0,63} (empty, separators, a
+    leading dot, whitespace, NUL, over 64 characters): the alias is interpolated into a filename, so
+    anything else could escape TOKEN_DIR.
     """
     # fullmatch, not $: "$" also matches before a trailing newline, which would let "a\n" through.
     if not isinstance(alias, str) or _ALIAS_RE.fullmatch(alias) is None:
-        raise ValueError("invalid alias: must match [A-Za-z0-9-]+")
+        raise ValueError("invalid alias: must match [A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
     return (TOKEN_DIR if token_dir is None else token_dir) / f"{alias}_cache.bin"
 
 
