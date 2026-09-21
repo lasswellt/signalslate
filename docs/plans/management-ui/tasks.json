@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T23:41:46Z",
+  "updated": "2026-09-21T23:47:12Z",
   "tasks": [
     {
       "id": "T-001",
@@ -3082,11 +3082,46 @@
           "timeout": 600
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:47:12Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'iso_z' api/routers/runs.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:46:51Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/runs.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:46:52Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_runs_timestamps.py -q",
+            "exit": 0,
+            "duration_ms": 579,
+            "tail": "....                                                                     [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n4 passed, 1 warning in 0.34s",
+            "recorded_at": "2026-09-21T23:46:52Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest -q",
+            "exit": 0,
+            "duration_ms": 19568,
+            "tail": "...................................................... [ 72%]\n........................................................................ [ 75%]\n........................................................................ [ 79%]\n........................................................................ [ 82%]\n........................................................................ [ 86%]\n........................................................................ [ 89%]\n........................................................................ [ 93%]\n........................................................................ [ 96%]\n........................................................................ [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions\n    warnings.warn(  # deprecated in 14.0 - 2024-11-09\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:16: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated\n    from websockets.server import WebSocketServerProtocol\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2088 passed, 3 warnings in 18.70s",
+            "recorded_at": "2026-09-21T23:47:12Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check-report finding 8. /api/runs and /api/runs/{id} return run.started_at, finished_at and source_health.checked_at as naive UTC datetimes, which browsers parse as LOCAL time; /status and the new routers already use api.serialize.iso_z. Convert every datetime in api/routers/runs.py through iso_z (None stays None) and change nothing else in the payload shape. Existing tests must pass unchanged: grep the existing tests for these fields first and report if any assert the naive format (then STOP with BLOCKED and the failing assertion instead of editing them). Tests (real router on a temp DB): every timestamp in list and detail ends with Z and parses back to the stored UTC value; a running run has finished_at null; source_health checked_at ends with Z."
     },
