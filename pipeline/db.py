@@ -78,6 +78,42 @@ class SourceCursor(SQLModel, table=True):
     # licensed, say) would otherwise freeze the watermark forever, re-fetching the full backfill
     # window every day for good. See runner.MAX_STUCK_RUNS.
     consecutive_failures: int = 0
+    # Last collection attempt, successful or not. last_success_at only moves on a clean run, so it
+    # cannot tell "never tried" from "tried and failed". These four columns are all nullable on
+    # purpose: _add_missing_columns() silently skips a NOT NULL column without a Python default,
+    # which would leave an existing install raising "no such column" on every cursor read.
+    last_attempt_at: Optional[datetime] = None
+    last_status: Optional[str] = None  # "ok" | "error"
+    last_detail: Optional[str] = None
+    last_item_count: Optional[int] = None
+
+
+class Connection(SQLModel, table=True):
+    """
+    One configured source, editable from the management UI. `id` equals the source id used by
+    CollectedItem.source, SourceHealth.source and SourceCursor.source, so nothing downstream
+    needs a lookup.
+
+    `config` holds NON-secret fields as JSON. `secret_ciphertext` is an encrypted JSON envelope of
+    the secrets dict, kept in a plain nullable TEXT column and encrypted/decrypted only in the
+    service module (a TypeDecorator would hide the crypto from callers and make every ORM load
+    attempt a decrypt).
+    """
+    id: str = Field(primary_key=True)
+    kind: str  # "m365" | "zoom" | "slack" | "gmail"
+    label: str  # the alias for m365, the literal "zoom" for zoom
+    origin: str  # "env" | "ui"
+    seq: int = 0  # stable creation order; numbers the M365_ORG<n> env keys
+    config: str  # JSON of non-secret fields
+    secret_ciphertext: Optional[str] = None
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class Tombstone(SQLModel, table=True):
+    """A deleted connection id: stops the startup .env seeding from re-creating a connection the user removed."""
+    id: str = Field(primary_key=True)
+    deleted_at: datetime = Field(default_factory=utcnow)
 
 
 def _add_missing_columns() -> None:
