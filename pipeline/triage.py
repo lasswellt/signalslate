@@ -131,8 +131,24 @@ def batches(seq: Sequence[T], size: int = BATCH_SIZE) -> Iterator[list[T]]:
 
 _CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 _HTML = re.compile(r"<!--.*?-->|</?[A-Za-z][^>]*>", re.DOTALL)
-_MD_LINK = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
-_URL = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
+# The target may hold one level of parentheses, e.g. javascript:alert(1), or the ")" would be left behind.
+_MD_LINK = re.compile(r"!?\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)")
+# Anything that could render as a link or an executable target in the PDF digest. Bare domains
+# (evil.example.net, Acme.com) are deliberately NOT matched: company names and file names would be
+# mangled far more often than a scheme-less domain does harm in a static PDF.
+_URL = re.compile(
+    r"""
+      (?<![a-z0-9+.-])[a-z][a-z0-9+.-]*://\S+   # any scheme with //: http(s), ftp(s), sftp, ws(s), file, ...
+                                                # (lookbehind starts a scheme at a run start only, so a long
+                                                # letter run is scanned once, not once per position)
+    | \b(?:mailto|javascript|vbscript|data|tel|sms|blob):\S+
+                                                # opaque schemes; \b keeps "metadata:x" out, and requiring a
+                                                # non-space next keeps the labels "Data: Q3" and "Tel: 555" intact
+    | www\.\S+                                 # scheme-less web address
+    | (?<![\w:/])//\S+                          # protocol-relative //host/path; "and//or" is left alone
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
 _WHITESPACE = re.compile(r"\s+")
 _ISO_DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
@@ -141,8 +157,8 @@ def sanitize_text(text: str, max_len: int) -> str:
     """
     Strip links, markup and control characters, collapse whitespace, cap at `max_len`.
 
-    Control characters and tags become a space rather than nothing so that "ht<b></b>tps://x" cannot
-    reassemble into a URL after stripping. Markdown links keep only their label. The cut is at a
+    Control characters and tags become a space rather than nothing so that "ht<b></b>tps://x" or
+    "ja<b></b>vascript:x" cannot reassemble into a URL after stripping. Markdown links keep only their label. The cut is at a
     whitespace boundary when there is one.
     """
     text = _CONTROL.sub(" ", text)

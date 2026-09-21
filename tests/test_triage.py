@@ -242,6 +242,69 @@ def test_sanitize_text_empty_and_markup_only_give_empty_string():
     assert sanitize_text("<br/> https://example.com", 10) == ""
 
 
+@pytest.mark.parametrize(
+    "target",
+    [
+        "ftp://files.example.com/a.zip",
+        "ftps://files.example.com/a.zip",
+        "sftp://files.example.com/a.zip",
+        "ws://chat.example.com/s",
+        "wss://chat.example.com/s",
+        "file:///etc/passwd",
+        "mailto:a@example.com",
+        "javascript:alert(1)",
+        "vbscript:msgbox(1)",
+        "data:text/html;base64,PGI+",
+        "tel:+15550100",
+        "sms:+15550100",
+        "blob:https://example.com/uuid",
+        "MAILTO:a@example.com",
+        "JavaScript:alert(1)",
+        "//cdn.example.org/x.js",
+    ],
+)
+def test_sanitize_text_strips_other_uri_schemes(target: str):
+    assert sanitize_text(f"before {target} after", 100) == "before after"
+    assert sanitize_text(f"open [the label]({target}) please", 100) == "open the label please"
+
+
+def test_sanitize_text_protocol_relative_leaves_and_or_alone():
+    assert sanitize_text("read and//or write", 100) == "read and//or write"
+    assert sanitize_text("load //cdn.example.org/x.js now", 100) == "load now"
+
+
+def test_sanitize_text_full_url_is_removed_as_one_piece():
+    assert sanitize_text("go https://example.com/a//b now", 100) == "go now"
+
+
+def test_sanitize_text_leaves_bare_domains_alone():
+    assert sanitize_text("ask acme.example.com or Acme.com", 100) == "ask acme.example.com or Acme.com"
+
+
+@pytest.mark.parametrize("text", ["Data: Q3 numbers", "Tel: 555-0100", "metadata:x", "hotel:x", "profile:abc"])
+def test_sanitize_text_leaves_scheme_lookalikes_alone(text: str):
+    assert sanitize_text(text, 100) == text
+
+
+def test_sanitize_text_scheme_removal_leaves_no_double_space():
+    assert sanitize_text("See mailto:a@example.com now", 100) == "See now"
+
+
+def test_sanitize_text_tag_split_javascript_does_not_reassemble():
+    assert "javascript:" not in sanitize_text("ja<b></b>vascript:alert(1)", 100).lower()
+    assert "javascript:" not in sanitize_text("ja\x00vascript:alert(1)", 100).lower()
+
+
+def test_sanitize_text_long_letter_run_is_not_quadratic():
+    assert sanitize_text("a" * 200_000, 10) == "a" * 10
+
+
+def test_sanitize_record_strips_other_schemes_from_one_line():
+    cleaned = sanitize_record(make_record(one_line="Grab ftp://x.example.com/f and javascript:y now"))
+
+    assert cleaned.one_line == "Grab and now"
+
+
 # --- sanitize_record -------------------------------------------------------------------------------
 
 
