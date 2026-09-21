@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-21T22:45:15Z",
+  "updated": "2026-09-21T22:55:31Z",
   "tasks": [
     {
       "id": "T-001",
@@ -399,11 +399,60 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T22:55:31Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'from defusedxml' pipeline/domains/registrars/namecheap.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:55:31Z"
+          },
+          {
+            "cmd": "! grep -nE '^(import|from) xml\\.etree' pipeline/domains/registrars/namecheap.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:55:31Z"
+          },
+          {
+            "cmd": "grep -qE 'namecheap\\.domains\\.create' pipeline/domains/registrars/namecheap.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:55:31Z"
+          },
+          {
+            "cmd": "grep -qE 'api\\.sandbox\\.namecheap\\.com' pipeline/domains/registrars/namecheap.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:55:31Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/domains/registrars/namecheap.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:55:31Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_registrar_namecheap.py -q",
+            "exit": 0,
+            "duration_ms": 564,
+            "tail": "........................                                                 [100%]\n24 passed in 0.37s",
+            "recorded_at": "2026-09-21T22:55:31Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Finding 3, Step 2. requests (codebase convention), timeout 30. getList paged PageSize=100; check batch size is UNVERIFIED (~50): chunk at 50 and make the constant obvious. Map Status=ERROR messages to IpNotWhitelisted / NotEligible / AuthFailed. check_connection returns detail naming current egress IPv4 (api.ipify.org) so the UI can say 'whitelist X'. create needs all 4 contact roles from registrant_contact; returns charged amount. Tests stub requests at module import site (tests/test_collectors.py:47 pattern) with XML fixture strings; include an XXE payload test that must not resolve."
     },
