@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from api.routers import oauth as oauth_router  # noqa: E402
 from api.security import install_security  # noqa: E402
-from pipeline import connections, crypto, db, health, oauth_flows, oauth_google, oauth_m365  # noqa: E402
+from pipeline import connections, crypto, db, health, oauth_flows, oauth_google, oauth_m365, oauth_zoom  # noqa: E402
 from pipeline.health import GMAIL_SCOPE  # noqa: E402
 from pipeline.oauth_flows import FlowStore  # noqa: E402
 
@@ -49,8 +49,14 @@ M_ACCESS = "ms-access-token-Hd91XvB7mR"
 M_REFRESH = "ms-refresh-token-Bk55Lq0Wz"
 VERIFIER = "pkce-verifier-Rt61xHd0Pa"
 
+Z_ID = "zoom"
+Z_CLIENT_ID = "zoom-client-id-Ab12Cd34Ef"
+Z_CLIENT_SECRET = "zoom-client-secret-Gh56Ij78Kl"
+Z_REFRESH = "zoom-refresh-Mn90Op12Qr"
+Z_ACCESS = "zoom-access-St34Uv56Wx"
+
 CODE = "4/auth-code-Zk29qLmXw"
-SECRETS = [G_CLIENT_SECRET, G_REFRESH, G_ACCESS, M_ACCESS, M_REFRESH, VERIFIER, CODE]
+SECRETS = [G_CLIENT_SECRET, G_REFRESH, G_ACCESS, M_ACCESS, M_REFRESH, VERIFIER, CODE, Z_CLIENT_SECRET, Z_REFRESH, Z_ACCESS]
 
 
 class _FakeResponse:
@@ -177,6 +183,20 @@ def token_endpoint(monkeypatch):
 
 
 @pytest.fixture
+def zoom_token_endpoint(monkeypatch):
+    endpoint = TokenEndpoint()
+    endpoint.reply = _FakeResponse(200, {"refresh_token": Z_REFRESH, "access_token": Z_ACCESS, "expires_in": 3600})
+
+    def fake_post(url, data, timeout=None, auth=None, **kwargs):
+        assert url == oauth_zoom.TOKEN_ENDPOINT
+        endpoint.calls.append(dict(data))
+        return endpoint.reply
+
+    monkeypatch.setattr(oauth_zoom.requests, "post", fake_post)
+    return endpoint
+
+
+@pytest.fixture
 def fake_msal(monkeypatch):
     fake = FakeMsal()
     monkeypatch.setattr(oauth_m365.msal, "PublicClientApplication", fake.app_class())
@@ -201,6 +221,11 @@ def gmail(env):
 @pytest.fixture
 def m365(env):
     return connections.create("m365", {"alias": "acme", "tenant_id": TENANT_ID, "client_id": M_CLIENT_ID})
+
+
+@pytest.fixture
+def zoom(env):
+    return connections.create("zoom", {"client_id": Z_CLIENT_ID, "client_secret": Z_CLIENT_SECRET})
 
 
 def _app_logs(caplog) -> str:
@@ -847,3 +872,90 @@ def test_callback_uses_the_first_usable_configured_origin(client, gmail, token_e
     resp = _callback(client, "google", state=started["state"], code=CODE)
 
     assert resp.headers["location"] == SUCCESS
+
+
+# ---- zoom ----
+
+
+def test_start_zoom_sets_a_bound_nonce_cookie_and_builds_the_configured_redirect(client, zoom, flows):
+    started = _start(client, "zoom", Z_ID, "callback")
+
+    assert started["mode"] == "callback"
+    assert parse_qs(urlsplit(started["auth_url"]).query)["redirect_uri"] == [f"{BASE_URL}/api/oauth/callback/zoom"]
+    cookie = client.cookies[f"ss_oauth_{started['flow_id']}"]
+    assert cookie
+    assert Z_CLIENT_SECRET not in started["auth_url"]
+    assert len(flows) == 1
+
+
+def test_start_zoom_paste_back_mode_is_refused_with_invalid_mode(client, zoom, flows):
+    resp = _post(client, "/api/oauth/zoom/start", {"connection_id": Z_ID, "mode": "paste_back"})
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "invalid_mode"
+    assert "set-cookie" not in resp.headers
+    assert len(flows) == 0
+
+
+def test_start_zoom_with_s2s_auth_mode_is_a_handled_4xx_not_a_500(client, env, flows):
+    connections.create("zoom", {"client_id": Z_CLIENT_ID, "client_secret": Z_CLIENT_SECRET, "auth_mode": "s2s", "account_id": "acct-1"})
+
+    resp = _post(client, "/api/oauth/zoom/start", {"connection_id": Z_ID, "mode": "callback"})
+
+    assert 400 <= resp.status_code < 500
+    assert resp.json()["detail"]["code"] == "connection_not_found"
+    assert len(flows) == 0
+
+
+def test_paste_zoom_is_always_refused_and_never_touches_the_flow_store(client, zoom, flows):
+    started = _start(client, "zoom", Z_ID, "callback")
+
+    resp = _post(client, "/api/oauth/zoom/paste", {"flow_id": started["flow_id"], "url": _paste_url(started["state"])})
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "invalid_mode"
+    assert len(flows) == 1  # the callback flow started above is untouched
+    assert "set-cookie" not in resp.headers
+
+
+def test_callback_zoom_happy_path_redirects_to_the_fixed_target(client, zoom, zoom_token_endpoint, temp_db, flows, caplog):
+    started = _start(client, "zoom", Z_ID, "callback")
+    name = f"ss_oauth_{started['flow_id']}"
+
+    resp = _callback(client, "zoom", state=started["state"], code=CODE)
+
+    assert resp.status_code == 302
+    assert resp.headers["location"] == SUCCESS
+    assert resp.headers["cache-control"] == "no-store"
+    assert _deletes(resp, name)
+    assert len(zoom_token_endpoint.calls) == 1
+    assert zoom_token_endpoint.calls[0]["code"] == CODE
+    assert zoom_token_endpoint.calls[0]["redirect_uri"] == f"{BASE_URL}/api/oauth/callback/zoom"
+    assert connections.get_secret(Z_ID, "refresh_token") == Z_REFRESH
+    _assert_clean(resp, started["state"])
+    assert started["state"] not in _app_logs(caplog) and CODE not in _app_logs(caplog)
+    raw = _raw_db_text(temp_db)
+    assert CODE not in raw and Z_REFRESH not in raw
+    assert len(flows) == 0
+
+
+def test_callback_zoom_consent_denied_is_a_fixed_reason_and_leaks_nothing(client, zoom, zoom_token_endpoint, flows):
+    started = _start(client, "zoom", Z_ID, "callback")
+
+    resp = _callback(client, "zoom", state=started["state"], error="access_denied", error_description="user said no")
+
+    _assert_error_redirect(resp, "denied")
+    assert zoom_token_endpoint.calls == []
+    assert _deletes(resp, f"ss_oauth_{started['flow_id']}")
+    assert "user said no" not in _everything(resp)
+
+
+def test_callback_zoom_exchange_failure_is_a_fixed_reason(client, zoom, zoom_token_endpoint, flows):
+    started = _start(client, "zoom", Z_ID, "callback")
+    zoom_token_endpoint.reply = _FakeResponse(400, {"error": "invalid_grant", "reason": f"bad {CODE}"})
+
+    resp = _callback(client, "zoom", state=started["state"], code=CODE)
+
+    _assert_error_redirect(resp, "exchange_failed")
+    assert _deletes(resp, f"ss_oauth_{started['flow_id']}")
+    _assert_clean(resp, started["state"])
