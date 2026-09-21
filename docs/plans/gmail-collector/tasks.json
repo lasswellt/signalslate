@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T05:20:15Z",
+  "updated": "2026-09-21T05:22:25Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1680,11 +1680,39 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T05:22:25Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'isinstance\\(.*dict' auth/gmail_bootstrap.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T05:22:22Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" auth/gmail_bootstrap.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T05:22:22Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_gmail_bootstrap.py -q",
+            "exit": 0,
+            "duration_ms": 2680,
+            "tail": "..........................................                               [100%]\n42 passed in 2.54s",
+            "recorded_at": "2026-09-21T05:22:25Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check findings 4 and 6. (a) exchange_code calls body.get(...) on a NON-200 response before checking that the JSON body is a dict: a JSON array or scalar body raises AttributeError, not the TokenExchangeError its docstring promises, and main() catches only BootstrapError so the user gets a raw traceback. Fix: parse defensively (non-dict or non-JSON body -> a TokenExchangeError that names the HTTP status only, never echoing the body, which could contain secrets). (b) Handler.log_message deliberately returns without printing because the default logs the request line, which carries ?code=; the mutant that prints it survives all tests. Add a test that serves a real callback with a recognizable code through wait_for_code under capsys and asserts the code string appears in neither stdout nor stderr. Tests: a 400 response with a JSON array body, a JSON string body, a non-JSON body and an empty body each raise TokenExchangeError (a BootstrapError subclass) with no code, secret or refresh token in the message; the log-suppression test. Existing 24 tests unchanged."
     },
