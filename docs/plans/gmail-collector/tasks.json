@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T05:18:30Z",
+  "updated": "2026-09-21T05:20:15Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1621,11 +1621,39 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T05:20:15Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def handle_startendtag' pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T05:20:15Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T05:20:15Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+            "exit": 0,
+            "duration_ms": 568,
+            "tail": "........................................................................ [ 53%]\n...............................................................          [100%]\n135 passed, 51 deselected in 0.43s",
+            "recorded_at": "2026-09-21T05:20:15Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check findings 2 and 7. _TextExtractor overrides handle_starttag and handle_endtag but not handle_startendtag, and HTMLParser's default handle_startendtag calls start then end, so a self-closing NON-void hidden tag closes its own region at once: <div style='display:none'/>SECRET</div>visible extracts SECRETvisible (also the hidden attribute, aria-hidden and <script/>). Browsers ignore the '/>' on non-void elements (HTML5) and keep hiding until the matching end tag, so this is a bypass of the module's stated guarantee that hidden content never reaches the model. Fix: add handle_startendtag that, for a tag in _VOID_TAGS behaves as today, and otherwise behaves exactly like handle_starttag (push onto the stack and counter). Keep the T-018 Counter and stack in sync. Keep _SKIP_TAGS behavior for genuinely self-closing forms such as <br/>. Also pin the surviving mutant from the mutation run: the only skip-tags test puts <title> inside <head>, so dropping either alone survives: add one test with <title> OUTSIDE <head> and one with <head> text and no <title>. Tests: the four leaking forms above now hide their text and the text after the matching end tag is visible; the properly closed control still hides; <br/> and <img/> unaffected; Counter/stack consistency after self-closing tags; the two head/title tests. Every existing hidden-content, nesting and performance test must pass unchanged (the 10000-pair timing test especially)."
     },

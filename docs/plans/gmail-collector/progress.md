@@ -60,3 +60,5 @@ Ruling: defer — sanitize_text now removes any scheme:// URL (generic, a supers
 ## 2026-09-21T05:16:15Z build T-022 start (attempt 1)
 Ruling: defer — T-020 found that codecs.lookup(cs)._is_text_encoding is True for unicode_escape, raw_unicode_escape, utf-7, idna and punycode, so the private flag alone cannot close the surrogate hole; the fix is a canonical-name denylist plus the flag (fail-closed via getattr) plus a single _scrub helper over every string in the flattened payload. T-021 resolves client.messages.parse OUTSIDE the broad except so a client wired without .messages still raises (an existing test pins that); everything inside the call degrades to stubs and BaseException propagates. T-022 leaves operator-supplied argv text (args.source, NoAdapterError text) unwrapped by _safe; a hostile failure line has no dedicated test (triage._describe already sanitizes). (T-020..T-022, round 1)
 ## 2026-09-21T05:18:30Z verify T-022 ok=true
+## 2026-09-21T05:18:30Z build T-023 start (attempt 1)
+## 2026-09-21T05:20:15Z verify T-023 ok=true
