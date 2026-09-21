@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-21T22:55:31Z",
+  "updated": "2026-09-21T23:00:14Z",
   "tasks": [
     {
       "id": "T-001",
@@ -490,11 +490,53 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:00:14Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'sso-key' pipeline/domains/registrars/godaddy.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:00:13Z"
+          },
+          {
+            "cmd": "grep -qE '/v1/domains/agreements' pipeline/domains/registrars/godaddy.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:00:13Z"
+          },
+          {
+            "cmd": "grep -qE 'api\\.ote-godaddy\\.com' pipeline/domains/registrars/godaddy.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:00:13Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/domains/registrars/godaddy.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:00:13Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_registrar_godaddy.py -q",
+            "exit": 0,
+            "duration_ms": 556,
+            "tail": "......................                                                   [100%]\n22 passed in 0.37s",
+            "recorded_at": "2026-09-21T23:00:14Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Finding 4. Single _auth_headers() function (PAT migration risk). GET /v1/domains with marker pagination; POST /v1/domains/available (chunks of 500, checkType=FULL) — price is micro-units (divide by 1_000_000; verify against docs at build time); 403 ACCESS_DENIED/ACCOUNT_NOT_ELIGIBLE -> NotEligible('availability needs >=50 domains or 0/mo spend'); 429 -> RateLimited with RateLimit-Reset. purchase: GET /v1/domains/agreements?tlds=&privacy=false, then POST /v1/domains/purchase with consent.agreementKeys/agreedAt/agreedBy, privacy false, no add-ons. Tests stub requests."
     },
