@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T02:26:58Z",
+  "updated": "2026-09-21T02:34:33Z",
   "tasks": [
     {
       "id": "T-001",
@@ -25,11 +25,39 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T02:34:33Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "test -x venv/bin/python",
+            "exit": 0,
+            "duration_ms": 3,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:34:32Z"
+          },
+          {
+            "cmd": "venv/bin/python -c 'import msal, requests, fastapi, sqlmodel, apscheduler, pytest'",
+            "exit": 0,
+            "duration_ms": 366,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:34:32Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest -q",
+            "exit": 0,
+            "duration_ms": 684,
+            "tail": "........................................................................ [ 60%]\n................................................                         [100%]\n120 passed in 0.48s",
+            "recorded_at": "2026-09-21T02:34:33Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Host has no venv/ and no pytest (OS reinstall); Python is 3.14.x. Create venv/, pip install -r requirements.txt. If a pinned dep has no wheel for this interpreter, pick a supported one via mise, record the choice in README Local dev, and keep requirements.txt pins unchanged. If the baseline suite is red, STOP and report; do not start T-002 on a red baseline."
     },
