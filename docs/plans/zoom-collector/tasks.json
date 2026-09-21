@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "zoom-collector",
-  "updated": "2026-09-21T23:26:40Z",
+  "updated": "2026-09-21T23:35:10Z",
   "tasks": [
     {
       "id": "T-001",
@@ -342,11 +342,46 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:35:10Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'class ZoomAuthError' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:35:10Z"
+          },
+          {
+            "cmd": "grep -qE 'ZOOM_USER_SCOPES' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:35:10Z"
+          },
+          {
+            "cmd": "grep -qE 'fcntl' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:35:10Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_health.py -q",
+            "exit": 0,
+            "duration_ms": 795,
+            "tail": ".................................................................        [100%]\n65 passed in 0.57s",
+            "recorded_at": "2026-09-21T23:35:10Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Q6, Finding 4, Step 3. Zoom allows one token pair per user+app and rotates refresh tokens (devforum 127541); refresh tokens expire after 90 days. OAuth mode: hold a threading.Lock AND an fcntl.flock on a lock file beside the connection DB (covers the separate python -m pipeline.collect CLI process; owner confirmed this approach 2026-09-21) across read refresh_token -> oauth_zoom.refresh -> connections.set_secret(new refresh_token) BEFORE returning/caching; cache the access token in-process until 5 min before expiry. invalid_grant -> ZoomAuthError (hard, 'sign in again', like GmailAuthError health.py:400). check_zoom() uses the same function (Test button never refreshes separately) and checks ZOOM_USER_SCOPES in oauth mode: meeting:read:list_summaries, meeting:read:summary, meeting:read:list_meetings, meeting:read:list_past_participants + cloud_recording:read:meeting_transcript whenever include_transcripts is true (default true). S2S mode likewise adds cloud_recording:read:meeting_transcript:admin to the required set when include_transcripts is true. S2S mode path unchanged. Required test: two threads call zoom_token() concurrently -> exactly one POST to zoom.us/oauth/token and the stored refresh_token is the newest."
     },
