@@ -40,3 +40,5 @@ Ruling: split — sanitize_text only strips http(s):// and www. URLs, so ftp:, m
 ## 2026-09-21T03:16:30Z build T-014 start (attempt 1)
 Ruling: defer — triage_cli live mode triages every item in the window (--limit only caps what is printed), as specified; a large --hours window spends API credit on all of it. The WAL pragma on open may leave -wal/-shm sidecar files next to the DB (no rows written). Rows that are all unreadable payloads report 'no items' and exit 0. The post-edit typecheck hook baseline (76) is stale against a repo-wide pyright count of 85 that is identical with and without these changes (unresolved venv imports); a pyrightconfig.json with the venv path would fix the cause and is left to the user. (T-014, round 1)
 ## 2026-09-21T03:19:50Z verify T-014 ok=true
+## 2026-09-21T03:19:50Z build T-015 start (attempt 1)
+## 2026-09-21T03:20:49Z verify T-015 ok=true
