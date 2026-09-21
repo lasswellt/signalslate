@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T02:51:47Z",
+  "updated": "2026-09-21T02:54:33Z",
   "tasks": [
     {
       "id": "T-001",
@@ -502,11 +502,53 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T02:54:33Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def build_auth_url' auth/gmail_bootstrap.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:54:32Z"
+          },
+          {
+            "cmd": "grep -qE 'code_challenge_method' auth/gmail_bootstrap.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:54:32Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" auth/gmail_bootstrap.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:54:32Z"
+          },
+          {
+            "cmd": "venv/bin/python auth/gmail_bootstrap.py --help",
+            "exit": 0,
+            "duration_ms": 104,
+            "tail": "usage: gmail_bootstrap.py [-h] [--force] [--port PORT] [--no-browser] label\n\nInteractive (browser, loopback + PKCE) sign-in for one Gmail label\n\npositional arguments:\n  label         mailbox label, letters/digits only, e.g. personal; becomes\n                GMAIL_<LABEL>_REFRESH_TOKEN\n\noptions:\n  -h, --help    show this help message and exit\n  --force       mint a new token even if the configured one is healthy\n  --port PORT   loopback port to listen on (default: random free port)\n  --no-browser  print the URL instead of opening a browser",
+            "recorded_at": "2026-09-21T02:54:33Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_gmail_bootstrap.py -q",
+            "exit": 0,
+            "duration_ms": 615,
+            "tail": ".................                                                        [100%]\n17 passed in 0.47s",
+            "recorded_at": "2026-09-21T02:54:33Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research §1. Desktop OAuth client, auth-code + PKCE (S256), redirect http://127.0.0.1:<random port>, access_type=offline, prompt=consent, scope=GMAIL_SCOPE only. Stdlib http.server + secrets/hashlib + requests: NO google-auth-oauthlib dependency. Validate the state param; exchange the code (send client_secret); refuse to continue if the response has no refresh_token or the granted 'scope' lacks gmail.readonly; print the GMAIL_<LABEL>_REFRESH_TOKEN=... line for the user to paste into .env (never write it to a file). Short-circuit like m365_bootstrap.py: if a token is already configured and check_gmail is ok and not --force, exit 0. Support --port N and --no-browser (print the URL) so the loopback port can be SSH-forwarded from a headless box; that is an implementation note, not a documented Google recipe. Warn that every bootstrap run mints a token and Google keeps only 100 per client (oldest silently invalidated), so do not re-run casually. Unit-test the pure helpers (PKCE pair, URL builder, state check, scope assertion); the browser flow itself is a manual step."
     },
