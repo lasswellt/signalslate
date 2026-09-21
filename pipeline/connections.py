@@ -76,6 +76,8 @@ __all__ = [
     "secret_values",
     "seed_from_env",
     "materialize",
+    "zoom_auth_mode",
+    "zoom_include_transcripts",
     "overlay_provider",
     "is_family_key",
     "FAMILY_KEY_PATTERNS",
@@ -134,7 +136,15 @@ class _Kind:
 
 KINDS: dict[str, _Kind] = {
     "m365": _Kind("alias", ("alias", "tenant_id", "client_id"), (), ()),
-    "zoom": _Kind(None, ("account_id", "client_id"), ("client_secret",), ("client_secret",)),
+    "zoom": _Kind(
+        None,
+        ("client_id", "auth_mode", "account_id", "redirect_mode", "include_transcripts"),
+        ("client_secret", "refresh_token"),
+        # refresh_token is optional at creation: s2s installs never set it, and oauth installs get it
+        # from browser sign-in, same as gmail's refresh_token.
+        ("client_secret",),
+        optional_config=("auth_mode", "account_id", "redirect_mode", "include_transcripts"),
+    ),
     "slack": _Kind("label", ("label",), ("token",), ("token",)),
     "gmail": _Kind(
         "label",
@@ -170,7 +180,11 @@ KINDS: dict[str, _Kind] = {
 
 _REDIRECT_MODES = ("paste_back", "callback")
 _DEFAULT_REDIRECT_MODE = "paste_back"
-_SANDBOX_VALUES = ("true", "false")
+# Zoom's OAuth app only supports a server-side redirect; the paste_back fallback slack/gmail/wordpress
+# offer has no equivalent Zoom flow, so it is not one of the accepted values here.
+_ZOOM_REDIRECT_MODES = ("callback",)
+_ZOOM_AUTH_MODES = ("oauth", "s2s")
+_BOOL_VALUES = ("true", "false")
 _ENVIRONMENTS = ("production", "ote")
 _DEFAULT_ENVIRONMENT = "production"
 # Fields whose value is filled in automatically when the caller omits them.
@@ -178,6 +192,10 @@ _CONFIG_DEFAULTS: dict[str, str] = {
     "redirect_mode": _DEFAULT_REDIRECT_MODE,
     "environment": _DEFAULT_ENVIRONMENT,
 }
+# Kinds whose fields must NOT receive the shared default above: zoom's redirect_mode only accepts
+# "callback" (see _ZOOM_REDIRECT_MODES), so the shared "paste_back" default would be invalid for it;
+# leaving it unset means "not configured" instead.
+_NO_SHARED_DEFAULT: dict[str, set[str]] = {"zoom": {"redirect_mode"}}
 _REGISTRANT_CONTACT_KEYS = (
     "first_name",
     "last_name",
@@ -278,12 +296,17 @@ def _validate_config_value(kind: str, name: str, value: object) -> str:
             raise InvalidField(name, f"must match {pattern.pattern} and be at most {max_len} characters")
         return value
     if name == "redirect_mode":
-        if value not in _REDIRECT_MODES:
-            raise InvalidField(name, f"must be one of {', '.join(_REDIRECT_MODES)}")
+        allowed = _ZOOM_REDIRECT_MODES if kind == "zoom" else _REDIRECT_MODES
+        if value not in allowed:
+            raise InvalidField(name, f"must be one of {', '.join(allowed)}")
         return value
-    if name == "sandbox":
-        if value not in _SANDBOX_VALUES:
-            raise InvalidField(name, f"must be one of {', '.join(_SANDBOX_VALUES)}")
+    if name == "auth_mode":
+        if value not in _ZOOM_AUTH_MODES:
+            raise InvalidField(name, f"must be one of {', '.join(_ZOOM_AUTH_MODES)}")
+        return value
+    if name in ("sandbox", "include_transcripts"):
+        if value not in _BOOL_VALUES:
+            raise InvalidField(name, f"must be one of {', '.join(_BOOL_VALUES)}")
         return value
     if name == "environment":
         if value not in _ENVIRONMENTS:
@@ -352,6 +375,33 @@ def _validate_secrets(spec: _Kind, submitted: Mapping[str, Any]) -> dict[str, st
     return out
 
 
+def _check_zoom_auth_mode(config: Mapping[str, str]) -> None:
+    """An explicit auth_mode of "s2s" needs account_id on the same effective config (server-to-server
+    apps authenticate as an account, so there is nothing to derive it from otherwise). An absent
+    auth_mode is never rejected here: zoom_auth_mode() derives it from account_id instead."""
+    if config.get("auth_mode") == "s2s" and not config.get("account_id"):
+        raise InvalidField("account_id", "required when auth_mode is s2s")
+
+
+def zoom_auth_mode(view: "ConnectionView") -> str:
+    """
+    "oauth" or "s2s" for a Zoom connection. An explicit auth_mode wins; otherwise "s2s" when
+    account_id is set (the legacy server-to-server shape) and "oauth" otherwise.
+    """
+    mode = view.config.get("auth_mode")
+    if mode in _ZOOM_AUTH_MODES:
+        return mode
+    return "s2s" if view.config.get("account_id") else "oauth"
+
+
+def zoom_include_transcripts(view: "ConnectionView") -> bool:
+    """
+    Whether the Zoom collector should also pull meeting transcripts. Defaults to True (owner decision
+    2026-09-21): absent or any value other than the literal "false" means transcripts are included.
+    """
+    return view.config.get("include_transcripts") != "false"
+
+
 def _derive(kind: str, spec: _Kind, config: Mapping[str, str]) -> tuple[str, str]:
     """(id, label) from validated config."""
     if spec.label_field is None:
@@ -417,8 +467,9 @@ def create(kind: str, fields: Mapping[str, Any], origin: str = "ui") -> Connecti
 
     config = _validate_config(kind, spec, config_in)
     secrets = _validate_secrets(spec, secrets_in)
+    no_default = _NO_SHARED_DEFAULT.get(kind, ())
     for name in spec.optional_config:
-        if name in _CONFIG_DEFAULTS:
+        if name in _CONFIG_DEFAULTS and name not in no_default:
             config.setdefault(name, _CONFIG_DEFAULTS[name])
     for name in spec.config:
         if name not in config and name not in spec.optional_config:
@@ -426,6 +477,8 @@ def create(kind: str, fields: Mapping[str, Any], origin: str = "ui") -> Connecti
     for name in spec.required_secrets:
         if name not in secrets:
             raise MissingField(name, "required")
+    if kind == "zoom":
+        _check_zoom_auth_mode(config)
 
     connection_id, label = _derive(kind, spec, config)
     ciphertext = _require_vault().encrypt_json(secrets) if secrets else None
@@ -502,6 +555,8 @@ def update(
             if new_config:
                 merged_config = json.loads(row.config)
                 merged_config.update(new_config)
+                if row.kind == "zoom":
+                    _check_zoom_auth_mode(merged_config)
                 row.config = json.dumps(merged_config, sort_keys=True)
             row.updated_at = utcnow()
             session.add(row)
@@ -704,7 +759,10 @@ def seed_from_env(raw_env: Mapping[str, Optional[str]]) -> list[str]:
     zoom = {name: _declared(raw_env, f"ZOOM_{name.upper()}") for name in ("account_id", "client_id", "client_secret")}
     if any(zoom.values()):
         if all(zoom.values()):
-            add("zoom", zoom, "ZOOM_ACCOUNT_ID")
+            # A declared ZOOM_ACCOUNT_ID/CLIENT_ID/CLIENT_SECRET trio is always s2s, same as before
+            # KINDS grew auth_mode; ZOOM_AUTH_MODE is an optional extra key on top, not a gate.
+            zoom_auth_mode = _declared(raw_env, "ZOOM_AUTH_MODE")
+            add("zoom", {**zoom, **({"auth_mode": zoom_auth_mode} if zoom_auth_mode else {})}, "ZOOM_ACCOUNT_ID")
         else:
             _log.warning("skipped .env connection declared by ZOOM_ACCOUNT_ID: not all three Zoom values are set")
 
@@ -787,10 +845,17 @@ def materialize(*, pending_gmail_token: bool = False) -> dict[str, str]:
                 if "client_secret" in secrets:
                     out[f"GMAIL_{upper}_CLIENT_SECRET"] = secrets["client_secret"]
             elif row.kind == "zoom":
-                out["ZOOM_ACCOUNT_ID"] = config["account_id"]
-                out["ZOOM_CLIENT_ID"] = config["client_id"]
-                if "client_secret" in secrets:
-                    out["ZOOM_CLIENT_SECRET"] = secrets["client_secret"]
+                # oauth mode emits nothing here: the OAuth token flow reads client_id/client_secret
+                # straight from the store (like oauth_gmail._client_credentials), and emitting these
+                # keys anyway would make the legacy s2s path think an oauth-only connection was s2s.
+                mode = config.get("auth_mode")
+                if mode not in _ZOOM_AUTH_MODES:
+                    mode = "s2s" if config.get("account_id") else "oauth"
+                if mode == "s2s":
+                    out["ZOOM_ACCOUNT_ID"] = config["account_id"]
+                    out["ZOOM_CLIENT_ID"] = config["client_id"]
+                    if "client_secret" in secrets:
+                        out["ZOOM_CLIENT_SECRET"] = secrets["client_secret"]
     return out
 
 
