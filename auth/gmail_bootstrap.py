@@ -32,11 +32,10 @@ import re
 import secrets
 import sys
 import threading
-import time
 import webbrowser
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, Type
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 import requests
@@ -49,6 +48,10 @@ AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 LOOPBACK_HOST = "127.0.0.1"  # never 0.0.0.0: the auth code must not be reachable from the LAN
 DEFAULT_TIMEOUT = 300
+# Per accepted socket. Measured: on a single-threaded server an idle connection (a browser's speculative
+# preconnect, any local process) stalled the accept loop long past the deadline. Long enough for a slow
+# browser to send its request line, short enough that a dead connection frees its thread quickly.
+CONNECTION_TIMEOUT = 5
 _LABEL = re.compile(r"[A-Za-z0-9]+")
 
 
@@ -119,6 +122,34 @@ def check_state(expected: str, received: Optional[str]) -> None:
         raise StateMismatchError("state mismatch on the redirect; not continuing (possible forged callback)")
 
 
+class _ListenerServer(ThreadingHTTPServer):
+    # One thread per connection so an idle one never blocks the accept loop; daemon so it can never
+    # keep the process alive or be joined by server_close().
+    daemon_threads = True
+
+    def handle_error(self, request, client_address) -> None:
+        # The default prints a traceback to stderr for every socket timeout/reset; this CLI's output must
+        # stay clean. Anything that is not a socket error still gets the default treatment.
+        if isinstance(sys.exc_info()[1], OSError):
+            return
+        super().handle_error(request, client_address)
+
+
+def bind_listener(port: int, handler_cls: Type[BaseHTTPRequestHandler]) -> ThreadingHTTPServer:
+    """
+    Bind the callback listener to LOOPBACK_HOST only (listening, not yet serving).
+
+    :param port: port to bind; 0 for a random free port
+    :param handler_cls: request handler class
+    :returns: the bound server; the caller must server_close() it
+    :raises BootstrapError: the address cannot be bound
+    """
+    try:
+        return _ListenerServer((LOOPBACK_HOST, port), handler_cls)
+    except OSError as exc:
+        raise BootstrapError(f"cannot listen on {LOOPBACK_HOST}:{port}: {exc}") from exc
+
+
 def wait_for_code(
     port: int,
     state: str,
@@ -142,8 +173,21 @@ def wait_for_code(
     :raises ListenerTimeoutError: no callback before the deadline
     """
     outcome: dict[str, Optional[str]] = {}
+    outcome_lock = threading.Lock()
+    done = threading.Event()
+
+    def claim(**entries: str) -> bool:
+        # Handlers run on their own threads; the first decisive callback wins and later ones cannot
+        # overwrite a recorded code or error.
+        with outcome_lock:
+            if outcome:
+                return False
+            outcome.update(entries)
+            return True
 
     class Handler(BaseHTTPRequestHandler):
+        timeout = CONNECTION_TIMEOUT
+
         def do_GET(self) -> None:  # noqa: N802 (http.server's naming)
             parts = urlsplit(self.path)
             if parts.path != "/":
@@ -153,22 +197,27 @@ def wait_for_code(
             try:
                 check_state(state, query.get("state"))
             except StateMismatchError as exc:
-                outcome["error"] = "state"
-                outcome["detail"] = str(exc)
-                self._reply(400, "State mismatch. You can close this tab; nothing was authorized.")
-                return
-            if "error" in query:
-                outcome["error"] = "authorization"
-                outcome["detail"] = query["error"]
-                self._reply(400, f"Authorization failed: {query['error']}. You can close this tab.")
-                return
-            if not query.get("code"):
-                outcome["error"] = "authorization"
-                outcome["detail"] = "redirect carried no code"
-                self._reply(400, "No authorization code received. You can close this tab.")
-                return
-            outcome["code"] = query["code"]
-            self._reply(200, "Signed in. You can close this tab and return to the terminal.")
+                status, body = 400, "State mismatch. You can close this tab; nothing was authorized."
+                won = claim(error="state", detail=str(exc))
+            else:
+                if "error" in query:
+                    status, body = 400, f"Authorization failed: {query['error']}. You can close this tab."
+                    won = claim(error="authorization", detail=query["error"])
+                elif not query.get("code"):
+                    status, body = 400, "No authorization code received. You can close this tab."
+                    won = claim(error="authorization", detail="redirect carried no code")
+                else:
+                    status, body = 200, "Signed in. You can close this tab and return to the terminal."
+                    won = claim(code=query["code"])
+            if not won:
+                status, body = 409, "A callback was already received. You can close this tab."
+            try:
+                self._reply(status, body)
+            finally:
+                # Only the winner ends the wait, and only once its reply is flushed, so the browser sees
+                # the result page before wait_for_code returns and the process can exit.
+                if won:
+                    done.set()
 
         def _reply(self, status: int, body: str) -> None:
             data = body.encode()
@@ -182,28 +231,30 @@ def wait_for_code(
             # Default logging would print the request line, which contains the auth code.
             return
 
-    try:
-        server = HTTPServer((LOOPBACK_HOST, port), Handler)
-    except OSError as exc:
-        raise BootstrapError(f"cannot listen on {LOOPBACK_HOST}:{port}: {exc}") from exc
+    server = bind_listener(port, Handler)
+    serving: Optional[threading.Thread] = None
     try:
         if on_bound is not None:
             on_bound(server.server_address[1])
-        deadline = time.monotonic() + timeout
-        while not outcome:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise ListenerTimeoutError(f"no redirect received within {timeout:g}s")
-            server.timeout = remaining
-            server.handle_request()
+        serving = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
+        serving.start()
+        done.wait(timeout)
+        with outcome_lock:
+            decided = dict(outcome)
+        if not decided:
+            raise ListenerTimeoutError(f"no redirect received within {timeout:g}s")
     finally:
+        # shutdown() blocks until serve_forever exits, so it is only safe once that thread was started.
+        if serving is not None:
+            server.shutdown()
+            serving.join()
         server.server_close()
 
-    if "code" in outcome:
-        return outcome["code"]  # type: ignore[return-value]
-    if outcome["error"] == "state":
-        raise StateMismatchError(outcome["detail"] or "state mismatch")
-    raise AuthorizationError(f"Google returned error={outcome['detail']}")
+    if "code" in decided:
+        return decided["code"]  # type: ignore[return-value]
+    if decided["error"] == "state":
+        raise StateMismatchError(decided["detail"] or "state mismatch")
+    raise AuthorizationError(f"Google returned error={decided['detail']}")
 
 
 def exchange_code(client_id: str, client_secret: str, code: str, verifier: str, redirect_uri: str) -> dict:

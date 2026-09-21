@@ -1,8 +1,10 @@
 import base64
 import hashlib
+import socket
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -134,6 +136,88 @@ def test_wait_for_code_ignores_favicon_then_accepts_callback():
 def test_wait_for_code_times_out():
     with pytest.raises(gb.ListenerTimeoutError):
         gb.wait_for_code(0, "s", timeout=0.3)
+
+
+def _raw_get(sock, path):
+    sock.sendall(f"GET {path} HTTP/1.0\r\nHost: x\r\n\r\n".encode())
+    chunks = []
+    while chunk := sock.recv(4096):
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def test_bind_listener_binds_loopback_only():
+    from http.server import BaseHTTPRequestHandler
+
+    assert gb.LOOPBACK_HOST == "127.0.0.1"
+    server = gb.bind_listener(0, BaseHTTPRequestHandler)
+    try:
+        assert server.server_address[0] == "127.0.0.1"
+    finally:
+        server.server_close()
+
+
+def test_wait_for_code_times_out_at_deadline_with_idle_connection_open():
+    started = time.monotonic()
+    port, result, thread = _serve("s", timeout=1)
+    with socket.create_connection(("127.0.0.1", port), timeout=5):
+        thread.join(5)
+        elapsed = time.monotonic() - started
+    assert not thread.is_alive()
+    assert isinstance(result.get("error"), gb.ListenerTimeoutError)
+    assert elapsed < 1 + 2
+
+
+def test_wait_for_code_serves_callback_while_idle_connection_is_open():
+    port, result, thread = _serve("s")
+    with socket.create_connection(("127.0.0.1", port), timeout=5):
+        resp = requests.get(f"http://127.0.0.1:{port}/", params={"state": "s", "code": "c"}, timeout=5)
+        thread.join(5)
+    assert resp.status_code == 200
+    assert result == {"code": "c"}
+
+
+def test_wait_for_code_serves_callback_while_half_request_line_is_stalled():
+    port, result, thread = _serve("s")
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as stalled:
+        stalled.sendall(b"GET /?sta")
+        requests.get(f"http://127.0.0.1:{port}/", params={"state": "s", "code": "c"}, timeout=5)
+        thread.join(5)
+    assert result == {"code": "c"}
+
+
+def test_wait_for_code_closes_idle_connection_after_connection_timeout(monkeypatch):
+    monkeypatch.setattr(gb, "CONNECTION_TIMEOUT", 0.3)
+    port, result, thread = _serve("s", timeout=4)
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=5) as idle:
+            assert idle.recv(1) == b""
+    finally:
+        requests.get(f"http://127.0.0.1:{port}/", params={"state": "s", "code": "c"}, timeout=5)
+        thread.join(5)
+    assert result == {"code": "c"}
+
+
+def test_wait_for_code_releases_port_after_timeout():
+    from http.server import BaseHTTPRequestHandler
+
+    bound: dict = {}
+    with pytest.raises(gb.ListenerTimeoutError):
+        gb.wait_for_code(0, "s", timeout=0.3, on_bound=lambda p: bound.setdefault("port", p))
+    with pytest.raises(ConnectionRefusedError):
+        socket.create_connection(("127.0.0.1", bound["port"]), timeout=2)
+    gb.bind_listener(bound["port"], BaseHTTPRequestHandler).server_close()
+
+
+def test_wait_for_code_first_decisive_callback_wins():
+    port, result, thread = _serve("s")
+    # Connected before the valid callback, so the FIFO accept queue hands it to a handler thread first.
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as late:
+        requests.get(f"http://127.0.0.1:{port}/", params={"state": "s", "code": "c"}, timeout=5)
+        thread.join(5)
+        reply = _raw_get(late, "/?state=s&error=access_denied")
+    assert reply.startswith(b"HTTP/1.0 409")
+    assert result == {"code": "c"}
 
 
 class _FakeResponse:
