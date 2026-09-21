@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T06:33:47Z",
+  "updated": "2026-09-21T06:37:46Z",
   "tasks": [
     {
       "id": "T-001",
@@ -815,11 +815,53 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T06:37:46Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'only: Optional' pipeline/runner.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:37:45Z"
+          },
+          {
+            "cmd": "grep -qE 'def forget_source' pipeline/config_store.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:37:45Z"
+          },
+          {
+            "cmd": "grep -qE 'def set_source_active' pipeline/config_store.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:37:45Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/runner.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:37:45Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_runner_only.py tests/test_runner.py -q",
+            "exit": 0,
+            "duration_ms": 1087,
+            "tail": "..............................................................           [100%]\n62 passed in 0.89s",
+            "recorded_at": "2026-09-21T06:37:46Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research docs/_research/2026-09-21_management-ui.md section 3 and codebase findings Q4 and Q6. (1) execute_run(trigger='manual', only: Optional[str]=None): when only is given, validate it is in known_sources() (ValueError before any Run row is written), run the health check and collection for that source only (check_all_configured({only: True}) and the existing _active filter) while still creating the Run row, SourceHealth rows and using the same per-source cursor, backfill and failure-streak logic; Run.trigger for such runs is manual-source (do NOT edit db.py: mention it in the docstring; the web type is extended in the API and web tasks). (2) Close the check-then-insert race: a module-level threading.Lock around has_running_run() plus the Run insert so the scheduler and UI triggers cannot both start; the loser still raises RunAlreadyInProgress (contract unchanged). (3) Wrap the body of the run in health.env_snapshot() so one run sees one consistent config even if the store changes mid-run. (4) After each source's collection call db.record_attempt(source, result.status, result.detail, persisted_count); also for a raised exception (status error, detail = the exception CLASS NAME only). Do not change any status, cursor or streak logic. (5) config_store.py: add forget_source(source_id) (remove the id from the stored active_sources under the module _lock and write the file) and set_source_active(source_id, active: bool) (load merged, set, save). Neither may call into pipeline.connections (deadlock hazard: load_config holds _lock while known_sources() runs). tests/test_runner.py must pass unchanged. Tests: only=X collects only X and leaves other sources' cursors untouched; unknown only raises ValueError and writes no Run; the lock: two concurrent execute_run calls yield exactly one Run row and one RunAlreadyInProgress; snapshot: a store change injected between the health and collect phases is not observed inside the run; record_attempt written for ok, partial, error and raised-exception cases; forget_source and set_source_active round trip and a deleted id's old toggle does not resurrect on re-create."
     },
@@ -1125,7 +1167,7 @@
       "attempts": 0,
       "last_verify": null,
       "origin": "plan",
-      "notes": "Contracts in plan.md. api/serialize.py: iso_z(dt) -> Optional[str] (naive UTC -> YYYY-MM-DDTHH:MM:SSZ; the web parses naive ISO as LOCAL time today). Router (the /api prefix is added in main by a later task): GET /connections -> list of {id, kind, label, origin, config, secrets_set, active, health} where health is the latest SourceHealth for that id or null (via pipeline.db.latest_source_health), every text passed through redact(); POST /connections -> request models per kind with SecretStr secret fields, creates via pipeline.connections and then sets the connection INACTIVE with config_store.set_source_active(id, False) until it is tested; 201 with the view; 409 duplicate; 422 validation (field names only, no values); 503 with the stable error code secret_key_missing when the write includes secrets and no key is configured; PATCH /connections/{id} replaces config and or ONLY the secrets provided (an empty string means leave as is, never clear); DELETE /connections/{id} -> 204: connections.delete plus config_store.forget_source plus db.reset_cursor(id, None) (collected items are kept); env-seeded connections are deletable too (the tombstone prevents re-seeding); POST /connections/{id}/test -> {status: ok or error, detail} running the matching pipeline.health check_* function inside health.env_snapshot() with the detail redacted, 404 for an unknown id, and on ok it does NOT auto-activate (the UI toggles through PUT /config). Never return a secret, ciphertext or raw exception text; use explicit response_model classes. Tests (router-only app with install_security, temp_db, an in-memory Vault): the write-only property across list, create, patch and test responses (a json string search for every submitted secret AND its ciphertext), inactive-on-create, duplicate, PATCH partial secrets, delete tombstones and cannot be re-seeded, delete removes the toggle and the cursor, health null vs present, redaction of a health detail carrying a stored secret, 503 secret_key_missing, 422 does not echo secrets, test endpoint 404, the test endpoint maps check results (stub the check functions)."
+      "notes": "Contracts in plan.md. api/serialize.py: iso_z(dt) -> Optional[str] (naive UTC -> YYYY-MM-DDTHH:MM:SSZ; the web parses naive ISO as LOCAL time today). Router (the /api prefix is added in main by a later task): GET /connections -> list of {id, kind, label, origin, config, secrets_set, active, health} where health is the latest SourceHealth for that id or null (via pipeline.db.latest_source_health), every text passed through redact(); POST /connections -> request models per kind with SecretStr secret fields, creates via pipeline.connections and then sets the connection INACTIVE with config_store.set_source_active(id, False) until it is tested; 201 with the view; 409 duplicate; 422 validation (field names only, no values); 503 with the stable error code secret_key_missing when the write includes secrets and no key is configured; PATCH /connections/{id} replaces config and or ONLY the secrets provided (an empty string means leave as is, never clear); DELETE /connections/{id} -> 204: connections.delete plus config_store.forget_source plus db.reset_cursor(id, None) (collected items are kept); env-seeded connections are deletable too (the tombstone prevents re-seeding); POST /connections/{id}/test -> {status: ok or error, detail} running the matching pipeline.health check_* function inside health.env_snapshot() with the detail redacted, 404 for an unknown id, and on ok it does NOT auto-activate (the UI toggles through PUT /config). Never return a secret, ciphertext or raw exception text; use explicit response_model classes. Tests (router-only app with install_security, temp_db, an in-memory Vault): the write-only property across list, create, patch and test responses (a json string search for every submitted secret AND its ciphertext), inactive-on-create, duplicate, PATCH partial secrets, delete tombstones and cannot be re-seeded, delete removes the toggle and the cursor, health null vs present, redaction of a health detail carrying a stored secret, 503 secret_key_missing, 422 does not echo secrets, test endpoint 404, the test endpoint maps check results (stub the check functions). ADDED at build time (from T-011 review): config_store.set_source_active silently ignores an id that known_sources() does not contain (same as _merge). After creating a connection, verify its id is in pipeline.health.known_sources() BEFORE calling set_source_active(id, False); if it is not (for example the overlay is not registered), roll back the create and return 503 with the stable error code store_inactive rather than leaving an active-by-default connection. Also note runner.execute_run(only=id) runs a source even when it is toggled off."
     },
     {
       "id": "T-020",

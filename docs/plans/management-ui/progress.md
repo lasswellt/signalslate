@@ -27,3 +27,6 @@ Ruling: defer — tokencache keeps its own TOKEN_DIR and never imports health (n
 ## 2026-09-21T06:30:24Z build T-010 start (attempt 1)
 Ruling: defer — tokencache functions take an optional token_dir keyword (locked only validates the alias; the lock stays per alias); health.m365_cache_path is a thin wrapper passing health.TOKEN_DIR; the existing missing-cache message keeps its em dash. A tokencache.save OSError after a successful refresh still propagates out of check_m365 and access_token exactly as the old write_text did (a check_m365 raise escapes check_all_configured as before). (T-010, round 1)
 ## 2026-09-21T06:33:47Z verify T-010 ok=true
+## 2026-09-21T06:33:48Z build T-011 start (attempt 1)
+Ruling: defer — execute_run(only=X) validates X against known_sources() before writing any Run row and runs with active_sources={X: True}, so a source toggled off can still be run on demand; Run.trigger is manual-source (the db.py comment was out of scope and is noted only in the docstring); the start lock spans has_running_run plus the Run insert (proved with real threads and a barrier); config_store.set_source_active ignores undeclared ids like _merge, so T-019's notes now require verifying known_sources() membership after a create. (T-011, round 1)
+## 2026-09-21T06:37:46Z verify T-011 ok=true
