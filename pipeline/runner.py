@@ -31,6 +31,7 @@ from pipeline.db import (
     set_cursor,
 )
 from pipeline.health import HealthResult, check_all_configured, env_snapshot, known_sources
+from pipeline.redact import MARKER, redact
 
 
 # How many consecutive non-clean collections before a source's watermark advances anyway.
@@ -38,6 +39,10 @@ from pipeline.health import HealthResult, check_all_configured, env_snapshot, kn
 # not licensed) would otherwise pin the window at MAX_BACKFILL and re-fetch a week of Graph every
 # day, for good — and if that window ever exceeds the pagination cap, the source never recovers.
 MAX_STUCK_RUNS = 3
+
+# Cap on every free text the runner persists. Applied after redaction (redact() truncates last on
+# purpose): a cut token would no longer match its shape.
+MAX_PERSISTED_CHARS = 1000
 
 
 # Serialises "is a run in flight?" with "insert my Run row". Without it the scheduler and a UI
@@ -49,6 +54,43 @@ _start_lock = threading.Lock()
 
 class RunAlreadyInProgress(RuntimeError):
     """Raised when a run is started while another is still in flight."""
+
+
+def _stored_secrets() -> list[str]:
+    """
+    Every secret in the connection store, or [] when it cannot be read.
+
+    Imported lazily: connections pulls in the crypto layer, which the runner must not need in order
+    to run. Any failure (no vault, a locked DB row, an import error) degrades to pattern-only
+    redaction instead of blocking the run that is trying to report that failure.
+    """
+    try:
+        from pipeline import connections
+
+        return list(connections.secret_values())
+    except Exception:  # noqa: BLE001 — redaction must never end a run
+        return []
+
+
+def _scrub(text: Optional[str], secrets: Optional[list[str]] = None) -> Optional[str]:
+    """
+    `text` with credentials replaced and capped at MAX_PERSISTED_CHARS; None stays None.
+
+    Never raises. If redact() fails with the stored secrets, it is retried with none (token shapes
+    and key=value pairs only). If it fails again the text is dropped for the bare marker: persisting
+    unredacted text because the scrubber broke is the one outcome this exists to prevent.
+    `secrets` lets a caller that scrubs several texts read the store once.
+    """
+    if text is None:
+        return None
+    try:
+        known = _stored_secrets() if secrets is None else secrets
+        try:
+            return redact(text, known, max_len=MAX_PERSISTED_CHARS)
+        except Exception:  # noqa: BLE001
+            return redact(text, (), max_len=MAX_PERSISTED_CHARS)
+    except Exception:  # noqa: BLE001
+        return MARKER
 
 
 def collection_window(source: str, until: datetime) -> datetime:
@@ -292,7 +334,7 @@ def _execute_run(trigger: str, only: Optional[str]) -> Run:
             # hitting the rate-limit canary should keep that half. Safe because the cursor below
             # does not advance, so the window is re-read next time and the dedupe absorbs it.
             collected[source] = _persist(run_id, result)
-            record_attempt(source, result.status, result.detail, collected[source])
+            record_attempt(source, result.status, _scrub(result.detail), collected[source])
             if result.status == "ok":
                 # A clean collection advances the watermark and clears any failure streak.
                 set_cursor(source, until)
@@ -322,15 +364,23 @@ def _execute_run(trigger: str, only: Optional[str]) -> Run:
         if fatal is not None:
             status, error = "failed", fatal
 
+        # One store read for every text below. Scrubbing here, after _summarize, covers the joined
+        # failures list, the "Class: message" lines for raised exceptions, and the fatal message.
+        secrets = _stored_secrets()
+
         with get_session() as session:
             run = session.get(Run, run_id)
             for r in health:
-                session.add(SourceHealth(run_id=run_id, source=r.source, status=r.status, detail=r.detail))
+                session.add(
+                    SourceHealth(
+                        run_id=run_id, source=r.source, status=r.status, detail=_scrub(r.detail, secrets)
+                    )
+                )
 
             run.finished_at = utcnow()
             run.status = status
-            run.summary = summary
-            run.error = error
+            run.summary = _scrub(summary, secrets)
+            run.error = _scrub(error, secrets)
 
             session.add(run)
             session.commit()
