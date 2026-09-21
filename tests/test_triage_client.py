@@ -11,12 +11,11 @@ from types import SimpleNamespace
 from typing import Any
 
 import anthropic
-import httpx2
 import pytest
 from anthropic.resources.messages import Messages
 
 import pipeline.triage as triage
-from pipeline.normalize import NormalizedItem, normalize_gmail
+from pipeline.normalize import NormalizedItem, Participant, normalize_gmail
 from pipeline.triage import (
     MAX_OUTPUT_TOKENS,
     SYSTEM_PROMPT,
@@ -25,6 +24,7 @@ from pipeline.triage import (
     TriageBatch,
     TriageConfigError,
     TriageRecord,
+    _participant_line,
     build_request,
     make_client,
     triage_items,
@@ -93,7 +93,7 @@ class FakeClient:
 
 
 def connection_error() -> anthropic.APIConnectionError:
-    return anthropic.APIConnectionError(request=httpx2.Request("POST", "https://example.com/v1/messages"))
+    return anthropic.APIConnectionError(request=SimpleNamespace(method="POST", url="https://example.com/v1/messages"))
 
 
 def user_payload(request: dict) -> dict:
@@ -135,8 +135,38 @@ def test_build_request_user_content_is_json_with_only_allowed_item_fields():
     assert [entry["alias"] for entry in payload["items"]] == ["m001", "m002"]
     for entry in payload["items"]:
         assert set(entry) == ALLOWED_ITEM_FIELDS
-    assert payload["items"][0]["participants"] == ["Alex Example <alex@example.com>"]
+    assert payload["items"][0]["participants"] == ["from: Alex Example <alex@example.com>"]
     assert payload["items"][0]["occurred_at"] == MOMENT.isoformat()
+
+
+def test_build_request_prefixes_each_participant_with_its_role_and_omits_brackets_for_nameless():
+    item = make_item("a1").model_copy(
+        update={
+            "participants": [
+                Participant(name="Alex Example", address="alex@example.com", role="from"),
+                Participant(name="", address="bob@example.com", role="to"),
+                Participant(name="   ", address="carol@example.com", role="cc"),
+            ]
+        }
+    )
+
+    payload = user_payload(build_request("m", [("m001", item)]))
+
+    assert payload["items"][0]["participants"] == [
+        "from: Alex Example <alex@example.com>",
+        "to: bob@example.com",
+        "cc: carol@example.com",
+    ]
+
+
+def test_participant_line_trims_name_whitespace():
+    line = _participant_line(Participant(name="  Dana Example ", address="dana@example.com", role="to"))
+
+    assert line == "to: Dana Example <dana@example.com>"
+
+
+def test_system_prompt_explains_participant_role_prefixes():
+    assert '"from:"' in SYSTEM_PROMPT and "sender" in SYSTEM_PROMPT
 
 
 def test_build_request_never_sends_real_ids_thread_keys_or_permalinks():

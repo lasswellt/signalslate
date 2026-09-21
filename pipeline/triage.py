@@ -28,7 +28,7 @@ import anthropic
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from pipeline.health import llm_settings
-from pipeline.normalize import NO_SUBJECT, NormalizedItem, truncate
+from pipeline.normalize import NO_SUBJECT, NormalizedItem, Participant, truncate
 
 # A guess, not a measurement: small enough that one bad batch costs little, large enough to keep the
 # call count low. Revisit once real runs show output quality and token use per batch.
@@ -289,6 +289,7 @@ Rules:
 Never invent an id and never skip an item.
 
 Fields:
+- participants (in each item): every entry is prefixed by its role ("from:", "to:", "cc:"); "from:" is the sender.
 - category: one of the allowed category values.
 - importance: one of the allowed importance values.
 - one_line: a single plain sentence saying what the item is and what matters in it.
@@ -310,6 +311,18 @@ class TriageResult:
     stubbed_count: int
 
 
+def _participant_line(participant: Participant) -> str:
+    """
+    One participants entry as "<role>: Name <addr>", or "<role>: addr" when there is no display name.
+
+    The role prefix is what lets the model tell the sender from the recipients, which action_needed
+    depends on (is the reader the one being asked?).
+    """
+    name = participant.name.strip()
+    who = f"{name} <{participant.address}>" if name else participant.address
+    return f"{participant.role}: {who}"
+
+
 def build_request(model: str, batch: Sequence[tuple[str, NormalizedItem]]) -> dict:
     """
     Keyword arguments for client.messages.parse() for one batch of (alias, item) pairs.
@@ -327,9 +340,7 @@ def build_request(model: str, batch: Sequence[tuple[str, NormalizedItem]]) -> di
                 "kind": item.kind,
                 "occurred_at": item.occurred_at.isoformat(),
                 "title": item.title,
-                "participants": [
-                    f"{p.name} <{p.address}>" if p.name.strip() else p.address for p in item.participants
-                ],
+                "participants": [_participant_line(p) for p in item.participants],
                 "body_text": item.body_text,
                 "labels": item.labels,
             }
