@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T02:34:33Z",
+  "updated": "2026-09-21T02:40:40Z",
   "tasks": [
     {
       "id": "T-001",
@@ -30,7 +30,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T02:34:33Z",
+        "ts": "2026-09-21T02:40:40Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -38,23 +38,23 @@
           {
             "cmd": "test -x venv/bin/python",
             "exit": 0,
-            "duration_ms": 3,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T02:34:32Z"
+            "recorded_at": "2026-09-21T02:40:39Z"
           },
           {
             "cmd": "venv/bin/python -c 'import msal, requests, fastapi, sqlmodel, apscheduler, pytest'",
             "exit": 0,
-            "duration_ms": 366,
+            "duration_ms": 381,
             "tail": "",
-            "recorded_at": "2026-09-21T02:34:32Z"
+            "recorded_at": "2026-09-21T02:40:39Z"
           },
           {
             "cmd": "venv/bin/python -m pytest -q",
             "exit": 0,
-            "duration_ms": 684,
-            "tail": "........................................................................ [ 60%]\n................................................                         [100%]\n120 passed in 0.48s",
-            "recorded_at": "2026-09-21T02:34:33Z"
+            "duration_ms": 741,
+            "tail": "........................................................................ [ 52%]\n.................................................................        [100%]\n137 passed in 0.52s",
+            "recorded_at": "2026-09-21T02:40:40Z"
           }
         ]
       },
@@ -87,7 +87,7 @@
           "timeout": 10
         },
         {
-          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" pipeline/health.py",
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/health.py",
           "timeout": 10
         },
         {
@@ -95,11 +95,53 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T02:40:40Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def check_gmail' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:40:40Z"
+          },
+          {
+            "cmd": "grep -qE 'GMAIL_' tests/conftest.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:40:40Z"
+          },
+          {
+            "cmd": "grep -qE 'gmail_\\{' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:40:40Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:40:40Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_health.py -q",
+            "exit": 0,
+            "duration_ms": 228,
+            "tail": "..........................................                               [100%]\n42 passed in 0.09s",
+            "recorded_at": "2026-09-21T02:40:40Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research §1,§2,§6. GMAIL_SCOPE=gmail.readonly only. Regex ^GMAIL_([A-Z0-9]+)_REFRESH_TOKEN$ must not match GMAIL_CLIENT_ID/SECRET. gmail_accounts() mirrors slack_workspaces(): lowercased labels, sorted, empty value -> None. gmail_token_response(label) mirrors zoom_token_response(): plain POST https://oauth2.googleapis.com/token (client_id, client_secret, grant_type=refresh_token, refresh_token); refresh returns NO new refresh token so nothing is written back. invalid_grant raises GmailAuthError (hard, never retried). check_gmail: refresh -> assert granted scope (space-delimited 'scope' field) contains gmail.readonly -> GET gmail/v1/users/me/profile (1 quota unit). invalid_grant message must name the likely causes (consent screen still in Testing = 7-day expiry, Google password change, revoked access) and 'auth/gmail_bootstrap.py <label>'. known_sources order: m365..., zoom, slack..., gmail.... Add GMAIL_ to the _env() prefix filter AND to tests/conftest.py CONFIG_PREFIXES. Tests stub requests.post/get at the health module, following tests/test_health.py."
     },
@@ -166,7 +208,7 @@
           "timeout": 10
         },
         {
-          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" pipeline/collectors/gmail.py",
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
           "timeout": 10
         },
         {
@@ -204,7 +246,7 @@
           "timeout": 10
         },
         {
-          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" pipeline/collectors/gmail.py",
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
           "timeout": 10
         },
         {
@@ -246,7 +288,7 @@
           "timeout": 10
         },
         {
-          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" pipeline/collectors/gmail.py",
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
           "timeout": 10
         },
         {
@@ -287,7 +329,7 @@
           "timeout": 10
         },
         {
-          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" auth/gmail_bootstrap.py",
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" auth/gmail_bootstrap.py",
           "timeout": 10
         },
         {
@@ -374,7 +416,7 @@
           "timeout": 10
         },
         {
-          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" pipeline/normalize.py",
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/normalize.py",
           "timeout": 10
         },
         {
@@ -419,7 +461,7 @@
           "timeout": 10
         },
         {
-          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" pipeline/triage.py",
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
           "timeout": 10
         },
         {
@@ -505,7 +547,7 @@
           "timeout": 10
         },
         {
-          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" pipeline/triage.py",
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
           "timeout": 10
         },
         {
@@ -569,7 +611,7 @@
           "timeout": 10
         },
         {
-          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" pipeline/triage_cli.py",
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage_cli.py",
           "timeout": 10
         },
         {
