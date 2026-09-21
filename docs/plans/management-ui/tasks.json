@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T23:12:56Z",
+  "updated": "2026-09-21T23:22:37Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2783,13 +2783,55 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:22:37Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'oauthFlowStatus' web/composables/useApi.ts",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:22:22Z"
+          },
+          {
+            "cmd": "! grep -nE 'isSignedIn' web/components/OAuthDialog.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:22:22Z"
+          },
+          {
+            "cmd": "cd web && npm run typecheck",
+            "exit": 0,
+            "duration_ms": 3171,
+            "tail": "\n> typecheck\n> nuxt typecheck",
+            "recorded_at": "2026-09-21T23:22:26Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/OAuthDialog.test.ts tests/useApi.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3832,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/useApi.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n····························stdout | tests/OAuthDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······························································\n\n Test Files  2 passed (2)\n      Tests  90 passed (90)\n   Start at  19:22:27\n   Duration  2.61s (tests 53%, transform 32%, environment 9%, import 5%, setup 1%)",
+            "recorded_at": "2026-09-21T23:22:30Z"
+          },
+          {
+            "cmd": "cd web && npm run build",
+            "exit": 0,
+            "duration_ms": 7670,
+            "tail": "yles.Pd4Strki.mjs (3.83 kB) (1.22 kB gzip)\n  ├─ .output/server/chunks/build/error-404-styles.Pd4Strki.mjs.map (196 B) (155 B gzip)\n  ├─ .output/server/chunks/build/error-500-D5UJ6Lpm.mjs (4.72 kB) (1.94 kB gzip)\n  ├─ .output/server/chunks/build/error-500-D5UJ6Lpm.mjs.map (205 B) (175 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs (2.18 kB) (862 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs.map (196 B) (156 B gzip)\n  ├─ .output/server/chunks/build/history-DCmhBHbS.mjs (79.9 kB) (17.8 kB gzip)\n  ├─ .output/server/chunks/build/history-DCmhBHbS.mjs.map (1.73 kB) (506 B gzip)\n  ├─ .output/server/chunks/build/index-D5t3h5U6.mjs (40.7 kB) (3.56 kB gzip)\n  ├─ .output/server/chunks/build/index-D5t3h5U6.mjs.map (18.3 kB) (2.69 kB gzip)\n  ├─ .output/server/chunks/build/interval-CwAGk-1A.mjs (376 B) (274 B gzip)\n  ├─ .output/server/chunks/build/interval-CwAGk-1A.mjs.map (167 B) (152 B gzip)\n  ├─ .output/server/chunks/build/server.mjs (157 kB) (41.7 kB gzip)\n  ├─ .output/server/chunks/build/server.mjs.map (5.93 kB) (1.33 kB gzip)\n  ├─ .output/server/chunks/build/styles.mjs (497 B) (260 B gzip)\n  ├─ .output/server/chunks/build/styles.mjs.map (395 B) (203 B gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs (167 kB) (41.2 kB gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs.map (3.04 kB) (753 B gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs (14.2 kB) (4.57 kB gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs.map (845 B) (272 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs (94 B) (100 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs.map (88 B) (97 B gzip)\n  ├─ .output/server/index.mjs (353 B) (205 B gzip)\n  └─ .output/server/package.json (723 B) (321 B gzip)\nΣ Total size: 3.25 MB (717 kB gzip)\n[nitro] ✔ You can preview this build using node .output/server/index.mjs\n│\n└  ✨ Build complete!",
+            "recorded_at": "2026-09-21T23:22:37Z"
+          }
+        ]
+      },
       "origin": "check",
-      "notes": "check-report finding 4 plus the T-029 review note. useApi.ts: add oauthFlowStatus(flowId) -> {status: 'pending'|'ok'|'error'|'expired', reason?} calling GET /oauth/flows/{flow_id} with credentials: 'include' (the nonce cookie), typed like the other calls; add nothing else. OAuthDialog.vue: in callback mode poll oauthFlowStatus every 2 s (same timer hygiene as now: cleared on close, unmount, terminal state and expiry), on ok call listConnections once and finish(view), on error show the fixed message for reason, on expired show the expired state; REMOVE the isSignedIn/baseline/health heuristic entirely. The paste-back path is unchanged. web/tests/OAuthDialog.test.ts: you may rewrite ONLY the tests that faked a health row for polling (they assert the removed heuristic) and replace the vacuous q-btn--loading assertions (Quasar never renders that class) with a check for the spinner element; every other test must pass unchanged. New tests: the poll completes on ok for BOTH providers including a Gmail connection that already had a refresh_token; error reason mapping; expired; polling stops at terminal states, on close and on unmount (fake timers); a failed status request shows the warning and keeps polling; no pasted URL or secret in Notify or DOM. Typecheck, build and the whole web suite must pass."
+      "notes": "check-report finding 4 plus the T-029 review note. useApi.ts: add oauthFlowStatus(flowId) -> {status: 'pending'|'ok'|'error'|'expired', reason?} calling GET /oauth/flows/{flow_id} with credentials: 'include' (the nonce cookie), typed like the other calls; add nothing else. OAuthDialog.vue: in callback mode poll oauthFlowStatus every 2 s (same timer hygiene as now: cleared on close, unmount, terminal state and expiry), on ok call listConnections once and finish(view), on error show the fixed message for reason, on expired show the expired state; REMOVE the isSignedIn/baseline/health heuristic entirely. The paste-back path is unchanged. web/tests/OAuthDialog.test.ts: you may rewrite ONLY the tests that faked a health row for polling (they assert the removed heuristic) and replace the vacuous q-btn--loading assertions (Quasar never renders that class) with a check for the spinner element; every other test must pass unchanged. New tests: the poll completes on ok for BOTH providers including a Gmail connection that already had a refresh_token; error reason mapping; expired; polling stops at terminal states, on close and on unmount (fake timers); a failed status request shows the warning and keeps polling; no pasted URL or secret in Notify or DOM. Typecheck, build and the whole web suite must pass. ADDED at build time (from T-037 review): the status route answers 404 code unknown_flow once a flow is unknown, expired-and-purged, or the cookie is gone, and it may return 200 {status:'expired'} only while the pending record is still held: the dialog must treat a 404 from oauthFlowStatus during callback polling as 'ended or expired' (show the expired state and stop polling), never as a transient warning. The 200 body is {status, reason?} with reason present only when status is 'error'; reason codes are the fixed set in api/routers/oauth.py."
     },
     {
       "id": "T-039",
