@@ -166,6 +166,17 @@ const ERROR_MESSAGES: Record<string, string> = {
   connection_error: 'The connection could not be updated.',
   sign_in_failed: FALLBACK_MESSAGE,
 }
+// What GET /oauth/flows/{id} can report as an error (_REASONS in api/routers/oauth.py), as fixed text.
+const FLOW_REASON_MESSAGES: Record<string, string> = {
+  invalid_request: 'The provider sent back an unusable response. Press Start to begin again.',
+  expired: EXPIRED_MESSAGE,
+  denied: ERROR_MESSAGES.consent_denied,
+  provider_error: ERROR_MESSAGES.provider_error,
+  exchange_failed: ERROR_MESSAGES.exchange_failed,
+  scope_missing: ERROR_MESSAGES.scope_not_granted,
+  no_refresh_token: ERROR_MESSAGES.no_refresh_token,
+  failed: FALLBACK_MESSAGE,
+}
 // The flow survives these two (the server rejects them before it consumes anything), so the paste box stays.
 const RETRYABLE = new Set(['invalid_pasted_url', 'nonce_mismatch'])
 
@@ -195,7 +206,6 @@ const expiresAt = ref(0)
 
 let flowId: string | null = null
 let authUrl: string | null = null
-let baseline = { signedIn: false, checkedAt: null as string | null }
 // Bumped whenever a sign-in starts over or the dialog closes, so a late response from the old one is dropped.
 let session = 0
 let polling = false
@@ -248,7 +258,7 @@ function reopen() {
   if (authUrl) openAuthUrl(authUrl)
 }
 
-function expire() {
+function expire(message: string = EXPIRED_MESSAGE) {
   session += 1
   stopTimers()
   stage.value = 'choose'
@@ -256,20 +266,12 @@ function expire() {
   authUrl = null
   pasted.value = ''
   pollWarning.value = null
-  errorText.value = EXPIRED_MESSAGE
+  errorText.value = message
 }
 
 function tick() {
   now.value = Date.now()
   if (stage.value === 'waiting' && now.value >= expiresAt.value) expire()
-}
-
-function isSignedIn(conn: ConnectionView): boolean {
-  const ready = provider.value === 'google' ? conn.secrets_set.includes('refresh_token') : conn.health?.status === 'ok'
-  if (!ready) return false
-  // A connection that was already signed in looks signed in before the flow ends: only a fresh health
-  // check tells the two apart.
-  return !baseline.signedIn || (conn.health?.checked_at ?? null) !== baseline.checkedAt
 }
 
 function finish(view: ConnectionView, name: string | null) {
@@ -285,16 +287,31 @@ function finish(view: ConnectionView, name: string | null) {
 }
 
 async function poll(owner: number) {
-  if (polling) return
+  const id = flowId
+  if (polling || !id) return
   polling = true
   try {
-    const list = await api.listConnections()
+    // The server, not the connection's stored state, says how the sign-in ended: a re-sign-in leaves
+    // no trace in the connection list that tells it from the sign-in before.
+    const flow = await api.oauthFlowStatus(id)
     if (owner !== session || stage.value !== 'waiting') return
     pollWarning.value = null
-    const conn = list.find((entry) => entry.id === props.connection?.id)
-    if (conn && isSignedIn(conn)) finish(conn, null)
-  } catch {
-    if (owner === session) pollWarning.value = 'Could not check the connection just now. Trying again.'
+    if (flow.status === 'expired') {
+      expire()
+    } else if (flow.status === 'error') {
+      expire((flow.reason && FLOW_REASON_MESSAGES[flow.reason]) || FALLBACK_MESSAGE)
+    } else if (flow.status === 'ok') {
+      const list = await api.listConnections()
+      if (owner !== session || stage.value !== 'waiting') return
+      const conn = list.find((entry) => entry.id === props.connection?.id)
+      if (conn) finish(conn, null)
+      else expire(ERROR_MESSAGES.connection_not_found)
+    }
+  } catch (error) {
+    if (owner !== session) return
+    // 404 unknown_flow: the flow ended, was purged, or this browser's cookie is gone. It never comes back.
+    if (error instanceof ApiError && error.status === 404) expire()
+    else pollWarning.value = 'Could not check the sign-in just now. Trying again.'
   } finally {
     polling = false
   }
@@ -318,10 +335,6 @@ async function onStart() {
     authUrl = started.auth_url
     expiresAt.value = expiry
     now.value = Date.now()
-    baseline = {
-      signedIn: provider.value === 'google' ? conn.secrets_set.includes('refresh_token') : conn.health?.status === 'ok',
-      checkedAt: conn.health?.checked_at ?? null,
-    }
     stage.value = 'waiting'
     stopTimers()
     tickTimer = setInterval(tick, TICK_MS)

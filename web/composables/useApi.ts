@@ -218,6 +218,13 @@ export interface OAuthPasteResult {
   account: string | null
 }
 
+// GET /oauth/flows/{flow_id}: `reason` is one of the fixed codes in api/routers/oauth.py and is only
+// present when status is 'error'.
+export interface OAuthFlowStatus {
+  status: 'pending' | 'ok' | 'error' | 'expired'
+  reason?: string
+}
+
 /**
  * A failed API call. `message` is built only from the response's `detail` (its `msg` / `message`
  * text), never from the request or from the underlying fetch error, so a submitted secret cannot
@@ -295,7 +302,7 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   body?: unknown
   params?: Query
-  // Only the OAuth start/paste calls set this: the nonce cookie set by start must round-trip
+  // Only the OAuth start/paste/flow-status calls set this: the nonce cookie set by start must round-trip
   // cross-origin, and every other call is cookie-free so no ambient credential can ride along.
   credentials?: 'include'
 }
@@ -388,5 +395,7 @@ export function useApi() {
         body: payload,
         credentials: 'include',
       }),
+    oauthFlowStatus: (flowId: string) =>
+      request<OAuthFlowStatus>(url(`/oauth/flows/${seg(flowId)}`), { credentials: 'include' }),
   }
 }

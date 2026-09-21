@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, nextTick } from 'vue'
 import { flushPromises } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
@@ -7,6 +7,7 @@ import { QLayout, QPageContainer, useQuasar } from 'quasar'
 import { useRouter } from '#imports'
 import OAuthDialog from '~/components/OAuthDialog.vue'
 import ConnectionsPage from '~/pages/connections.vue'
+import { ApiError, useApi } from '~/composables/useApi'
 import type { ConnectionView, SystemInfo } from '~/composables/useApi'
 
 const PASTE_ONLY: SystemInfo = {
@@ -63,6 +64,7 @@ let system: SystemInfo
 let expiresInMs: number
 let startAuthUrl: string
 let pasteResult: () => unknown
+let flowStatus: () => unknown
 let notify: ReturnType<typeof vi.fn>
 let openSpy: ReturnType<typeof vi.spyOn>
 
@@ -80,6 +82,11 @@ function stubApi() {
       calls.push({ method, path, credentials: options.credentials, body: options.body ? JSON.parse(options.body) : undefined })
       if (method === 'GET' && path === '/api/system') return system
       if (method === 'GET' && path === '/api/connections') return list
+      if (method === 'GET' && path.startsWith('/api/oauth/flows/')) {
+        const result = flowStatus()
+        if (result instanceof Error) throw result
+        return result
+      }
       if (method === 'POST' && path.endsWith('/start')) {
         const body = JSON.parse(options.body ?? '{}') as { mode: string }
         return {
@@ -122,7 +129,9 @@ async function submitPaste() {
   const form = body.querySelector('[data-testid="oauth-dialog"] form')
   if (!form) throw new Error('no paste form')
   form.dispatchEvent(new Event('submit', { cancelable: true }))
-  await vi.waitFor(() => expect($('oauth-submit')?.classList.contains('q-btn--loading')).toBe(false))
+  await nextTick()
+  // Quasar shows a busy button as a QSpinner inside it; it never adds a q-btn--loading class.
+  await vi.waitFor(() => expect($('oauth-submit')?.querySelector('.q-spinner') ?? null).toBeNull())
   await flushPromises()
 }
 
@@ -160,9 +169,11 @@ async function openSignIn() {
 
 const startCalls = () => calls.filter((call) => call.path.endsWith('/start'))
 const listCalls = () => calls.filter((call) => call.method === 'GET' && call.path === '/api/connections')
+const statusCalls = () => calls.filter((call) => call.method === 'GET' && call.path.startsWith('/api/oauth/flows/'))
 
 beforeEach(() => {
   list = [GMAIL]
+  flowStatus = () => ({ status: 'pending' })
   system = PASTE_ONLY
   expiresInMs = 10 * 60_000
   startAuthUrl = AUTH_URL
@@ -404,10 +415,10 @@ describe('callback mode', () => {
     expect(startCalls()[0]?.body).toEqual({ connection_id: 'gmail_work', mode: 'callback' })
     expect(vi.getTimerCount()).toBeGreaterThan(before)
     expect($('oauth-paste')).toBeNull()
-    const initial = listCalls().length
+    const initial = statusCalls().length
 
     await vi.advanceTimersByTimeAsync(4_100)
-    expect(listCalls().length - initial).toBe(2)
+    expect(statusCalls().length - initial).toBe(2)
 
     await vi.advanceTimersByTimeAsync(6_000)
     await flushPromises()
@@ -415,20 +426,243 @@ describe('callback mode', () => {
     expect($('oauth-start')).not.toBeNull()
     expect(vi.getTimerCount()).toBe(before)
 
-    const settled = listCalls().length
+    const settled = statusCalls().length
     await vi.advanceTimersByTimeAsync(20_000)
-    expect(listCalls().length).toBe(settled)
+    expect(statusCalls().length).toBe(settled)
   })
 
-  it('finishes when a refresh_token appears on a gmail connection', async () => {
+  it('polls the flow status with the nonce cookie and never reads the connection list until it is ok', async () => {
+    await startCallback()
+    await vi.advanceTimersByTimeAsync(4_100)
+    expect(statusCalls()).toEqual([
+      { method: 'GET', path: '/api/oauth/flows/flow-1', credentials: 'include', body: undefined },
+      { method: 'GET', path: '/api/oauth/flows/flow-1', credentials: 'include', body: undefined },
+    ])
+    expect(listCalls()).toHaveLength(0)
+  })
+
+  it('finishes when the flow reports ok on a gmail connection', async () => {
     const { wrapper, before } = await startCallback()
+    flowStatus = () => ({ status: 'ok' })
     list = [{ ...GMAIL, secrets_set: ['client_secret', 'refresh_token'] }]
     await vi.advanceTimersByTimeAsync(2_100)
     await flushPromises()
 
     expect($('oauth-connected')).not.toBeNull()
     expect(wrapper.emitted('connected')).toHaveLength(1)
+    expect(wrapper.emitted('connected')?.[0]).toEqual([list[0]])
+    expect(listCalls()).toHaveLength(1)
     expect(vi.getTimerCount()).toBe(before)
+
+    const settled = statusCalls().length
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(statusCalls().length).toBe(settled)
+    expect(listCalls()).toHaveLength(1)
+  })
+
+  const SIGNED_IN_GMAIL = connection({ secrets_set: ['client_secret', 'refresh_token'] })
+  const HEALTHY_M365 = connection({
+    id: 'm365_corp',
+    kind: 'm365',
+    label: 'corp',
+    config: { tenant_id: 't', client_id: 'c' },
+    secrets_set: [],
+    health: { status: 'ok', detail: null, checked_at: '2026-09-21T10:00:00Z' },
+  })
+
+  it.each([
+    ['gmail with a refresh_token already stored', SIGNED_IN_GMAIL, '/api/oauth/google/start'],
+    ['microsoft that is already healthy', HEALTHY_M365, '/api/oauth/microsoft/start'],
+  ])('a re-sign-in of %s waits for the flow, then finishes on ok', async (_name, conn, startPath) => {
+    list = [conn]
+    const { wrapper, before } = await startCallback(conn)
+    expect(startCalls()[0]?.path).toBe(startPath)
+
+    // The stored state already looks signed in, but the flow is still pending: nothing finishes.
+    await vi.advanceTimersByTimeAsync(6_100)
+    await flushPromises()
+    expect(statusCalls().length).toBeGreaterThanOrEqual(3)
+    expect($('oauth-connected')).toBeNull()
+    expect(wrapper.emitted('connected')).toBeUndefined()
+    expect(listCalls()).toHaveLength(0)
+
+    flowStatus = () => ({ status: 'ok' })
+    await vi.advanceTimersByTimeAsync(2_100)
+    await flushPromises()
+    expect($('oauth-connected')).not.toBeNull()
+    expect(wrapper.emitted('connected')).toHaveLength(1)
+    expect(listCalls()).toHaveLength(1)
+    expect(vi.getTimerCount()).toBe(before)
+  })
+
+  it('finishes when a microsoft flow reports ok', async () => {
+    const { wrapper, before } = await startCallback(M365)
+    expect(startCalls()[0]?.path).toBe('/api/oauth/microsoft/start')
+
+    await vi.advanceTimersByTimeAsync(2_100)
+    expect(wrapper.emitted('connected')).toBeUndefined()
+
+    flowStatus = () => ({ status: 'ok' })
+    list = [{ ...M365, health: { status: 'ok', detail: null, checked_at: '2026-09-21T10:00:00Z' } }]
+    await vi.advanceTimersByTimeAsync(2_100)
+    await flushPromises()
+    expect($('oauth-connected')).not.toBeNull()
+    expect(wrapper.emitted('connected')).toHaveLength(1)
+    expect(vi.getTimerCount()).toBe(before)
+  })
+
+  it('shows the connection-gone message when the flow is ok but the connection no longer exists', async () => {
+    const { wrapper, before } = await startCallback()
+    flowStatus = () => ({ status: 'ok' })
+    list = []
+    await vi.advanceTimersByTimeAsync(2_100)
+    await flushPromises()
+    expect($('oauth-error')?.textContent).toContain('no longer exists')
+    expect($('oauth-connected')).toBeNull()
+    expect(wrapper.emitted('connected')).toBeUndefined()
+    expect(vi.getTimerCount()).toBe(before)
+  })
+
+  it.each([
+    ['denied', 'denied'],
+    ['expired', 'expired'],
+    ['invalid_request', 'unusable response'],
+    ['provider_error', 'provider reported an error'],
+    ['exchange_failed', 'did not accept'],
+    ['scope_missing', 'permission'],
+    ['no_refresh_token', 'refresh token'],
+    ['failed', 'Sign-in failed'],
+  ])('maps the flow error reason %s to fixed text and stops polling', async (reason, fragment) => {
+    const { wrapper, before } = await startCallback()
+    flowStatus = () => ({ status: 'error', reason })
+    await vi.advanceTimersByTimeAsync(2_100)
+    await flushPromises()
+
+    expect($('oauth-error')?.textContent).toContain(fragment)
+    expect($('oauth-start')).not.toBeNull()
+    expect($('oauth-countdown')).toBeNull()
+    expect($('oauth-connected')).toBeNull()
+    expect(wrapper.emitted('connected')).toBeUndefined()
+    expect(vi.getTimerCount()).toBe(before)
+    expect(listCalls()).toHaveLength(0)
+
+    const settled = statusCalls().length
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(statusCalls().length).toBe(settled)
+  })
+
+  it('falls back to a generic message for an unknown reason and never renders it', async () => {
+    const { before } = await startCallback()
+    flowStatus = () => ({ status: 'error', reason: LEAK })
+    await vi.advanceTimersByTimeAsync(2_100)
+    await flushPromises()
+    expect($('oauth-error')?.textContent).toContain('Sign-in failed')
+    expect(body.innerHTML).not.toContain(LEAK)
+    expect(vi.getTimerCount()).toBe(before)
+  })
+
+  it('shows the expired state and stops polling when the flow reports expired', async () => {
+    const { before } = await startCallback()
+    flowStatus = () => ({ status: 'expired' })
+    await vi.advanceTimersByTimeAsync(2_100)
+    await flushPromises()
+
+    expect($('oauth-error')?.textContent).toContain('expired')
+    expect($('oauth-start')).not.toBeNull()
+    expect($('oauth-poll-warning')).toBeNull()
+    expect(vi.getTimerCount()).toBe(before)
+    const settled = statusCalls().length
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(statusCalls().length).toBe(settled)
+  })
+
+  it('treats a 404 unknown_flow as ended or expired, not as a transient warning', async () => {
+    const { before } = await startCallback()
+    flowStatus = () => apiFailure(404, { code: 'unknown_flow', message: LEAK })
+    await vi.advanceTimersByTimeAsync(2_100)
+    await flushPromises()
+
+    expect($('oauth-error')?.textContent).toContain('expired')
+    expect($('oauth-start')).not.toBeNull()
+    expect($('oauth-poll-warning')).toBeNull()
+    expect(body.innerHTML).not.toContain(LEAK)
+    expect(vi.getTimerCount()).toBe(before)
+    const settled = statusCalls().length
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(statusCalls().length).toBe(settled)
+  })
+
+  it('warns and keeps polling when a status request fails, then recovers', async () => {
+    const { wrapper, before } = await startCallback()
+    flowStatus = () => apiFailure(500, { code: 'something_new', message: LEAK })
+    await vi.advanceTimersByTimeAsync(2_100)
+    await flushPromises()
+    expect($('oauth-poll-warning')?.textContent).toContain('Trying again')
+    expect($('oauth-error')).toBeNull()
+    expect($('oauth-countdown')).not.toBeNull()
+    expect(body.innerHTML).not.toContain(LEAK)
+
+    flowStatus = () => Object.assign(new Error('offline'), { status: 0 })
+    const failed = statusCalls().length
+    await vi.advanceTimersByTimeAsync(4_100)
+    expect(statusCalls().length - failed).toBe(2)
+    expect($('oauth-poll-warning')).not.toBeNull()
+    expect(vi.getTimerCount()).toBeGreaterThan(before)
+
+    flowStatus = () => ({ status: 'ok' })
+    list = [{ ...GMAIL, secrets_set: ['client_secret', 'refresh_token'] }]
+    await vi.advanceTimersByTimeAsync(2_100)
+    await flushPromises()
+    expect($('oauth-connected')).not.toBeNull()
+    expect($('oauth-poll-warning')).toBeNull()
+    expect(wrapper.emitted('connected')).toHaveLength(1)
+    expect(vi.getTimerCount()).toBe(before)
+  })
+
+  it('polls again after an ok whose connection list request failed', async () => {
+    const { wrapper } = await startCallback()
+    flowStatus = () => ({ status: 'ok' })
+    list = [{ ...GMAIL, secrets_set: ['client_secret', 'refresh_token'] }]
+    const original = globalThis.$fetch
+    vi.stubGlobal('$fetch', async (url: string, options?: { method?: string }) => {
+      if (new URL(url).pathname === '/api/connections') throw Object.assign(new Error('offline'), { status: 0 })
+      return original(url, options as never)
+    })
+    await vi.advanceTimersByTimeAsync(2_100)
+    await flushPromises()
+    expect($('oauth-poll-warning')).not.toBeNull()
+    expect($('oauth-connected')).toBeNull()
+
+    vi.stubGlobal('$fetch', original)
+    await vi.advanceTimersByTimeAsync(2_100)
+    await flushPromises()
+    expect($('oauth-connected')).not.toBeNull()
+    expect(wrapper.emitted('connected')).toHaveLength(1)
+  })
+
+  it('keeps server text and the flow id out of Notify and the DOM through a callback sign-in', async () => {
+    await mountPage()
+    await openSignIn()
+    await click('mode-callback')
+    await click('oauth-start')
+    flowStatus = () => ({ status: 'error', reason: LEAK })
+    await vi.advanceTimersByTimeAsync(2_100)
+    await flushPromises()
+    expect($('oauth-error')?.textContent).toContain('Sign-in failed')
+
+    await click('oauth-start')
+    flowStatus = () => ({ status: 'ok' })
+    list = [{ ...GMAIL, secrets_set: ['client_secret', 'refresh_token'] }]
+    await vi.advanceTimersByTimeAsync(2_100)
+    await flushPromises()
+    await vi.waitFor(() => expect($('oauth-connected')).not.toBeNull())
+
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ message: 'Signed in gmail_work' }))
+    for (const secret of [CODE, PASTED, LEAK, 'flow-1']) {
+      expect(JSON.stringify(notify.mock.calls)).not.toContain(secret)
+      expect(body.innerHTML).not.toContain(secret)
+      expect(body.textContent).not.toContain(secret)
+    }
   })
 
   it('does not finish on an unchanged connection', async () => {
@@ -437,21 +671,6 @@ describe('callback mode', () => {
     await flushPromises()
     expect($('oauth-connected')).toBeNull()
     expect($('oauth-countdown')).not.toBeNull()
-  })
-
-  it('finishes when a microsoft connection turns healthy', async () => {
-    const { wrapper, before } = await startCallback(M365)
-    expect(startCalls()[0]?.path).toBe('/api/oauth/microsoft/start')
-
-    await vi.advanceTimersByTimeAsync(2_100)
-    expect(wrapper.emitted('connected')).toBeUndefined()
-
-    list = [{ ...M365, health: { status: 'ok', detail: null, checked_at: '2026-09-21T10:00:00Z' } }]
-    await vi.advanceTimersByTimeAsync(2_100)
-    await flushPromises()
-    expect($('oauth-connected')).not.toBeNull()
-    expect(wrapper.emitted('connected')).toHaveLength(1)
-    expect(vi.getTimerCount()).toBe(before)
   })
 
   it('stops polling when the dialog is closed', async () => {
@@ -463,6 +682,16 @@ describe('callback mode', () => {
     expect(listCalls().length).toBe(settled)
   })
 
+  it('stops polling the flow status when the dialog is closed', async () => {
+    const { before } = await startCallback()
+    await vi.advanceTimersByTimeAsync(2_100)
+    expect(statusCalls()).toHaveLength(1)
+    await click('oauth-cancel')
+    expect(vi.getTimerCount()).toBe(before)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(statusCalls()).toHaveLength(1)
+  })
+
   it('stops polling when the component unmounts', async () => {
     const { wrapper, before } = await startCallback()
     wrapper.unmount()
@@ -471,6 +700,53 @@ describe('callback mode', () => {
     const settled = listCalls().length
     await vi.advanceTimersByTimeAsync(10_000)
     expect(listCalls().length).toBe(settled)
+  })
+
+  it('stops polling the flow status when the component unmounts', async () => {
+    const { wrapper, before } = await startCallback()
+    await vi.advanceTimersByTimeAsync(2_100)
+    expect(statusCalls()).toHaveLength(1)
+    wrapper.unmount()
+    mounted = mounted.filter((entry) => entry !== (wrapper as VueWrapper<unknown>))
+    expect(vi.getTimerCount()).toBe(before)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(statusCalls()).toHaveLength(1)
+  })
+
+  it('drops a status answer that arrives after the dialog was closed', async () => {
+    const { wrapper, before } = await startCallback()
+    let release: (value: unknown) => void = () => undefined
+    flowStatus = () => new Promise((resolve) => { release = resolve }) as unknown
+    await vi.advanceTimersByTimeAsync(2_100)
+    await click('oauth-cancel')
+    release({ status: 'ok' })
+    await flushPromises()
+    expect(wrapper.emitted('connected')).toBeUndefined()
+    expect(listCalls()).toHaveLength(0)
+    expect(vi.getTimerCount()).toBe(before)
+  })
+})
+
+describe('oauthFlowStatus', () => {
+  it('GETs the encoded flow id with credentials, no body and no CSRF header', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({ status: 'error', reason: 'denied' })
+    vi.stubGlobal('$fetch', fetchSpy)
+    const result = await useApi().oauthFlowStatus('flow/1 x')
+    expect(result).toEqual({ status: 'error', reason: 'denied' })
+    const [url, options] = fetchSpy.mock.calls[0] as [string, Record<string, unknown>]
+    expect(new URL(url).pathname).toBe('/api/oauth/flows/flow%2F1%20x')
+    expect(options).toMatchObject({ method: 'GET', credentials: 'include' })
+    expect(options.body).toBeUndefined()
+    expect(options.headers).toBeUndefined()
+  })
+
+  it('turns a 404 unknown_flow into an ApiError carrying the code and none of the server text', async () => {
+    vi.stubGlobal('$fetch', async () => {
+      throw apiFailure(404, { code: 'unknown_flow', message: LEAK })
+    })
+    const error = await useApi().oauthFlowStatus('flow-1').catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error).toMatchObject({ status: 404, code: 'unknown_flow' })
   })
 })
 
