@@ -37,3 +37,6 @@ Ruling: defer — dry_run() shares a private _execute with report() (report skip
 ## 2026-09-21T06:43:15Z verify T-013 ok=true
 ## 2026-09-21T06:43:15Z build T-014 start (attempt 1)
 ## 2026-09-21T06:45:26Z verify T-014 ok=true
+## 2026-09-21T06:45:26Z build T-015 start (attempt 1)
+Ruling: defer — FlowStore.consume requires the nonce on EVERY call (None is a mismatch, so paste_back mode needs the cookie too), a wrong nonce or a provider mismatch does NOT consume the record (an attacker cannot burn a victim's flow), expiry is reported before nonce mismatch; parse_pasted_url additionally rejects backslash/control characters, repeated parameters and more than 50 query fields; hypothesis is not installed so the never-leaks-the-code property is a seeded 400-URL loop. Adversarially re-verified by hand. (T-015, round 1)
+## 2026-09-21T06:50:01Z verify T-015 ok=true

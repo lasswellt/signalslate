@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T06:45:26Z",
+  "updated": "2026-09-21T06:50:01Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1091,11 +1091,46 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T06:50:01Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'class FlowStore' pipeline/oauth_flows.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:50:01Z"
+          },
+          {
+            "cmd": "grep -qE 'def parse_pasted_url' pipeline/oauth_flows.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:50:01Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/oauth_flows.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:50:01Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_oauth_flows.py -q",
+            "exit": 0,
+            "duration_ms": 226,
+            "tail": "........................................................................ [ 63%]\n.........................................                                [100%]\n113 passed in 0.10s",
+            "recorded_at": "2026-09-21T06:50:01Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research docs/_research/2026-09-21_management-ui.md section 6 (every rule). Provider-agnostic pure logic with an in-process store (single uvicorn process; pending flows do not survive a restart: document it). PendingFlow dataclass: flow_id, provider, connection_id, mode (paste_back|callback), state, redirect_uri, payload (provider flow dict including code_verifier: NEVER returned to a browser), nonce_hash, created_at, expires_at. FlowStore with a lock: create(provider, connection_id, mode, state, redirect_uri, payload, ttl_seconds=900, now=None) -> (PendingFlow, nonce) where nonce = secrets.token_urlsafe(32) and only its sha256 is stored; consume(state=None, flow_id=None, nonce=None, provider=None, now=None) -> PendingFlow atomically removes the record and raises FlowError subclasses (UnknownFlow, ExpiredFlow, NonceMismatch, ProviderMismatch) with generic messages; comparisons via hmac.compare_digest; a wrong nonce must NOT consume the record (so an attacker cannot burn a victim's flow; document and test); expired records are purged on every call; at most 20 pending flows (oldest evicted). parse_pasted_url(url, *, allowed_hosts=('127.0.0.1','localhost')) -> dict returns only {code, state, error, error_description} (each str capped at 2 KB): reject length over 4096, a non-http scheme, a host that is not exactly in allowed_hosts (case-insensitive), userinfo, a missing query; NEVER fetch the URL; a fragment-only response (code after #) raises a specific FlowError telling the user to use query mode; no exception message ever contains the code or the full URL. build_callback_url(public_base_url, provider) -> f'{base}/api/oauth/callback/{provider}' (https only; provider in google or microsoft). Tests: TTL with an injected clock; single use; nonce binding; provider mismatch; eviction cap; purge; parse_pasted_url matrix (good loopback with a port, localhost, https rejected, other host rejected, the userinfo trick http://127.0.0.1@evil.example/, http://evil.example/?x=http://127.0.0.1, oversize, fragment-only, missing state, an error response); and a property test that FlowError messages never include the code."
     },
