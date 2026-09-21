@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T23:33:20Z",
+  "updated": "2026-09-21T23:41:46Z",
   "tasks": [
     {
       "id": "T-001",
@@ -3003,13 +3003,55 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:41:46Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def rotate_all' pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:41:45Z"
+          },
+          {
+            "cmd": "grep -qE 'pipeline.crypto rotate' README.md",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:41:45Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/crypto.py pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:41:45Z"
+          },
+          {
+            "cmd": "! grep -nE \"/home/[a-z]|(^|[^0-9])(10\\.[0-9]+\\.[0-9]+\\.[0-9]+|192\\.168\\.[0-9]+\\.[0-9]+)\" README.md",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:41:45Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_crypto_rotate.py tests/test_crypto.py tests/test_connections.py -q",
+            "exit": 0,
+            "duration_ms": 1491,
+            "tail": "........................................................................ [ 41%]\n........................................................................ [ 82%]\n...............................                                          [100%]\n175 passed in 1.27s",
+            "recorded_at": "2026-09-21T23:41:46Z"
+          }
+        ]
+      },
       "origin": "check",
-      "notes": "check-report finding 7. The README tells the owner to rotate by putting the new key first and the old keys after it, but Vault.rotate() is never called: rows stay encrypted under the old key until each is edited, and dropping the old key later makes every untouched secret undecryptable (fail closed, 503). FIX: connections.rotate_all() (pipeline/connections.py) re-encrypts every connection row's secret_ciphertext under the primary key with Vault.rotate inside ONE transaction and returns counts; if any row is unreadable it writes NOTHING and reports which connection IDS (never values) so the owner can fix or re-enter them; python -m pipeline.crypto rotate (extend main() in pipeline/crypto.py: keep genkey behavior and its usage/exit codes so tests/test_crypto.py passes unchanged; rotate opens the DB through the existing init helpers, builds the vault from SIGNALSLATE_SECRET_KEY, prints only counts and ids, exit 0 on success, 1 on an unreadable row, 2 on usage or no key). README.md: replace the rotation bullet with the complete procedure (add the new key first and keep the old one, restart, run the rotate command, verify the connections list still tests ok, then remove the old key), keep the public-repo rules (<your-host>, no real values). Tests: rotate from key A to key B,A re-encrypts (ciphertext changes, decrypts under B alone after dropping A), idempotent second run, an undecryptable row aborts with nothing written and its id reported, no key -> exit 2, output never contains a secret or ciphertext, genkey unchanged, no rows -> 0 rotated."
+      "notes": "check-report finding 7. The README tells the owner to rotate by putting the new key first and the old keys after it, but Vault.rotate() is never called: rows stay encrypted under the old key until each is edited, and dropping the old key later makes every untouched secret undecryptable (fail closed, 503). FIX: connections.rotate_all() (pipeline/connections.py) re-encrypts every connection row's secret_ciphertext under the primary key with Vault.rotate inside ONE transaction and returns counts; if any row is unreadable it writes NOTHING and reports which connection IDS (never values) so the owner can fix or re-enter them; python -m pipeline.crypto rotate (extend main() in pipeline/crypto.py: keep genkey behavior and its usage/exit codes so tests/test_crypto.py passes unchanged; rotate opens the DB through the existing init helpers, builds the vault from SIGNALSLATE_SECRET_KEY, prints only counts and ids, exit 0 on success, 1 on an unreadable row, 2 on usage or no key). README.md: replace the rotation bullet with the complete procedure (add the new key first and keep the old one, restart, run the rotate command, verify the connections list still tests ok, then remove the old key), keep the public-repo rules (<your-host>, no real values). Tests: rotate from key A to key B,A re-encrypts (ciphertext changes, decrypts under B alone after dropping A), idempotent second run, an undecryptable row aborts with nothing written and its id reported, no key -> exit 2, output never contains a secret or ciphertext, genkey unchanged, no rows -> 0 rotated. ADDED at build time (from T-040): README.md and .env.example (scope+.env.example) must ALSO document the new Host allow-list, as an upgrade note for existing installs: the API now answers 400 host_not_allowed for any Host that is not localhost, 127.0.0.1, ::1, LAN_HOST, the hostname of a WEB_ORIGINS entry, the PUBLIC_BASE_URL host or an entry of the new optional comma-separated ALLOWED_HOSTS (hostnames only, no URLs, ports ignored, case-insensitive, IPv6 with or without brackets, wildcards dropped and counted at startup, read once at startup so a change needs a restart, /api/health is not exempt). An install that reaches the API by a name other than LAN_HOST (or a proxy that forwards a different Host, e.g. the compose service name api) must set ALLOWED_HOSTS. Add ALLOWED_HOSTS= with a comment to .env.example, and add it to the README settings text next to WEB_ORIGINS. State that it defends against DNS-rebinding reads and is not authentication. Keep the public-repo rules and the README grep guard clean. Also note in the README that WEB_ORIGINS and ALLOWED_HOSTS need a restart to take effect."
     },
     {
       "id": "T-042",

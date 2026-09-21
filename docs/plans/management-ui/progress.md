@@ -107,3 +107,6 @@ Ruling: accept — T-035 scope expanded to tests/test_tokencache.py (remove the 
 ## 2026-09-21T23:26:43Z verify T-039 ok=true
 ## 2026-09-21T23:26:43Z build T-040 start (attempt 1)
 ## 2026-09-21T23:33:20Z verify T-040 ok=true
+## 2026-09-21T23:33:20Z build T-041 start (attempt 1)
+## 2026-09-21T23:33:49Z build T-041 start (attempt 1)
+## 2026-09-21T23:41:46Z verify T-041 ok=true
