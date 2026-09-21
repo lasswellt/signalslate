@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T05:16:15Z",
+  "updated": "2026-09-21T05:18:30Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1560,11 +1560,39 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T05:18:30Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qiE 'backslashreplace|errors=.replace' pipeline/triage_cli.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T05:18:29Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage_cli.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T05:18:29Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_triage_cli.py -q",
+            "exit": 0,
+            "duration_ms": 911,
+            "tail": "..................                                                       [100%]\n18 passed in 0.62s",
+            "recorded_at": "2026-09-21T05:18:30Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check findings 1 and 5. (a) pipeline/triage_cli.py print_dry/print_live print item text straight to stdout; a lone surrogate in a title or body raises UnicodeEncodeError and crashes the CLI. Route every printed string through one small helper that makes it safe for the stdout encoding (encode with errors='replace' / backslashreplace and decode back) so a hostile item can never crash the dry run. (b) the mutant that makes --dry write a database row survives: only the live path asserts 'writes nothing'. Add a dry-mode test that compares db row counts (CollectedItem, Run, SourceCursor, SourceHealth) before and after main([... '--dry']) and asserts they are unchanged. Tests: an item whose title and body contain a lone surrogate prints without raising in both --dry and live (fake client) modes, exit code unchanged; the dry-mode no-write test. Existing tests unchanged."
     },
