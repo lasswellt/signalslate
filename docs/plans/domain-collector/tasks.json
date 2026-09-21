@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-21T22:36:12Z",
+  "updated": "2026-09-21T22:40:35Z",
   "tasks": [
     {
       "id": "T-001",
@@ -210,11 +210,60 @@
           "timeout": 240
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T22:40:35Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '\"namecheap\": _Kind' pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:40:33Z"
+          },
+          {
+            "cmd": "grep -qE '\"godaddy\": _Kind' pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:40:33Z"
+          },
+          {
+            "cmd": "grep -qE '\"wordpress\": _Kind' pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:40:33Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:40:33Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_connections_registrars.py -q",
+            "exit": 0,
+            "duration_ms": 749,
+            "tail": "........................................................                 [100%]\n56 passed in 0.45s",
+            "recorded_at": "2026-09-21T22:40:34Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_connections.py tests/test_connection_materialize.py -q",
+            "exit": 0,
+            "duration_ms": 1575,
+            "tail": "........................................................................ [ 39%]\n........................................................................ [ 79%]\n.....................................                                    [100%]\n181 passed in 1.35s",
+            "recorded_at": "2026-09-21T22:40:35Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Finding 2. namecheap: label, api_user, username, client_ip (IPv4 only; Namecheap FAQ), sandbox (true|false, optional); secrets api_key (required), registrant_contact (optional JSON). godaddy: label, environment (production|ote, optional default production); secrets api_key, api_secret (required), registrant_contact optional. wordpress: label, client_id, redirect_mode (optional); secrets client_secret (required), access_token (optional, set by sign-in). Labels [a-z0-9]+ max 32 in _LABEL_RULES. materialize() emits nothing for these kinds (adapters read via get_secret); registrar keys are UI-only, not seeded from .env. registrant_contact validated as JSON object with required keys first_name,last_name,address1,city,state_province,postal_code,country,phone,email."
     },
