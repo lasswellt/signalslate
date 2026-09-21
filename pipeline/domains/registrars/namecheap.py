@@ -21,6 +21,14 @@ Design decisions:
 - _CHECK_BATCH_SIZE and the domains.create contact parameter table are UNVERIFIED for the same
   403-to-non-browser reason (Open Questions in the research doc); each is a named constant with an
   UNVERIFIED comment instead of a bare literal, so a later confirmed value is a one-line fix.
+- domains.check has no price attribute for a non-premium (standard) name, so check() makes a second
+  call, namecheap.users.getPricing, to price it — never Decimal("0"): a purchase price-cap guard
+  (T-017) comparing against a stand-in zero would pass every non-premium name regardless of its
+  real cost. getPricing's response shape is UNVERIFIED for the same 403 reason; parsing is
+  defensive and, when a price genuinely can't be found, check() raises RegistrarError for that
+  domain rather than returning an untrustworthy Quote. One getPricing call per distinct TLD, cached
+  for the NamecheapClient instance's lifetime, since every name in a batch sharing a TLD shares a
+  price.
 """
 import logging
 from collections.abc import Sequence
@@ -64,6 +72,16 @@ _CMD_GET_LIST = "namecheap.domains.getList"
 _CMD_CHECK = "namecheap.domains.check"
 _CMD_CREATE = "namecheap.domains.create"
 _CMD_GET_BALANCES = "namecheap.users.getBalances"
+_CMD_GET_PRICING = "namecheap.users.getPricing"
+
+# UNVERIFIED (namecheap.com method-reference pages 403 non-browser clients, same as the other
+# UNVERIFIED constants below): namecheap.users.getPricing's request/response shape. Modeled on
+# publicly documented examples — ProductType="DOMAIN", ProductCategory "register"/"renew" nodes
+# each holding <Product Name="<tld>"><Price Duration="1" YourPrice="..." Currency="..."/> — but not
+# confirmed against a live account. _find_tld_price() parses defensively and check() treats any
+# shape mismatch as "price unavailable", never as a fabricated 0.
+_PRICING_CATEGORY_REGISTER = "register"
+_PRICING_CATEGORY_RENEW = "renew"
 
 # Research Finding 3 / Implementation Sketch Step 2 (verified page usage): getList is paged.
 _PAGE_SIZE = 100
@@ -73,8 +91,8 @@ _PAGE_SIZE = 100
 # 403s non-browser clients, so this is a conservative assumed chunk size, not a confirmed API cap.
 _CHECK_BATCH_SIZE = 50
 
-# UNVERIFIED: domains.check has no Currency attribute; the account's billing currency is assumed
-# USD until confirmed against a live account.
+# Fallback only: used for a premium Quote (whose PremiumRegistrationPrice attribute has no
+# currency of its own) and as getPricing's Currency default when that attribute is missing.
 _ACCOUNT_CURRENCY = "USD"
 
 # UNVERIFIED (same Open Question as _CHECK_BATCH_SIZE): the domains.create parameter table. This
@@ -198,26 +216,33 @@ def _parse_domain(entry: Any) -> RegistrarDomain:
     )
 
 
-def _parse_quote(entry: Any) -> Quote:
-    name = (entry.get("Domain") or "").lower()
-    premium = _parse_bool(entry.get("IsPremiumName")) or False
-    if premium:
-        price = _to_decimal(entry.get("PremiumRegistrationPrice"))
-        renewal_price: Optional[Decimal] = _to_decimal(entry.get("PremiumRenewalPrice"))
-    else:
-        # domains.check has no standard (non-premium) price attribute; that lives in
-        # namecheap.users.getPricing, out of scope for this adapter. Zero here is a known gap in
-        # this Quote, not a real price, until getPricing is wired in.
-        price = Decimal("0")
-        renewal_price = None
-    return Quote(
-        name=name,
-        available=_parse_bool(entry.get("Available")) or False,
-        premium=premium,
-        price=price,
-        renewal_price=renewal_price,
-        currency=_ACCOUNT_CURRENCY,
-    )
+def _domain_tld(name: str) -> str:
+    return name.rsplit(".", 1)[-1] if "." in name else name
+
+
+def _find_tld_price(category: Any, tld: str) -> Optional[tuple[Decimal, str]]:
+    """
+    Within one <ProductCategory> node, the 1-year price for <Product Name="tld">, or None when the
+    category, the product or a usable price attribute is missing. Prefers YourPrice (the account's
+    actual price after any account-specific discount) over Price (list price); see the UNVERIFIED
+    note on _CMD_GET_PRICING for why this is parsed defensively rather than assumed present.
+    """
+    if category is None:
+        return None
+    for product in category.iterfind("nc:Product", _NS):
+        if (product.get("Name") or "").strip().lower() != tld:
+            continue
+        for price_el in product.iterfind("nc:Price", _NS):
+            if price_el.get("Duration") != "1":
+                continue
+            raw = price_el.get("YourPrice") or price_el.get("Price")
+            if not raw:
+                continue
+            try:
+                return Decimal(raw), (price_el.get("Currency") or _ACCOUNT_CURRENCY)
+            except InvalidOperation:
+                continue
+    return None
 
 
 def _contact_params(contact: Contact) -> dict[str, str]:
@@ -236,6 +261,9 @@ class NamecheapClient:
     def __init__(self, connection_id: str) -> None:
         self._connection_id = connection_id
         self._config = _load_config(connection_id)
+        # tld -> (register_price, renewal_price, currency), or None when getPricing had nothing
+        # for that tld. Instance-lifetime only, per the module docstring's pricing design decision.
+        self._pricing_cache: dict[str, Optional[tuple[Decimal, Optional[Decimal], str]]] = {}
 
     @property
     def _host(self) -> str:
@@ -276,6 +304,67 @@ class NamecheapClient:
                 return domains
             page += 1
 
+    def _fetch_register_pricing(self, tld: str) -> Optional[tuple[Decimal, Optional[Decimal], str]]:
+        """
+        1-year register + renew price for tld from namecheap.users.getPricing, cached per tld for
+        this client's lifetime (every name in a check() batch sharing a tld shares a price, and
+        purchase() prices are looked up right before a spend decision, so staleness risk is low).
+
+        Returns None when the response has no usable register price for this tld — the caller must
+        not fall back to 0. A registrar-level failure (auth, rate limit, ...) is not caught here and
+        propagates as-is from self._call, since that is a real typed error, not "price unavailable".
+        """
+        if tld in self._pricing_cache:
+            return self._pricing_cache[tld]
+        root = self._call(_CMD_GET_PRICING, ProductType="DOMAIN", ProductName=tld)
+        pricing_result = root.find(".//nc:CommandResponse/nc:UserGetPricingResult", _NS)
+        result: Optional[tuple[Decimal, Optional[Decimal], str]] = None
+        if pricing_result is not None:
+            register_price: Optional[Decimal] = None
+            renewal_price: Optional[Decimal] = None
+            currency = _ACCOUNT_CURRENCY
+            for product_type in pricing_result.iterfind("nc:ProductType", _NS):
+                if (product_type.get("Name") or "").strip().upper() != "DOMAIN":
+                    continue
+                for category in product_type.iterfind("nc:ProductCategory", _NS):
+                    category_name = (category.get("Name") or "").strip().lower()
+                    found = _find_tld_price(category, tld)
+                    if found is None:
+                        continue
+                    price, found_currency = found
+                    if category_name == _PRICING_CATEGORY_REGISTER:
+                        register_price, currency = price, found_currency
+                    elif category_name == _PRICING_CATEGORY_RENEW:
+                        renewal_price = price
+            if register_price is not None:
+                result = (register_price, renewal_price, currency)
+        self._pricing_cache[tld] = result
+        return result
+
+    def _parse_quote(self, entry: Any) -> Quote:
+        name = (entry.get("Domain") or "").lower()
+        premium = _parse_bool(entry.get("IsPremiumName")) or False
+        if premium:
+            price = _to_decimal(entry.get("PremiumRegistrationPrice"))
+            renewal_price: Optional[Decimal] = _to_decimal(entry.get("PremiumRenewalPrice"))
+            currency = _ACCOUNT_CURRENCY
+        else:
+            tld = _domain_tld(name)
+            pricing = self._fetch_register_pricing(tld)
+            if pricing is None:
+                # Never a Quote carrying Decimal("0"): a purchase price-cap guard comparing
+                # against a stand-in zero would wrongly pass every name priced this way.
+                raise RegistrarError(f"Namecheap price unavailable for .{tld}")
+            price, renewal_price, currency = pricing
+        return Quote(
+            name=name,
+            available=_parse_bool(entry.get("Available")) or False,
+            premium=premium,
+            price=price,
+            renewal_price=renewal_price,
+            currency=currency,
+        )
+
     def check(self, names: Sequence[str]) -> list[Quote]:
         """Authoritative availability for each name, chunked at _CHECK_BATCH_SIZE per call."""
         quotes: list[Quote] = []
@@ -285,7 +374,7 @@ class NamecheapClient:
             root = self._call(_CMD_CHECK, DomainList=",".join(chunk))
             response = root.find(".//nc:CommandResponse", _NS)
             entries = list(response.iterfind("nc:DomainCheckResult", _NS)) if response is not None else []
-            quotes.extend(_parse_quote(entry) for entry in entries)
+            quotes.extend(self._parse_quote(entry) for entry in entries)
         return quotes
 
     def purchase(self, quote: Quote, years: int, contact: Contact) -> PurchaseResult:

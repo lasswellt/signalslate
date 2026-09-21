@@ -117,6 +117,28 @@ def _router(handler):
     return dispatch
 
 
+def _pricing_response(tld: str, register_price: str, renew_price: str, currency: str = "USD") -> FakeResponse:
+    return _ok(
+        '<CommandResponse Type="namecheap.users.getPricing"><UserGetPricingResult>'
+        '<ProductType Name="DOMAIN">'
+        f'<ProductCategory Name="register"><Product Name="{tld}">'
+        f'<Price Duration="1" DurationType="YEAR" Price="{register_price}" YourPrice="{register_price}" Currency="{currency}"/>'
+        '</Product></ProductCategory>'
+        f'<ProductCategory Name="renew"><Product Name="{tld}">'
+        f'<Price Duration="1" DurationType="YEAR" Price="{renew_price}" YourPrice="{renew_price}" Currency="{currency}"/>'
+        '</Product></ProductCategory>'
+        '</ProductType></UserGetPricingResult></CommandResponse>'
+    )
+
+
+def _empty_pricing_response() -> FakeResponse:
+    return _ok(
+        '<CommandResponse Type="namecheap.users.getPricing"><UserGetPricingResult>'
+        '<ProductType Name="DOMAIN"><ProductCategory Name="register"/><ProductCategory Name="renew"/></ProductType>'
+        '</UserGetPricingResult></CommandResponse>'
+    )
+
+
 # --- config / construction ----------------------------------------------------------
 
 
@@ -198,8 +220,13 @@ def test_list_domains_pages_until_short_page(monkeypatch, connection_id):
 def test_check_chunks_at_batch_size(monkeypatch, connection_id):
     names = [f"name{i}.com" for i in range(namecheap._CHECK_BATCH_SIZE + 5)]
     seen_chunks = []
+    pricing_calls = {"n": 0}
 
     def handler(command, params):
+        if command == namecheap._CMD_GET_PRICING:
+            pricing_calls["n"] += 1
+            assert params["ProductName"] == "com"
+            return _pricing_response("com", "10.98", "12.98")
         assert command == namecheap._CMD_CHECK
         chunk = params["DomainList"].split(",")
         seen_chunks.append(chunk)
@@ -213,11 +240,14 @@ def test_check_chunks_at_batch_size(monkeypatch, connection_id):
     assert len(seen_chunks[0]) == namecheap._CHECK_BATCH_SIZE
     assert len(seen_chunks[1]) == 5
     assert len(quotes) == len(names)
-    assert all(isinstance(q, Quote) and q.available for q in quotes)
+    assert all(isinstance(q, Quote) and q.available and q.price == Decimal("10.98") for q in quotes)
+    # Every name shares the .com tld: getPricing must be called once, not once per name/chunk.
+    assert pricing_calls["n"] == 1
 
 
 def test_check_premium_quote_has_price(monkeypatch, connection_id):
     def handler(command, params):
+        assert command != namecheap._CMD_GET_PRICING  # premium price never needs getPricing
         return _ok(
             '<CommandResponse><DomainCheckResult Domain="premium.com" Available="true" '
             'IsPremiumName="true" PremiumRegistrationPrice="199.00" PremiumRenewalPrice="99.00"/></CommandResponse>'
@@ -230,6 +260,36 @@ def test_check_premium_quote_has_price(monkeypatch, connection_id):
     assert quote.price == Decimal("199.00")
     assert quote.renewal_price == Decimal("99.00")
     assert quote.currency == namecheap._ACCOUNT_CURRENCY
+
+
+def test_check_non_premium_uses_register_pricing_from_getpricing(monkeypatch, connection_id):
+    def handler(command, params):
+        if command == namecheap._CMD_GET_PRICING:
+            assert params["ProductName"] == "io"
+            return _pricing_response("io", "34.98", "36.98", currency="USD")
+        return _ok('<CommandResponse><DomainCheckResult Domain="startup.io" Available="true" IsPremiumName="false"/></CommandResponse>')
+
+    route(monkeypatch, _router(handler))
+    client = namecheap.NamecheapClient(connection_id)
+    [quote] = client.check(["startup.io"])
+    assert quote.premium is False
+    assert quote.price == Decimal("34.98")
+    assert quote.renewal_price == Decimal("36.98")
+    assert quote.currency == "USD"
+
+
+def test_check_non_premium_missing_pricing_raises_not_zero(monkeypatch, connection_id):
+    def handler(command, params):
+        if command == namecheap._CMD_GET_PRICING:
+            return _empty_pricing_response()
+        return _ok('<CommandResponse><DomainCheckResult Domain="obscure.xyz" Available="true" IsPremiumName="false"/></CommandResponse>')
+
+    route(monkeypatch, _router(handler))
+    client = namecheap.NamecheapClient(connection_id)
+    with pytest.raises(RegistrarError) as info:
+        client.check(["obscure.xyz"])
+    assert "obscure.xyz" not in str(info.value)  # generic message, not the raw entry
+    assert "xyz" in str(info.value)
 
 
 # --- purchase -----------------------------------------------------------------------
