@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "zoom-collector",
-  "updated": "2026-09-21T23:08:56Z",
+  "updated": "2026-09-21T23:13:55Z",
   "tasks": [
     {
       "id": "T-001",
@@ -187,11 +187,67 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:13:55Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def start' pipeline/oauth_zoom.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:13:54Z"
+          },
+          {
+            "cmd": "grep -qE 'def finish_callback' pipeline/oauth_zoom.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:13:54Z"
+          },
+          {
+            "cmd": "grep -qE 'def refresh' pipeline/oauth_zoom.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:13:54Z"
+          },
+          {
+            "cmd": "grep -qE 'zoom.us/oauth/authorize' pipeline/oauth_zoom.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:13:54Z"
+          },
+          {
+            "cmd": "grep -qE 'PROVIDERS = \\(.*\"zoom\"' pipeline/oauth_flows.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:13:54Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/oauth_zoom.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:13:54Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_oauth_zoom.py tests/test_oauth_flows.py -q",
+            "exit": 0,
+            "duration_ms": 736,
+            "tail": "........................................................................ [ 48%]\n........................................................................ [ 96%]\n......                                                                   [100%]\n150 passed in 0.52s",
+            "recorded_at": "2026-09-21T23:13:55Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Q2 + Step 2. Mirror pipeline/oauth_gmail.py (sequencing) + oauth_google.py (endpoint helpers) in ONE module. Endpoints: https://zoom.us/oauth/authorize, https://zoom.us/oauth/token (Basic client_id:client_secret), https://zoom.us/oauth/revoke. Read client id/secret from the connection store like oauth_gmail._client_credentials. finish stores refresh_token via connections.set_secret('zoom','refresh_token',...). paste_back start must fail with a fixed-message FlowError subclass ('Zoom requires callback mode'): Zoom docs say loopback redirects are for PKCE/native clients only, not confidential clients. refresh(client_id, client_secret, refresh_token) returns the full token JSON; invalid_grant raises a dedicated error (no token text in messages). All errors subclass oauth_flows.FlowError with fixed messages. Tests mock only requests to zoom.us (copy the shape of tests/test_oauth_gmail.py)."
     },

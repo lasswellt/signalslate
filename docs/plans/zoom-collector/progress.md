@@ -7,3 +7,5 @@ Ruling: transcripts on by default (include_transcripts=true); default auth mode 
 ## 2026-09-21T23:02:49Z build T-002 start (attempt 1)
 ## 2026-09-21T23:09:04Z verify T-002 ok=true
 Ruling: carry-forward — T-002 concern: oauth-mode zoom materializes no env keys; T-005 zoom_token must read client_id/secret/refresh_token from the connection store (connections.get/get_secret), not _env() (T-002, round 1)
+## 2026-09-21T23:09:04Z build T-003 start (attempt 1)
+## 2026-09-21T23:13:55Z verify T-003 ok=true
