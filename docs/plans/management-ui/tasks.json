@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T06:23:34Z",
+  "updated": "2026-09-21T06:27:06Z",
   "tasks": [
     {
       "id": "T-001",
@@ -584,11 +584,53 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T06:27:06Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def set_env_overlay_provider' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:27:05Z"
+          },
+          {
+            "cmd": "grep -qE 'def env_snapshot' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:27:05Z"
+          },
+          {
+            "cmd": "grep -qE 'SIGNALSLATE_SECRET_KEY' tests/conftest.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:27:05Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:27:05Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_env_overlay.py tests/test_health.py tests/test_runner.py tests/test_collectors.py -q",
+            "exit": 0,
+            "duration_ms": 1126,
+            "tail": "........................................................................ [ 23%]\n........................................................................ [ 46%]\n........................................................................ [ 69%]\n........................................................................ [ 92%]\n.......................                                                  [100%]\n311 passed in 0.93s",
+            "recorded_at": "2026-09-21T06:27:06Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research docs/_research/2026-09-21_management-ui.md section 1 (all six corrections). In pipeline/health.py: (a) rename today's _env body to _raw_env() (behavior unchanged; used for seeding) and add a public alias env() for callers outside health (leave auth/gmail_bootstrap.py's private import alone for now). (b) _env() returns the same dict as before, and IF an overlay provider is registered AND it returns a dict: drop every key for which the registered family test is true, then add the overlay keys; otherwise return exactly the old result. health must NOT import pipeline.connections at module level (cycle): add set_env_overlay_provider(provider, family_test) that startup registers; default None so every existing test behaves unchanged. (c) env_snapshot() context manager built on contextvars: on enter it freezes the current _env() result for the entering context so every call inside returns the frozen dict; nested use is a no-op. env_override(mapping) context manager layering candidate keys over the frozen or current env, restoring on exit; both are per-context (threads that did not enter are unaffected). (d) add SIGNALSLATE_SECRET_KEY, WEB_ORIGINS and PUBLIC_BASE_URL to _SINGLE_KEYS and to tests/conftest.py CONFIG_KEYS; accessors secret_key_setting() -> Optional[str], web_origins() -> list[str] (WEB_ORIGINS split on commas, blanks dropped; when unset default to http://localhost:3000 plus http://<LAN_HOST>:3000 when LAN_HOST is set) and public_base_url() -> Optional[str] (must start with https://, trailing slash stripped, else None; never derived from request headers). (e) gmail_token_response(label) must prefer GMAIL_<LABEL>_CLIENT_ID and GMAIL_<LABEL>_CLIENT_SECRET over the shared GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET and fall back to the shared pair (today's configs keep working); the missing-credentials error text stays the same. Tests (new file; the ENTIRE existing suite must pass unchanged): overlay off by default; with a stub provider the raw family keys disappear and overlay keys appear, including the deleted-connection case (os.environ holds SLACK_GONE_TOKEN, the overlay lacks it, slack_workspaces() omits it); non-family keys untouched; a provider returning None leaves env untouched; snapshot freezes across a mid-run overlay change; env_override layers and restores; contextvars isolation between two threads; the settings accessors including https-only public_base_url and the LAN_HOST default origin; per-label Gmail client credentials preferred over the shared pair. ADDED at build time (from T-007 review): connections.overlay_provider() returns a read-only MappingProxyType (Optional[Mapping[str,str]]), NOT a dict: accept any Mapping in health (copy it with dict(overlay) before merging; never isinstance-check for dict; never mutate it). Blank primary values are already treated as undeclared by the seeder. Also add a test that the overlay provider's family test and the real connections.is_family_key agree when registered together (register both with the real connections module in one integration test)."
     },
@@ -972,7 +1014,7 @@
       "attempts": 0,
       "last_verify": null,
       "origin": "plan",
-      "notes": "Research docs/_research/2026-09-21_management-ui.md sections 8 and 9 (verified by experiment): with today's wildcard CORS a custom header defense is void, strict CORS alone does not stop a simple POST (the handler still runs), body-less POSTs are the exposed ones, and the default 422 handler ECHOES submitted secrets in the input field. api/security.py: install_security(app, *, allowed_origins: list[str]) adds (a) CORSMiddleware with the explicit origin list, methods GET, POST, PATCH, PUT, DELETE and OPTIONS, allow_headers Content-Type and X-Requested-With, allow_credentials False; (b) a middleware that for every non-safe method (POST, PUT, PATCH, DELETE) answers 403 unless the header X-Requested-With equals signalslate and, when an Origin header is present, it is in allowed_origins by exact match (GET and OPTIONS and the health route are exempt; the OAuth callback is a GET); requests that carry a body must have Content-Type application/json else 415; (c) a RequestValidationError handler returning 422 with per-error {type, loc, msg} ONLY (drop input, ctx and url) and NEVER using exc.body anywhere. hide_input_in_errors does not help under FastAPI. api/main.py: replace the wildcard CORS with install_security(app, allowed_origins=health.web_origins()); change nothing else. Tests with a router-only FastAPI app and TestClient without the lifespan: missing header -> 403 for POST, PUT, PATCH, DELETE and a body-less POST; wrong Origin -> 403; correct header and Origin -> passes; GET unaffected; preflight from an unlisted origin -> 400 with no allow-origin header; text/plain and form bodies -> 415 or 422; a too-short SecretStr field posted -> the 422 body does NOT contain the submitted string, also for a model_validator failure and a wrong content type (regression for the echo); the JSON decode error shape."
+      "notes": "Research docs/_research/2026-09-21_management-ui.md sections 8 and 9 (verified by experiment): with today's wildcard CORS a custom header defense is void, strict CORS alone does not stop a simple POST (the handler still runs), body-less POSTs are the exposed ones, and the default 422 handler ECHOES submitted secrets in the input field. api/security.py: install_security(app, *, allowed_origins: list[str]) adds (a) CORSMiddleware with the explicit origin list, methods GET, POST, PATCH, PUT, DELETE and OPTIONS, allow_headers Content-Type and X-Requested-With, allow_credentials False; (b) a middleware that for every non-safe method (POST, PUT, PATCH, DELETE) answers 403 unless the header X-Requested-With equals signalslate and, when an Origin header is present, it is in allowed_origins by exact match (GET and OPTIONS and the health route are exempt; the OAuth callback is a GET); requests that carry a body must have Content-Type application/json else 415; (c) a RequestValidationError handler returning 422 with per-error {type, loc, msg} ONLY (drop input, ctx and url) and NEVER using exc.body anywhere. hide_input_in_errors does not help under FastAPI. api/main.py: replace the wildcard CORS with install_security(app, allowed_origins=health.web_origins()); change nothing else. Tests with a router-only FastAPI app and TestClient without the lifespan: missing header -> 403 for POST, PUT, PATCH, DELETE and a body-less POST; wrong Origin -> 403; correct header and Origin -> passes; GET unaffected; preflight from an unlisted origin -> 400 with no allow-origin header; text/plain and form bodies -> 415 or 422; a too-short SecretStr field posted -> the 422 body does NOT contain the submitted string, also for a model_validator failure and a wrong content type (regression for the echo); the JSON decode error shape. ADDED at build time (from T-008 review): health.web_origins() does not strip trailing slashes or normalize case, so a pasted https://host/ would never match a browser Origin header. Normalize BOTH sides when matching in api/security.py: strip whitespace and trailing slashes, lowercase scheme and host, ignore default ports (http 80, https 443); add tests: an allowed origin configured with a trailing slash or uppercase host still matches the browser's canonical Origin; a different port or scheme does NOT match; an Origin of null never matches. Do not edit health.py in this task."
     },
     {
       "id": "T-019",

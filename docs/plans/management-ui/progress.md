@@ -18,3 +18,6 @@ Ruling: defer — connections.secrets_set is derived by decrypting the envelope,
 ## 2026-09-21T06:18:57Z build T-007 start (attempt 1)
 Ruling: defer — overlay_provider returns a read-only MappingProxyType keyed on version plus vault identity; materialize/secret_values skip rows they cannot decrypt (warning names the id only) while get_secret raises the generic crypto errors; blank primary env values count as undeclared. T-008's notes were extended accordingly. (T-007, round 1)
 ## 2026-09-21T06:23:34Z verify T-007 ok=true
+## 2026-09-21T06:23:34Z build T-008 start (attempt 1)
+Ruling: defer — tests/conftest.py gained an autouse fixture clearing the process-global env overlay provider around every test; _env() always returns a fresh dict; provider exceptions propagate out of _env() (connections.materialize handles its own decrypt errors); gmail_token_response still reads _env() twice (consistent inside a snapshot). web_origins() does not normalize trailing slashes or case: T-018's notes now require normalization on both sides of the Origin match. Seam verified independently against the real connections provider: deleted seeded connection does not resurrect from the container env, store wins after an edit, snapshot stable mid-run. (T-008, round 1)
+## 2026-09-21T06:27:06Z verify T-008 ok=true
