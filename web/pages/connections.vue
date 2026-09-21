@@ -100,6 +100,15 @@
             data-testid="conn-edit"
             @click="openEdit(conn)"
           />
+          <q-btn
+            v-if="system?.secret_key_configured && (conn.kind === 'gmail' || conn.kind === 'm365')"
+            flat
+            color="primary"
+            icon="login"
+            label="Sign in"
+            data-testid="conn-signin"
+            @click="openSignIn(conn)"
+          />
           <q-space />
           <q-btn
             flat
@@ -114,6 +123,8 @@
     </template>
 
     <ConnectionDialog v-model="dialogOpen" :mode="dialogMode" :connection="dialogConnection" @saved="onSaved" />
+
+    <OAuthDialog v-model="signInOpen" :connection="signInConnection" :system="system" @connected="onSignedIn" />
 
     <q-dialog :model-value="deleteTarget !== null" @update:model-value="(open: boolean) => { if (!open) deleteTarget = null }">
       <q-card style="max-width: 480px" data-testid="delete-confirm">
@@ -277,6 +288,48 @@ async function onSaved(saved: ConnectionView, mode: 'create' | 'edit') {
   await load(true)
 }
 
+const signInOpen = ref(false)
+const signInConnection = ref<ConnectionView | null>(null)
+
+function openSignIn(conn: ConnectionView) {
+  signInConnection.value = conn
+  signInOpen.value = true
+}
+
+async function onSignedIn(signed: ConnectionView) {
+  $q.notify({ type: 'positive', message: `Signed in ${signed.id}` })
+  await load(true)
+}
+
+// What ?oauth=error&reason= can carry (api/routers/oauth.py _REASONS). The query is untrusted text, so
+// only a known code maps to a message and nothing from it is ever shown.
+const LANDING_MESSAGES: Record<string, string> = {
+  invalid_request: 'The sign-in request was not recognised. Start the sign-in again from this page.',
+  expired: 'The sign-in took too long and expired. Start it again.',
+  denied: 'Access was denied at the provider. Start again and approve access.',
+  provider_error: 'The provider reported an error. Try again in a moment.',
+  exchange_failed: 'The provider did not accept the sign-in. Start it again.',
+  scope_missing: 'The required permission was not granted. Start again and approve every permission.',
+  no_refresh_token: 'The provider did not return a refresh token. Start again and approve offline access.',
+  failed: 'Sign-in failed. Start it again.',
+}
+
+const route = useRoute()
+const router = useRouter()
+
+function handleLanding() {
+  const outcome = route.query.oauth
+  if (outcome !== 'ok' && outcome !== 'error') return
+  if (outcome === 'ok') {
+    $q.notify({ type: 'positive', message: 'Sign-in complete' })
+  } else {
+    const reason = route.query.reason
+    const message = (typeof reason === 'string' && Object.hasOwn(LANDING_MESSAGES, reason) && LANDING_MESSAGES[reason]) || LANDING_MESSAGES.failed
+    $q.notify({ type: 'negative', message })
+  }
+  void router.replace({ path: route.path, query: {} })
+}
+
 const deleteTarget = ref<ConnectionView | null>(null)
 const deleting = ref(false)
 const deleteError = ref<string | null>(null)
@@ -304,5 +357,8 @@ async function confirmDelete() {
   }
 }
 
-onMounted(() => load())
+onMounted(() => {
+  handleLanding()
+  return load()
+})
 </script>
