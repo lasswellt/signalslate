@@ -44,7 +44,7 @@ from urllib.parse import parse_qs, urlsplit
 from pipeline.clock import utcnow
 
 MODES = ("paste_back", "callback")
-PROVIDERS = ("google", "microsoft")
+PROVIDERS = ("google", "microsoft", "wordpress")
 
 DEFAULT_TTL_SECONDS = 900
 MAX_PENDING = 20
@@ -413,11 +413,11 @@ def build_callback_url(public_base_url: str, provider: str) -> str:
     Build the redirect URI registered with the provider from the configured PUBLIC_BASE_URL.
 
     Never derived from a request's Host header: that header is attacker-controlled and would let a
-    forged request choose where the provider sends the code. https only, because both providers
-    reject plain http for a non-loopback redirect.
+    forged request choose where the provider sends the code. https only, because every provider
+    rejects plain http for a non-loopback redirect.
 
     :raises InvalidCallbackConfig: not an https URL with a host, carries userinfo/query/fragment, or the
-        provider is not google or microsoft.
+        provider is not one of PROVIDERS.
     """
     if provider not in PROVIDERS or not isinstance(public_base_url, str):
         raise InvalidCallbackConfig()
