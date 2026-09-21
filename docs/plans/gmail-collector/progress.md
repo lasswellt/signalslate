@@ -42,3 +42,6 @@ Ruling: defer — triage_cli live mode triages every item in the window (--limit
 ## 2026-09-21T03:19:50Z verify T-014 ok=true
 ## 2026-09-21T03:19:50Z build T-015 start (attempt 1)
 ## 2026-09-21T03:20:49Z verify T-015 ok=true
+## 2026-09-21T03:20:49Z build T-016 start (attempt 1)
+Ruling: defer — sanitize_text now removes any scheme:// URL (generic, a superset of the suggested list), opaque schemes mailto/javascript/vbscript/data/tel/sms/blob when immediately followed by a non-space, and //host; bare domains and label lookalikes (Data: Q3, Tel: 555, metadata:x) are kept. _MD_LINK allows one level of nested parens in the target (Tier 2 deviation, disjoint alternatives, no catastrophic backtracking; deeper nesting leaves a trailing ')'). (T-016, round 1)
+## 2026-09-21T03:22:52Z verify T-016 ok=true

@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T03:20:49Z",
+  "updated": "2026-09-21T03:22:52Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1204,11 +1204,39 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T03:22:52Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qiE 'javascript' pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:22:51Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:22:51Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_triage.py tests/test_triage_client.py tests/test_triage_injection.py -q",
+            "exit": 0,
+            "duration_ms": 773,
+            "tail": "........................................................................ [ 36%]\n........................................................................ [ 73%]\n.....................................................                    [100%]\n197 passed in 0.55s",
+            "recorded_at": "2026-09-21T03:22:52Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Found in T-013 review. sanitize_text (pipeline/triage.py, _URL) strips only http(s):// and www. forms; a hostile or confused model reply can still carry ftp://, mailto:, javascript:, data:, file:, tel: URIs or protocol-relative //host/path into the digest, which is later rendered to PDF. Extend the URL removal to those schemes (case-insensitive, also when written with odd spacing is NOT required) and to //host/path forms, removing them the same way existing URLs are removed. Do NOT strip bare domains (evil.example.net, Acme.com): false positives on company names and file names outweigh the gain for a PDF digest; say so in a comment. Keep the existing behavior for markdown links (label kept, target dropped). Add tests to tests/test_triage.py for each new scheme (in plain text and as a markdown link target), for //host, for a bare domain being left alone, and for a sentence where removal leaves no double spaces. The existing 62 triage tests and the injection suite must keep passing unchanged."
     }
