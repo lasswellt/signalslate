@@ -20,3 +20,5 @@ Ruling: gate narrowed to plan-owned test files while peer management-ui has unco
 ## 2026-09-21T23:05:59Z verify T-009 ok=true
 ## 2026-09-21T23:06:00Z build T-010 start (attempt 1)
 ## 2026-09-21T23:09:03Z verify T-010 ok=true
+## 2026-09-21T23:09:03Z build T-011 start (attempt 1)
+## 2026-09-21T23:12:21Z verify T-011 ok=true

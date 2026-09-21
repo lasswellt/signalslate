@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-21T23:09:03Z",
+  "updated": "2026-09-21T23:12:21Z",
   "tasks": [
     {
       "id": "T-001",
@@ -817,11 +817,46 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:12:21Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'crt\\.sh' pipeline/domains/intel.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:12:21Z"
+          },
+          {
+            "cmd": "grep -qE 'web\\.archive\\.org/cdx' pipeline/domains/intel.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:12:21Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/domains/intel.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:12:21Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_domain_intel.py -q",
+            "exit": 0,
+            "duration_ms": 200,
+            "tail": ".................                                                        [100%]\n17 passed in 0.05s",
+            "recorded_at": "2026-09-21T23:12:21Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Q4 ('url search' interpreted as URL/subdomain intel). crt.sh ?q=%25.<d>&output=json, 5 req/min and frequent 502: one retry with backoff, then status unavailable; dedupe/limit subdomains (<=500), strip wildcards. Wayback CDX collapse=urlkey limit 200. On-demand only (not in daily refresh). urlscan/VirusTotal out of scope (key + ToS)."
     },
