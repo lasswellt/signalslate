@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-21T22:40:35Z",
+  "updated": "2026-09-21T22:45:15Z",
   "tasks": [
     {
       "id": "T-001",
@@ -303,13 +303,62 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T22:45:15Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def normalize_domain' pipeline/domains/__init__.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:45:14Z"
+          },
+          {
+            "cmd": "grep -qE '^def domain_settings' pipeline/domains/__init__.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:45:14Z"
+          },
+          {
+            "cmd": "grep -qE '^class Registrar\\(Protocol\\)' pipeline/domains/registrars/__init__.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:45:14Z"
+          },
+          {
+            "cmd": "grep -qE '^class (RegistrarDomain|Quote|PurchaseResult|Contact)' pipeline/domains/registrars/__init__.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:45:14Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/domains/__init__.py pipeline/domains/registrars/__init__.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:45:14Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_domain_base.py -q",
+            "exit": 0,
+            "duration_ms": 441,
+            "tail": "........................                                                 [100%]\n24 passed in 0.24s",
+            "recorded_at": "2026-09-21T22:45:15Z"
+          }
+        ]
+      },
       "origin": "plan",
-      "notes": "Research Implementation Step 1. normalize_domain: strip, lower, trailing dot, IDNA to punycode, reject labels >63, total >253, no scheme/path; returns (name, tld). domain_settings() reads via pipeline.health.env(): DOMAINS_PURCHASE_ENABLED (default false), DOMAINS_MAX_PRICE (default 25), DOMAINS_DAILY_CAP (default 50), DOMAINS_ALLOW_PREMIUM (default false), DOMAINS_REFRESH_CRON (default '30 5 * * *'), DOMAINS_RESOLVER (optional); invalid numbers fail closed (purchase disabled). Registrar Protocol: list_domains, check, purchase, check_connection. Typed status errors: NotEligible, IpNotWhitelisted, RateLimited, AuthFailed, Unsupported, RegistrarError. Decimal prices, never float."
+      "notes": "Research Implementation Step 1. normalize_domain: strip, lower, trailing dot, IDNA to punycode, reject labels >63, total >253, no scheme/path; returns (name, tld). domain_settings() reads via pipeline.health.env(): DOMAINS_PURCHASE_ENABLED (default false), DOMAINS_MAX_PRICE (default 25), DOMAINS_DAILY_CAP (default 50), DOMAINS_ALLOW_PREMIUM (default false), DOMAINS_REFRESH_CRON (default '30 5 * * *'), DOMAINS_RESOLVER (optional); invalid numbers fail closed (purchase disabled). Registrar Protocol: list_domains, check, purchase, check_connection. Typed status errors: NotEligible, IpNotWhitelisted, RateLimited, AuthFailed, Unsupported, RegistrarError. Decimal prices, never float. scope+tests/conftest.py"
     },
     {
       "id": "T-005",
