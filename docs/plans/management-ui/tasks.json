@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T07:28:49Z",
+  "updated": "2026-09-21T07:30:48Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1784,11 +1784,39 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T07:30:48Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'environment' web/vitest.config.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:30:46Z"
+          },
+          {
+            "cmd": "grep -qE 'extends' web/tsconfig.json",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:30:46Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/smoke.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 2553,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/smoke.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·\n\n Test Files  1 passed (1)\n      Tests  1 passed (1)\n   Start at  03:30:47\n   Duration  1.42s (transform 45%, tests 29%, environment 14%, import 10%, setup 2%)",
+            "recorded_at": "2026-09-21T07:30:48Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research docs/_research/2026-09-21_management-ui.md section 10. web/tsconfig.json = { extends: ./.nuxt/tsconfig.json }. web/vitest.config.ts uses defineVitestConfig from @nuxt/test-utils/config with test.environment nuxt and include tests/**/*.test.ts. web/tests/smoke.test.ts mounts a Quasar password input with mountSuspended (q-input type=password autocomplete=new-password model-value empty) and asserts the rendered input has type password, the autocomplete attribute and an empty value: it mirrors the research experiment and proves the harness works with Quasar. Do NOT fix the pre-existing typecheck errors here (nuxt.config.ts is edited by the next web task). Keep every added file minimal."
     },

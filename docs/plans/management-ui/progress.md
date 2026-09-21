@@ -61,3 +61,5 @@ Ruling: accept — T-021 callback deletes only the nonce-matched ss_oauth_* cook
 ## 2026-09-21T07:27:24Z verify T-022 ok=true
 ## 2026-09-21T07:27:29Z build T-023 start (attempt 1)
 ## 2026-09-21T07:28:49Z verify T-023 ok=true
+## 2026-09-21T07:28:52Z build T-024 start (attempt 1)
+## 2026-09-21T07:30:48Z verify T-024 ok=true
