@@ -24,3 +24,6 @@ Ruling: defer — tests/conftest.py gained an autouse fixture clearing the proce
 ## 2026-09-21T06:27:06Z build T-009 start (attempt 1)
 Ruling: defer — tokencache keeps its own TOKEN_DIR and never imports health (no cycle); load() treats every damaged or unreadable file as absent and logs only the alias; save() restores has_state_changed on a failed write so a retry is not skipped. T-010's scope was widened to include pipeline/tokencache.py and its tests so an optional token_dir keyword can honor the tests' patched health.TOKEN_DIR. A test written for T-009 once wrote a stray file into the real tokens/ directory (monkeypatch.undo reverted the fixture); it was fixed with a scoped context and the stray file removed. (T-009, round 1)
 ## 2026-09-21T06:30:24Z verify T-009 ok=true
+## 2026-09-21T06:30:24Z build T-010 start (attempt 1)
+Ruling: defer — tokencache functions take an optional token_dir keyword (locked only validates the alias; the lock stays per alias); health.m365_cache_path is a thin wrapper passing health.TOKEN_DIR; the existing missing-cache message keeps its em dash. A tokencache.save OSError after a successful refresh still propagates out of check_m365 and access_token exactly as the old write_text did (a check_m365 raise escapes check_all_configured as before). (T-010, round 1)
+## 2026-09-21T06:33:47Z verify T-010 ok=true

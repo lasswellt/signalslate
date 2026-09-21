@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T06:30:24Z",
+  "updated": "2026-09-21T06:33:47Z",
   "tasks": [
     {
       "id": "T-001",
@@ -737,11 +737,46 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T06:33:47Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'tokencache' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:33:46Z"
+          },
+          {
+            "cmd": "grep -qE 'tokencache' pipeline/collectors/graph.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:33:46Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/graph.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:33:46Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_tokencache_wiring.py tests/test_health.py tests/test_collectors.py -q",
+            "exit": 0,
+            "duration_ms": 1456,
+            "tail": "........................................................................ [ 28%]\n........................................................................ [ 57%]\n........................................................................ [ 86%]\n.................................                                        [100%]\n249 passed in 1.28s",
+            "recorded_at": "2026-09-21T06:33:47Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Replace the two duplicated cache read-modify-write sites: health.check_m365 (~lines 193-204) and collectors/graph.py access_token (~lines 51-65). Both must hold tokencache.locked(alias) across load, acquire_token_silent_with_error and save. Keep every existing behavior and message: tests/test_health.py and tests/test_collectors.py m365 tests must pass UNCHANGED, including the missing-file message 'No token cache: run auth/m365_bootstrap.py once on a machine with a browser'. New: a corrupt or unreadable cache now yields an error HealthResult ('Token cache unreadable: re-run sign-in') and an error CollectionResult instead of an exception escaping check_all_configured. Keep health.m365_cache_path() as a thin wrapper over tokencache.cache_path so existing imports and tests keep working. auth/m365_bootstrap.py still writes its own file: leave it. Tests: a corrupt cache makes check_m365 return an error HealthResult (no raise) and collect_m365 return an error CollectionResult; a concurrent check and collect on the same alias serialize (assert with a lock-order probe on a stubbed app); the refreshed state is persisted atomically with mode 0600. scope+pipeline/tokencache.py scope+tests/test_tokencache.py (added at build time from the T-009 review): the EXISTING tests monkeypatch health.TOKEN_DIR to a temp dir (tests/test_health.py env fixture), but tokencache has its own TOKEN_DIR, so the wiring would silently read and write the real tokens/ directory. Give tokencache.cache_path, load, save and locked an optional keyword token_dir: Optional[Path] = None (default: the module TOKEN_DIR) WITHOUT changing any existing behavior or test in tests/test_tokencache.py, and have health.check_m365 and graph.access_token pass health.TOKEN_DIR explicitly through health.m365_cache_path. Add a test proving a patched health.TOKEN_DIR is honored and the real repo tokens/ directory is never touched."
     },
