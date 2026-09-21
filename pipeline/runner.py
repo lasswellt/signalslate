@@ -28,7 +28,7 @@ from pipeline.db import (
     record_failure,
     set_cursor,
 )
-from pipeline.health import HealthResult, check_all_configured, m365_aliases, slack_workspaces
+from pipeline.health import HealthResult, check_all_configured, known_sources
 
 
 # How many consecutive non-clean collections before a source's watermark advances anyway.
@@ -132,9 +132,13 @@ def _persist(run_id: int, result: CollectionResult) -> int:
 
 
 def _active(config: dict) -> list[str]:
-    """Declared sources that are toggled on, in a stable order."""
-    declared = [f"m365_{a}" for a in m365_aliases()] + ["zoom"] + [f"slack_{l}" for l in slack_workspaces()]
-    return [s for s in declared if config["active_sources"].get(s, False)]
+    """
+    Declared sources that are toggled on, in a stable order.
+
+    Delegates to known_sources() rather than keeping its own list: a hand-copied list here once let
+    a newly declared source pass its health check yet never be collected, with no error anywhere.
+    """
+    return [s for s in known_sources() if config["active_sources"].get(s, False)]
 
 
 def _summarize(

@@ -44,7 +44,7 @@ class Run(SQLModel, table=True):
 class SourceHealth(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     run_id: int = Field(foreign_key="run.id")
-    source: str  # "m365_<alias>" | "zoom" | "slack_<label>"
+    source: str  # "m365_<alias>" | "zoom" | "slack_<label>" | "gmail_<label>"
     status: str  # "ok" | "error"
     detail: Optional[str] = None
     checked_at: datetime = Field(default_factory=utcnow)
@@ -58,7 +58,7 @@ class CollectedItem(SQLModel, table=True):
     """
     id: Optional[int] = Field(default=None, primary_key=True)
     run_id: int = Field(foreign_key="run.id", index=True)
-    source: str = Field(index=True)  # "m365_<alias>" | "zoom" | "slack_<label>"
+    source: str = Field(index=True)  # "m365_<alias>" | "zoom" | "slack_<label>" | "gmail_<label>"
     item_type: str  # mail | event | task | chat | message | meeting
     external_id: str  # the source's own id — dedupes overlapping collection windows
     occurred_at: datetime  # the item's own timestamp, naive UTC
