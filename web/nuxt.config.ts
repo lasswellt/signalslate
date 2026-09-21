@@ -2,8 +2,8 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   modules: ['nuxt-quasar-ui'],
   quasar: {
-    plugins: ['Notify'],
-    extras: { font: 'roboto-font', icons: ['material-icons'] },
+    plugins: ['Notify', 'Dialog'],
+    extras: { font: 'roboto-font', fontIcons: ['material-icons'] },
   },
   runtimeConfig: {
     public: {
