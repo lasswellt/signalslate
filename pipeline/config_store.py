@@ -53,3 +53,40 @@ def save_config(new_config: dict[str, Any]) -> dict[str, Any]:
         merged = _merge(new_config)
         CONFIG_PATH.write_text(json.dumps(merged, indent=2))
         return merged
+
+
+def forget_source(source_id: str) -> None:
+    """
+    Drop a source's stored toggle so a connection re-created under the same id starts on rather than
+    inheriting the old value.
+
+    Works on the raw file, never _merge: _merge calls known_sources(), which reaches the connection
+    store, and this is called while a connection is being deleted. pipeline.connections must never be
+    called from here, or a caller holding the connection lock deadlocks against load_config, which
+    holds _lock while known_sources() runs.
+    """
+    with _lock:
+        if not CONFIG_PATH.exists():
+            return
+        stored = json.loads(CONFIG_PATH.read_text())
+        sources = stored.get("active_sources")
+        if not isinstance(sources, dict) or source_id not in sources:
+            return
+        del sources[source_id]
+        CONFIG_PATH.write_text(json.dumps(stored, indent=2))
+
+
+def set_source_active(source_id: str, active: bool) -> dict[str, Any]:
+    """
+    Toggle one source and return the merged config. Load and save share one _lock hold, so two
+    toggles cannot lose each other's write. An id .env does not declare is ignored, like any other
+    undeclared source in _merge; the caller validates it against known_sources().
+    """
+    with _lock:
+        stored = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+        merged = _merge(stored)
+        if source_id in merged["active_sources"]:
+            merged["active_sources"][source_id] = active
+        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        CONFIG_PATH.write_text(json.dumps(merged, indent=2))
+        return merged
