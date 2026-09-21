@@ -241,7 +241,7 @@ def test_preflight_from_allowed_origin(client):
     )
     assert resp.status_code == 200
     assert resp.headers["access-control-allow-origin"] == ALLOWED
-    assert "access-control-allow-credentials" not in resp.headers
+    assert resp.headers["access-control-allow-credentials"] == "true"
 
 
 def test_preflight_from_unlisted_origin_is_400_without_allow_origin(client):
@@ -279,6 +279,36 @@ def test_wildcard_in_config_is_dropped_not_honoured():
     c = TestClient(build_app(["*"]))
     resp = c.get("/api/thing", headers={"Origin": "https://evil.example.org"})
     assert "access-control-allow-origin" not in resp.headers
+    assert "access-control-allow-credentials" not in resp.headers
+
+
+def test_allowed_origin_gets_credentials_with_the_exact_origin_never_a_wildcard(client):
+    resp = client.get("/api/thing", headers={"Origin": ALLOWED})
+    assert resp.headers["access-control-allow-origin"] == ALLOWED
+    assert resp.headers["access-control-allow-credentials"] == "true"
+    write = client.post("/api/run", headers={**GOOD, "Origin": ALLOWED})
+    assert write.headers["access-control-allow-origin"] == ALLOWED
+    assert write.headers["access-control-allow-credentials"] == "true"
+
+
+def test_unlisted_origin_gets_neither_allow_origin_nor_allow_credentials(client):
+    evil = {"Origin": "https://evil.example.org"}
+    preflight = client.options(
+        "/api/thing",
+        headers={**evil, "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "x-requested-with"},
+    )
+    for resp in (client.get("/api/thing", headers=evil), preflight, client.post("/api/run", headers={**GOOD, **evil})):
+        assert "access-control-allow-origin" not in resp.headers
+        assert "access-control-allow-credentials" not in resp.headers
+
+
+def test_wildcard_entry_is_dropped_but_a_listed_origin_beside_it_still_works():
+    c = TestClient(build_app(["*", ALLOWED]))
+    listed = c.get("/api/thing", headers={"Origin": ALLOWED})
+    assert listed.headers["access-control-allow-origin"] == ALLOWED
+    assert listed.headers["access-control-allow-credentials"] == "true"
+    other = c.get("/api/thing", headers={"Origin": "https://evil.example.org"})
+    assert "access-control-allow-origin" not in other.headers
 
 
 # --- JSON-only bodies ----------------------------------------------------------------------------

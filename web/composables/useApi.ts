@@ -295,6 +295,9 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   body?: unknown
   params?: Query
+  // Only the OAuth start/paste calls set this: the nonce cookie set by start must round-trip
+  // cross-origin, and every other call is cookie-free so no ambient credential can ride along.
+  credentials?: 'include'
 }
 
 /**
@@ -313,6 +316,7 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
       params,
       headers: mutating ? { 'X-Requested-With': 'signalslate', 'Content-Type': 'application/json' } : undefined,
       body: mutating && options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      ...(options.credentials ? { credentials: options.credentials } : {}),
     })
   } catch (error) {
     throw toApiError(error)
@@ -373,8 +377,16 @@ export function useApi() {
       request<ItemDetail>(url(`/collectors/${seg(source)}/items/${id}`)),
 
     oauthStart: (provider: OAuthProvider, payload: { connection_id: string; mode: OAuthMode }) =>
-      request<OAuthStart>(url(`/oauth/${seg(provider)}/start`), { method: 'POST', body: payload }),
+      request<OAuthStart>(url(`/oauth/${seg(provider)}/start`), {
+        method: 'POST',
+        body: payload,
+        credentials: 'include',
+      }),
     oauthPaste: (provider: OAuthProvider, payload: { flow_id: string; url: string }) =>
-      request<OAuthPasteResult>(url(`/oauth/${seg(provider)}/paste`), { method: 'POST', body: payload }),
+      request<OAuthPasteResult>(url(`/oauth/${seg(provider)}/paste`), {
+        method: 'POST',
+        body: payload,
+        credentials: 'include',
+      }),
   }
 }

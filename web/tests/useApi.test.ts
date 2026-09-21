@@ -117,6 +117,24 @@ describe('mutating calls', () => {
     expect(itemsOptions.params).toEqual({ limit: 25, before_id: 90 })
   })
 
+  it('sends credentials include on oauthStart and oauthPaste only', async () => {
+    const client = api()
+    const withCredentials = new Set(['oauthStart', 'oauthPaste'])
+    for (const [name, , , call] of cases) {
+      fetchMock.mockClear()
+      await call(client)
+      const [, options] = fetchMock.mock.calls[0] as [string, { credentials?: string }]
+      if (withCredentials.has(name)) expect(options.credentials, name).toBe('include')
+      else expect(options, name).not.toHaveProperty('credentials')
+    }
+    fetchMock.mockClear()
+    await client.getStatus()
+    await client.listItems('zoom')
+    for (const [, options] of fetchMock.mock.calls as Array<[string, object]>) {
+      expect(options).not.toHaveProperty('credentials')
+    }
+  })
+
   it('escapes path segments', async () => {
     await api().deleteConnection('a/b c')
     expect((fetchMock.mock.calls[0] as [string])[0].endsWith('/api/connections/a%2Fb%20c')).toBe(true)

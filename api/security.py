@@ -13,6 +13,13 @@ Design decisions (docs/_research/2026-09-21_management-ui.md sections 8 and 9, v
 - FastAPI's default 422 echoes the submitted value in `input` (a secret in a too-short password
   field, a whole-body echo on a model_validator failure). hide_input_in_errors does not help under
   FastAPI, so the handler here rebuilds each error from {type, loc, msg} and never touches exc.body.
+- The sign-in flow needs cookies across origins: POST /oauth/{provider}/start sets the ss_oauth_<flow_id>
+  nonce cookie and paste/callback require it, and web (:3000) and API (:8000) are same-site but
+  cross-origin. The browser stores and sends it only with credentials 'include' AND a response carrying
+  Access-Control-Allow-Credentials: true, so CORS allows credentials. That is safe only because
+  allow_origins is the explicit normalized list: Starlette echoes the exact request origin for a listed
+  one and nothing for any other, and a "*" entry is dropped before it gets here. Never let a wildcard,
+  or a reflected arbitrary Origin, reach that list while credentials are allowed.
 - health.web_origins() returns the operator's strings verbatim, so a pasted "https://Host/" would
   never equal the canonical Origin a browser sends. Both sides are normalized before comparing.
 """
@@ -22,8 +29,9 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from starlette.datastructures import Headers
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.datastructures import Headers, MutableHeaders
+from starlette.responses import Response
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 REQUIRED_HEADER = "X-Requested-With"
 REQUIRED_HEADER_VALUE = "signalslate"
@@ -72,6 +80,39 @@ def _is_json(content_type: str | None) -> bool:
     if content_type is None:
         return False
     return content_type.split(";", 1)[0].strip().lower() == "application/json"
+
+
+class _CredentialedCORS(CORSMiddleware):
+    """
+    CORSMiddleware that never advertises credentials to an origin it does not allow.
+
+    Starlette stamps Access-Control-Allow-Credentials on every simple response and preflight once
+    allow_credentials is on, allowed origin or not. Without an Allow-Origin the browser discards the
+    response anyway, but a stray "credentials true" on an unlisted origin's answer is the wrong signal
+    to leave for any client or test that reads the headers, so it is removed unless an allowed origin
+    was echoed.
+    """
+
+    async def send(self, message: Message, send: Send, request_headers: Headers) -> None:
+        if message["type"] == "http.response.start":
+            async def _send(inner: Message) -> None:
+                if inner["type"] == "http.response.start":
+                    _drop_credentials_without_origin(MutableHeaders(scope=inner))
+                await send(inner)
+
+            await super().send(message, _send, request_headers)
+            return
+        await super().send(message, send, request_headers)
+
+    def preflight_response(self, request_headers: Headers) -> Response:
+        response = super().preflight_response(request_headers)
+        _drop_credentials_without_origin(response.headers)
+        return response
+
+
+def _drop_credentials_without_origin(headers: MutableHeaders) -> None:
+    if "access-control-allow-origin" not in headers:
+        del headers["access-control-allow-credentials"]
 
 
 class _RequestGuard:
@@ -129,10 +170,10 @@ def install_security(app: FastAPI, *, allowed_origins: list[str]) -> None:
     )
     app.add_middleware(_RequestGuard, allowed_origins=frozenset(normalized))
     app.add_middleware(
-        CORSMiddleware,
+        _CredentialedCORS,
         allow_origins=normalized,
         allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", REQUIRED_HEADER],
-        allow_credentials=False,
+        allow_credentials=True,
     )
     app.add_exception_handler(RequestValidationError, _validation_error_handler)
