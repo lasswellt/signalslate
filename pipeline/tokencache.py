@@ -45,9 +45,13 @@ _locks: dict[str, threading.Lock] = {}
 _locks_guard = threading.Lock()
 
 
-def cache_path(alias: str) -> Path:
+def cache_path(alias: str, *, token_dir: Optional[Path] = None) -> Path:
     """
     Path of the cache file for one alias.
+
+    token_dir defaults to the module TOKEN_DIR, read at call time. A caller that owns its own
+    directory setting (pipeline.health.TOKEN_DIR, which tests and deployments repoint) passes it
+    explicitly; otherwise its cache would be read from one directory and written to another.
 
     Raises ValueError for any alias outside [A-Za-z0-9-]+ (empty, separators, dots, whitespace, NUL):
     the alias is interpolated into a filename, so anything else could escape TOKEN_DIR.
@@ -55,7 +59,7 @@ def cache_path(alias: str) -> Path:
     # fullmatch, not $: "$" also matches before a trailing newline, which would let "a\n" through.
     if not isinstance(alias, str) or _ALIAS_RE.fullmatch(alias) is None:
         raise ValueError("invalid alias: must match [A-Za-z0-9-]+")
-    return TOKEN_DIR / f"{alias}_cache.bin"
+    return (TOKEN_DIR if token_dir is None else token_dir) / f"{alias}_cache.bin"
 
 
 def alias_lock(alias: str) -> threading.Lock:
@@ -73,13 +77,19 @@ def alias_lock(alias: str) -> threading.Lock:
 
 
 @contextmanager
-def locked(alias: str) -> Iterator[None]:
-    """Hold the alias lock around a load-modify-save sequence."""
+def locked(alias: str, *, token_dir: Optional[Path] = None) -> Iterator[None]:
+    """
+    Hold the alias lock around a load-modify-save sequence.
+
+    token_dir only lets a caller pass the same arguments to locked, load and save. The lock stays
+    per alias, not per file: the same alias in two directories over-serializes, which is harmless.
+    """
+    cache_path(alias, token_dir=token_dir)
     with alias_lock(alias):
         yield
 
 
-def load(alias: str) -> Optional[msal.SerializableTokenCache]:
+def load(alias: str, *, token_dir: Optional[Path] = None) -> Optional[msal.SerializableTokenCache]:
     """
     The alias's cache, or None when there is no usable one.
 
@@ -89,7 +99,7 @@ def load(alias: str) -> Optional[msal.SerializableTokenCache]:
 
     Raises ValueError only for an invalid alias.
     """
-    path = cache_path(alias)
+    path = cache_path(alias, token_dir=token_dir)
     try:
         text = path.read_text()
     except FileNotFoundError:
@@ -111,7 +121,7 @@ def load(alias: str) -> Optional[msal.SerializableTokenCache]:
     return cache
 
 
-def save(alias: str, cache: msal.SerializableTokenCache) -> None:
+def save(alias: str, cache: msal.SerializableTokenCache, *, token_dir: Optional[Path] = None) -> None:
     """
     Persist the cache atomically, and only if MSAL changed it since it was loaded.
 
@@ -120,7 +130,7 @@ def save(alias: str, cache: msal.SerializableTokenCache) -> None:
 
     Raises ValueError for an invalid alias; OSError if the write or replace fails.
     """
-    path = cache_path(alias)
+    path = cache_path(alias, token_dir=token_dir)
     if not cache.has_state_changed:
         return
     path.parent.mkdir(parents=True, exist_ok=True)

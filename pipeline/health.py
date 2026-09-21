@@ -16,6 +16,8 @@ import msal
 import requests
 from dotenv import dotenv_values
 
+from pipeline import tokencache
+
 ROOT = Path(__file__).resolve().parent.parent
 TOKEN_DIR = ROOT / "tokens"
 # Delegated Graph scopes. Decide the full list up front: adding one later forces re-consent in
@@ -300,7 +302,9 @@ def m365_tenant_config(alias: str) -> Optional[dict]:
 
 
 def m365_cache_path(alias: str) -> Path:
-    return TOKEN_DIR / f"{alias}_cache.bin"
+    # TOKEN_DIR is passed explicitly: tokencache has its own TOKEN_DIR, and callers (tests, the
+    # bootstrap scripts) repoint this module's, so the default would read the real tokens/ directory.
+    return tokencache.cache_path(alias, token_dir=TOKEN_DIR)
 
 
 def m365_app(cfg: dict, cache: msal.SerializableTokenCache) -> msal.PublicClientApplication:
@@ -318,22 +322,24 @@ def check_m365(alias: str) -> HealthResult:
     if cfg is None:
         return HealthResult(source, "error", f"No usable .env entry for alias={alias!r} (tenant_id + client_id)")
 
-    cache_path = m365_cache_path(alias)
-    if not cache_path.exists():
-        return HealthResult(source, "error", "No token cache — run auth/m365_bootstrap.py once on a machine with a browser")
+    # The lock spans load -> refresh -> save: MSAL rotates the refresh token on use, so two
+    # unserialized refreshes of one alias strand the loser's token.
+    with tokencache.locked(alias, token_dir=TOKEN_DIR):
+        cache = tokencache.load(alias, token_dir=TOKEN_DIR)
+        if cache is None:
+            if not m365_cache_path(alias).exists():
+                return HealthResult(source, "error", "No token cache — run auth/m365_bootstrap.py once on a machine with a browser")
+            return HealthResult(source, "error", "Token cache unreadable: re-run sign-in")
 
-    cache = msal.SerializableTokenCache()
-    cache.deserialize(cache_path.read_text())
-    app = m365_app(cfg, cache)
-    accounts = app.get_accounts()
-    if not accounts:
-        return HealthResult(source, "error", "Cache has no account — re-run auth/m365_bootstrap.py")
+        app = m365_app(cfg, cache)
+        accounts = app.get_accounts()
+        if not accounts:
+            return HealthResult(source, "error", "Cache has no account — re-run auth/m365_bootstrap.py")
 
-    # _with_error distinguishes "nothing cached" (None) from "refresh rejected" (error dict), so
-    # a revoked refresh token surfaces its AADSTS code on the dashboard instead of a generic message.
-    result = app.acquire_token_silent_with_error(SCOPES, account=accounts[0])
-    if cache.has_state_changed:
-        cache_path.write_text(cache.serialize())
+        # _with_error distinguishes "nothing cached" (None) from "refresh rejected" (error dict), so
+        # a revoked refresh token surfaces its AADSTS code on the dashboard instead of a generic message.
+        result = app.acquire_token_silent_with_error(SCOPES, account=accounts[0])
+        tokencache.save(alias, cache, token_dir=TOKEN_DIR)
 
     if not result:
         return HealthResult(source, "error", "No token in cache for these scopes — re-run auth/m365_bootstrap.py")

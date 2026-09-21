@@ -323,3 +323,45 @@ def test_concurrent_read_modify_write_loses_no_update(token_dir):
     final = tokencache.load("tenant-a")
     assert final is not None
     assert _access_token_count(final) == workers
+
+
+# ---- token_dir override ------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def other_dir(tmp_path):
+    return tmp_path / "elsewhere"
+
+
+def test_cache_path_token_dir_overrides_module_default(token_dir, other_dir):
+    assert tokencache.cache_path("tenant-a", token_dir=other_dir) == other_dir / "tenant-a_cache.bin"
+    assert tokencache.cache_path("tenant-a", token_dir=None) == token_dir / "tenant-a_cache.bin"
+
+
+def test_save_and_load_with_token_dir_never_touch_the_module_default(token_dir, other_dir):
+    tokencache.save("tenant-a", _changed_cache(), token_dir=other_dir)
+
+    assert (other_dir / "tenant-a_cache.bin").exists()
+    assert not token_dir.exists()
+    assert tokencache.load("tenant-a") is None
+    loaded = tokencache.load("tenant-a", token_dir=other_dir)
+    assert loaded is not None and _access_token_count(loaded) == 1
+
+
+def test_locked_with_token_dir_holds_the_alias_lock_and_validates_the_alias(token_dir, other_dir):
+    with tokencache.locked("tenant-a", token_dir=other_dir):
+        assert tokencache.alias_lock("tenant-a").locked()
+    assert not tokencache.alias_lock("tenant-a").locked()
+    with pytest.raises(ValueError):
+        tokencache.locked("../evil", token_dir=other_dir).__enter__()
+
+
+@pytest.mark.parametrize("fn", [
+    lambda d, a: tokencache.cache_path(a, token_dir=d),
+    lambda d, a: tokencache.load(a, token_dir=d),
+    lambda d, a: tokencache.save(a, _changed_cache(), token_dir=d),
+])
+def test_token_dir_does_not_bypass_alias_validation(token_dir, other_dir, fn):
+    with pytest.raises(ValueError):
+        fn(other_dir, "../evil")
+    assert not other_dir.exists()
