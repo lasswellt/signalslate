@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T03:02:47Z",
+  "updated": "2026-09-21T03:04:57Z",
   "tasks": [
     {
       "id": "T-001",
@@ -853,13 +853,62 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T03:04:57Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^anthropic==' requirements.txt",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:04:55Z"
+          },
+          {
+            "cmd": "grep -qE 'ANTHROPIC_API_KEY' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:04:55Z"
+          },
+          {
+            "cmd": "grep -qE 'ANTHROPIC_API_KEY' tests/conftest.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:04:55Z"
+          },
+          {
+            "cmd": "grep -qE '^ANTHROPIC_API_KEY=' .env.example",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:04:55Z"
+          },
+          {
+            "cmd": "venv/bin/python -c 'import anthropic'",
+            "exit": 0,
+            "duration_ms": 445,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:04:55Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest -q",
+            "exit": 0,
+            "duration_ms": 1346,
+            "tail": "........................................................................ [ 20%]\n........................................................................ [ 41%]\n........................................................................ [ 61%]\n........................................................................ [ 82%]\n..............................................................           [100%]\n350 passed in 1.11s",
+            "recorded_at": "2026-09-21T03:04:57Z"
+          }
+        ]
+      },
       "origin": "plan",
-      "notes": "Research §8. pip install anthropic in the venv, then pin the resolved version in requirements.txt as anthropic==<version> (record the version you actually installed; do not guess one). Add ANTHROPIC_API_KEY and SIGNALSLATE_MAP_MODEL to health._SINGLE_KEYS and tests/conftest.py CONFIG_KEYS so .env reaches the process the same way the other settings do (the SDK reads os.environ only, and locally .env is not loaded into it), plus a small llm_settings() accessor that returns the key and the model id. Default map model claude-haiku-4-5-20251001, overridable via env: Haiku 4.5 retirement is 'not sooner than 2026-10-15', so the id must be config. Do not add an SDK call here."
+      "notes": "Research §8. pip install anthropic in the venv, then pin the resolved version in requirements.txt as anthropic==<version> (record the version you actually installed; do not guess one). Add ANTHROPIC_API_KEY and SIGNALSLATE_MAP_MODEL to health._SINGLE_KEYS and tests/conftest.py CONFIG_KEYS so .env reaches the process the same way the other settings do (the SDK reads os.environ only, and locally .env is not loaded into it), plus a small llm_settings() accessor that returns the key and the model id. Default map model claude-haiku-4-5-20251001, overridable via env: Haiku 4.5 retirement is 'not sooner than 2026-10-15', so the id must be config. Do not add an SDK call here. scope+tests/test_health.py: the plan listed no test file for llm_settings(); added at build time (2026-09-21) so the new accessor is tested."
     },
     {
       "id": "T-012",

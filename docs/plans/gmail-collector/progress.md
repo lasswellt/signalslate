@@ -28,3 +28,6 @@ Ruling: defer — dev added '# pyright: ignore[reportMissingImports]' to pydanti
 ## 2026-09-21T02:59:19Z build T-010 start (attempt 1)
 Ruling: defer — sanitize_record's due check is stricter than fromisoformat on purpose (YYYY-MM-DD only; 3.12 fromisoformat also accepts 20260920 and ISO week dates). stub_record falls back to NO_SUBJECT for an empty or link-only title so a stub digest line is never blank. (T-010, round 1)
 ## 2026-09-21T03:02:47Z verify T-010 ok=true
+## 2026-09-21T03:02:47Z build T-011 start (attempt 1)
+Ruling: defer — anthropic==1.7.0 pinned (venv/bin/pip check clean; no existing pin changed). Its transitive deps are unpinned by design (flat direct-pin style): httpx2/httpcore2 (2.13.0, repo pydantic/httpx2), truststore, jiter, sniffio, docstring-parser. Provenance was checked against anthropic's own declared Requires-Dist metadata (it requires httpx2<3,>=2.0.0), not against PyPI publisher records; re-check when the Docker image is first built. The post-edit pyright hook's baseline (76 -> 79) is stale; project-wide count is 79 before and after. (T-011, round 1)
+## 2026-09-21T03:04:57Z verify T-011 ok=true
