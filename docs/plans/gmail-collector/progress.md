@@ -7,3 +7,5 @@ Ruling: defer — dev environment is a venv built on mise Python 3.12.14, not th
 ## 2026-09-21T02:40:54Z verify T-002 ok=true
 Ruling: spec-defect — the plan's stub-grep matched the pre-existing MSTODO_ env prefix and could never pass on pipeline/health.py; tasks.sh cannot edit verify[] after add, so tasks.json was regenerated through tasks.sh with a word-boundary pattern (\bTODO\b, \bFIXME\b) and T-001/T-002 re-verified (both PASS). No task content changed otherwise. (T-002, round 1)
 Ruling: defer — dev added a gmail branch to check_all_configured() that the task notes did not list explicitly; needed so active-source toggles reach check_gmail. FakeResponse in tests/test_health.py gained status_code/raise_for_status (existing tests unaffected). (T-002, round 1)
+## 2026-09-21T02:40:54Z build T-003 start (attempt 1)
+## 2026-09-21T02:42:05Z verify T-003 ok=true
