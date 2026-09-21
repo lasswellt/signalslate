@@ -1,0 +1,661 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent, h } from 'vue'
+import { flushPromises } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
+import { mountSuspended } from '@nuxt/test-utils/runtime'
+import { QLayout, QPageContainer } from 'quasar'
+import CollectorsPage from '~/pages/collectors.vue'
+import { parseUtc } from '~/composables/useApi'
+import type {
+  CollectorState,
+  DigestConfig,
+  DryRunJob,
+  DryRunResult,
+  ItemDetail,
+  ItemPage,
+  ItemRow,
+} from '~/composables/useApi'
+
+const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString().replace(/\.\d+Z$/, 'Z')
+
+function collector(overrides: Partial<CollectorState> = {}): CollectorState {
+  return {
+    source: 'zoom',
+    active: false,
+    watermark: ago(5),
+    consecutive_failures: 0,
+    stuck_threshold: 3,
+    last_attempt: { at: ago(5), status: 'ok', detail: null, item_count: 4 },
+    item_count: 42,
+    ...overrides,
+  }
+}
+
+function itemRow(id: number, overrides: Partial<ItemRow> = {}): ItemRow {
+  return { id, item_type: 'message', external_id: `ext-${id}`, occurred_at: ago(60), preview: `preview ${id}`, ...overrides }
+}
+
+const DRY_RESULT: DryRunResult = {
+  source: 'zoom',
+  status: 'ok',
+  detail: 'collected 3 items',
+  window: { since: ago(48 * 60), until: ago(0), hours: 48 },
+  count: 3,
+  by_type: { message: 2, recording: 1 },
+  items: [
+    { item_type: 'message', occurred_at: ago(30), external_id: 'a', preview: 'first preview line' },
+    { item_type: 'recording', occurred_at: ago(40), external_id: 'b', preview: 'second preview line' },
+  ],
+  duration_ms: 812,
+}
+
+interface Call {
+  method: string
+  path: string
+  headers?: Record<string, string>
+  body?: unknown
+  params?: Record<string, unknown>
+}
+
+interface State {
+  collectors: CollectorState[] | Error
+  config: DigestConfig
+  putConfig?: (body: DigestConfig) => DigestConfig | Error
+  run: { accepted: boolean } | Error
+  startDryRun: { job_id: string } | Error
+  dryRun: () => DryRunJob | Error
+  reset: (body: { days_back: number | null }) => unknown
+  clear: () => unknown
+  items: (params: Record<string, unknown>) => ItemPage | Error
+  item: (id: number) => ItemDetail | Error
+}
+
+let calls: Call[]
+let state: State
+
+function apiFailure(status: number, detail: unknown): Error {
+  return Object.assign(new Error('fetch failed'), { status, data: { detail } })
+}
+
+function freshState(): State {
+  return {
+    collectors: [],
+    config: { schedule_cron: '0 6 * * *', tracker: 'none', active_sources: {} },
+    run: { accepted: true },
+    startDryRun: { job_id: 'job-1' },
+    dryRun: () => ({ status: 'done', result: DRY_RESULT }),
+    reset: (body) => ({ source: 'zoom', watermark: null, note: `API note for ${JSON.stringify(body)}` }),
+    clear: () => ({ source: 'zoom', consecutive_failures: 0 }),
+    items: () => ({ items: [], next_before_id: null, total: 0 }),
+    item: (id) => ({ id, item_type: 'message', external_id: `ext-${id}`, occurred_at: ago(60), payload: '{}', truncated: false }),
+  }
+}
+
+/** A stand-in for the network: routes by method and path, records every call. */
+function stubApi() {
+  calls = []
+  vi.stubGlobal(
+    '$fetch',
+    async (url: string, options: { method?: string; headers?: Record<string, string>; body?: string; params?: Record<string, unknown> } = {}) => {
+      const path = new URL(url).pathname
+      const method = options.method ?? 'GET'
+      const body = options.body ? JSON.parse(options.body) : undefined
+      calls.push({ method, path, headers: options.headers, body, params: options.params })
+      const answer = (value: unknown) => {
+        if (value instanceof Error) throw value
+        return value
+      }
+      if (method === 'GET' && path === '/api/collectors') return answer(state.collectors)
+      if (method === 'GET' && path === '/api/config') return state.config
+      if (method === 'PUT' && path === '/api/config') return answer(state.putConfig ? state.putConfig(body) : body)
+      if (method === 'GET' && path.startsWith('/api/collectors/dry-run/')) return answer(state.dryRun())
+      if (method === 'POST' && path.endsWith('/run')) return answer(state.run)
+      if (method === 'POST' && path.endsWith('/dry-run')) return answer(state.startDryRun)
+      if (method === 'POST' && path.endsWith('/reset')) return answer(state.reset(body))
+      if (method === 'POST' && path.endsWith('/clear-failures')) return answer(state.clear())
+      const itemMatch = /^\/api\/collectors\/[^/]+\/items\/(\d+)$/.exec(path)
+      if (method === 'GET' && itemMatch) return answer(state.item(Number(itemMatch[1])))
+      if (method === 'GET' && /^\/api\/collectors\/[^/]+\/items$/.test(path)) return answer(state.items(options.params ?? {}))
+      throw new Error(`unexpected ${method} ${path}`)
+    },
+  )
+}
+
+const body = document.body
+const $ = <T extends Element = HTMLElement>(testid: string) => body.querySelector<T>(`[data-testid="${testid}"]`)
+const $$ = (testid: string) => [...body.querySelectorAll<HTMLElement>(`[data-testid="${testid}"]`)]
+
+async function click(testid: string) {
+  const el = $(testid)
+  if (!el) throw new Error(`no element ${testid}`)
+  el.click()
+  await flushPromises()
+}
+
+async function type(testid: string, value: string) {
+  const el = $<HTMLInputElement>(testid)
+  if (!el) throw new Error(`no input ${testid}`)
+  el.value = value
+  el.dispatchEvent(new Event('input'))
+  await flushPromises()
+}
+
+// QPage renders nothing outside a QLayout, so the page is mounted in the same shell app.vue gives it.
+const Harness = defineComponent({
+  render: () => h(QLayout, null, () => h(QPageContainer, null, () => h(CollectorsPage))),
+})
+
+let mounted: Array<VueWrapper<unknown>> = []
+
+async function mountPage() {
+  const wrapper = await mountSuspended(Harness, { attachTo: document.body })
+  mounted.push(wrapper as VueWrapper<unknown>)
+  await flushPromises()
+  return wrapper
+}
+
+// QBtn marks `loading` with a spinner in its content, not with a class on the button.
+const isLoading = (el: HTMLElement) => el.querySelector('.q-spinner') !== null
+const rows = () => $$('collector')
+const rowOf = (source: string) => {
+  const row = rows().find((el) => el.querySelector('[data-testid="collector-source"]')?.textContent?.trim() === source)
+  if (!row) throw new Error(`no row ${source}`)
+  return row
+}
+const inRow = (source: string, testid: string) => {
+  const el = rowOf(source).querySelector<HTMLElement>(`[data-testid="${testid}"]`)
+  if (!el) throw new Error(`no ${testid} in ${source}`)
+  return el
+}
+const callsTo = (method: string, suffix: string) => calls.filter((call) => call.method === method && call.path.endsWith(suffix))
+const listCalls = () => calls.filter((call) => call.method === 'GET' && call.path === '/api/collectors')
+
+beforeEach(() => {
+  state = freshState()
+  state.collectors = [collector()]
+  stubApi()
+})
+
+afterEach(() => {
+  for (const wrapper of mounted) wrapper.unmount()
+  mounted = []
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
+
+describe('collectors page', () => {
+  it('renders a row per collector with watermark, streak, last attempt and item count', async () => {
+    const watermark = ago(5)
+    state.collectors = [
+      collector({ watermark }),
+      collector({
+        source: 'slack_acme',
+        consecutive_failures: 2,
+        last_attempt: { at: ago(120), status: 'error', detail: 'Slack rejected the token', item_count: 0 },
+        item_count: 0,
+      }),
+      collector({ source: 'gmail_work', watermark: null, last_attempt: null, item_count: 0 }),
+    ]
+    await mountPage()
+
+    expect(rows()).toHaveLength(3)
+    expect(inRow('zoom', 'collector-watermark').textContent).toContain('5 minutes ago')
+    expect(inRow('zoom', 'collector-watermark-abs').textContent).toContain(parseUtc(watermark).toLocaleString())
+    expect(inRow('zoom', 'collector-streak').textContent).toContain('Failure streak: 0 of 3')
+    expect(inRow('zoom', 'attempt-status').textContent?.trim()).toBe('ok')
+    expect(inRow('zoom', 'collector-attempt').textContent).toContain('(4 items)')
+    expect(inRow('zoom', 'collector-items').textContent).toContain('42 items')
+    expect(rowOf('zoom').querySelector('[data-testid="streak-warning"]')).toBeNull()
+
+    expect(inRow('slack_acme', 'collector-streak').textContent).toContain('Failure streak: 2 of 3')
+    expect(inRow('slack_acme', 'streak-warning')).not.toBeNull()
+    const warning = inRow('slack_acme', 'streak-warning-text').textContent ?? ''
+    expect(warning).toContain('After 3 consecutive failures')
+    expect(warning).toContain('not retried')
+    expect(inRow('slack_acme', 'attempt-status').textContent?.trim()).toBe('error')
+    expect(inRow('slack_acme', 'attempt-detail').textContent).toBe('Slack rejected the token')
+
+    expect(inRow('gmail_work', 'collector-watermark').textContent).toContain('none')
+    expect(inRow('gmail_work', 'collector-attempt').textContent).toContain('none yet')
+    // Nothing to clear: the action is disabled at a zero streak.
+    expect(inRow('gmail_work', 'collector-clear').hasAttribute('disabled')).toBe(true)
+  })
+
+  it('warns from one failure before the threshold only', async () => {
+    state.collectors = [
+      collector({ source: 'a', consecutive_failures: 1, stuck_threshold: 3 }),
+      collector({ source: 'b', consecutive_failures: 3, stuck_threshold: 3 }),
+    ]
+    await mountPage()
+    expect(rowOf('a').querySelector('[data-testid="streak-warning"]')).toBeNull()
+    expect(inRow('b', 'streak-warning')).not.toBeNull()
+  })
+
+  it('renders server text as text, never as markup', async () => {
+    state.collectors = [
+      collector({ last_attempt: { at: ago(1), status: 'error', detail: '<img src=x onerror=alert(1)><b>bold</b>', item_count: 0 } }),
+    ]
+    await mountPage()
+    const attempt = inRow('zoom', 'collector-attempt')
+    expect(attempt.textContent).toContain('<img src=x onerror=alert(1)><b>bold</b>')
+    expect(attempt.querySelector('img')).toBeNull()
+    expect(attempt.querySelector('b')).toBeNull()
+  })
+
+  it('shows the empty state', async () => {
+    state.collectors = []
+    await mountPage()
+    expect($('empty')?.textContent).toBe('No collectors are declared')
+  })
+
+  it('shows a loading state until the request settles', async () => {
+    let release: (value: CollectorState[]) => void = () => {}
+    const gate = new Promise<CollectorState[]>((resolve) => (release = resolve))
+    vi.stubGlobal('$fetch', async () => gate)
+    await mountPage()
+    expect($('loading')).not.toBeNull()
+    expect($('empty')).toBeNull()
+
+    release([collector()])
+    await flushPromises()
+    expect($('loading')).toBeNull()
+    expect(rows()).toHaveLength(1)
+  })
+
+  it('shows the API error text and retries', async () => {
+    state.collectors = apiFailure(500, 'The store is unavailable')
+    await mountPage()
+    expect($('load-error')?.textContent).toContain('The store is unavailable')
+    expect($('empty')).toBeNull()
+
+    state.collectors = [collector()]
+    $('load-error')?.querySelector('button')?.click()
+    await flushPromises()
+    expect($('load-error')).toBeNull()
+    expect(rows()).toHaveLength(1)
+  })
+
+  it('the enabled toggle reads the config, writes the merged active_sources and keeps the new state', async () => {
+    state.config = { schedule_cron: '0 7 * * *', tracker: 'jira', active_sources: { slack_acme: true, zoom: false } }
+    await mountPage()
+    const toggle = () => inRow('zoom', 'collector-active')
+    expect(toggle().getAttribute('aria-checked')).toBe('false')
+
+    toggle().click()
+    await flushPromises()
+
+    expect(calls.filter((call) => call.path === '/api/config').map((call) => call.method)).toEqual(['GET', 'PUT'])
+    const put = calls.find((call) => call.method === 'PUT')
+    expect(put?.headers?.['X-Requested-With']).toBe('signalslate')
+    expect(put?.body).toEqual({ schedule_cron: '0 7 * * *', tracker: 'jira', active_sources: { slack_acme: true, zoom: true } })
+    expect(toggle().getAttribute('aria-checked')).toBe('true')
+    expect(rowOf('zoom').querySelector('[data-testid="toggle-error"]')).toBeNull()
+  })
+
+  it('the enabled toggle reverts and shows the error when the save fails', async () => {
+    state.collectors = [collector({ active: true })]
+    state.putConfig = () => apiFailure(422, 'active_sources: unknown source')
+    await mountPage()
+    const toggle = () => inRow('zoom', 'collector-active')
+    expect(toggle().getAttribute('aria-checked')).toBe('true')
+
+    toggle().click()
+    await flushPromises()
+
+    expect(toggle().getAttribute('aria-checked')).toBe('true')
+    expect(inRow('zoom', 'toggle-error').textContent?.trim()).toBe('active_sources: unknown source')
+    await vi.waitFor(() => expect(body.textContent).toContain('active_sources: unknown source'))
+  })
+})
+
+describe('run now', () => {
+  it('a 409 shows that a run is already in progress and starts no polling', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+    state.run = apiFailure(409, { code: 'run_in_progress', message: 'A run is already in progress' })
+    await mountPage()
+    const timers = vi.getTimerCount()
+
+    inRow('zoom', 'collector-run').click()
+    await flushPromises()
+
+    const post = callsTo('POST', '/collectors/zoom/run')[0]
+    expect(post?.headers?.['X-Requested-With']).toBe('signalslate')
+    await vi.waitFor(() => expect(body.textContent).toContain('A run is already in progress'))
+    expect(isLoading(inRow('zoom', 'collector-run'))).toBe(false)
+    expect(vi.getTimerCount()).toBe(timers)
+  })
+
+  it('polls the list until last_attempt.at changes, then stops', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+    await mountPage()
+    const timers = vi.getTimerCount()
+
+    inRow('zoom', 'collector-run').click()
+    await flushPromises()
+    expect(vi.getTimerCount()).toBeGreaterThan(timers)
+    expect(isLoading(inRow('zoom', 'collector-run'))).toBe(true)
+
+    const initial = listCalls().length
+    await vi.advanceTimersByTimeAsync(3_100)
+    expect(listCalls().length - initial).toBe(1)
+    // Unchanged last_attempt.at: still running.
+    expect(isLoading(inRow('zoom', 'collector-run'))).toBe(true)
+
+    state.collectors = [collector({ last_attempt: { at: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), status: 'ok', detail: null, item_count: 9 }, item_count: 51 })]
+    await vi.advanceTimersByTimeAsync(3_100)
+    await flushPromises()
+
+    expect(isLoading(inRow('zoom', 'collector-run'))).toBe(false)
+    expect(inRow('zoom', 'collector-items').textContent).toContain('51 items')
+    await vi.waitFor(() => expect(body.textContent).toContain('zoom: run finished (ok)'))
+    expect(vi.getTimerCount()).toBe(timers)
+    const settled = listCalls().length
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(listCalls().length).toBe(settled)
+  })
+
+  it('clears the poll timer on unmount', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+    const wrapper = await mountPage()
+    const timers = vi.getTimerCount()
+    inRow('zoom', 'collector-run').click()
+    await flushPromises()
+    expect(vi.getTimerCount()).toBeGreaterThan(timers)
+
+    wrapper.unmount()
+    mounted = mounted.filter((entry) => entry !== wrapper)
+    expect(vi.getTimerCount()).toBe(timers)
+  })
+})
+
+describe('dry run', () => {
+  async function openDryRun() {
+    await mountPage()
+    inRow('zoom', 'collector-dry-run').click()
+    await vi.waitFor(() => expect($('dry-dialog')).not.toBeNull())
+  }
+
+  it('sends hours and limit, polls the job and shows counts by type and previews', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+    let polls = 0
+    state.dryRun = () => (++polls < 3 ? { status: 'running', result: null } : { status: 'done', result: DRY_RESULT })
+    await openDryRun()
+    const timers = vi.getTimerCount()
+    expect($<HTMLInputElement>('dry-hours')?.value).toBe('24')
+    expect($<HTMLInputElement>('dry-limit')?.value).toBe('5')
+
+    await type('dry-hours', '48')
+    await type('dry-limit', '3')
+    await click('dry-start')
+
+    const post = callsTo('POST', '/collectors/zoom/dry-run')[0]
+    expect(post?.body).toEqual({ hours: 48, limit: 3 })
+    expect(post?.headers?.['X-Requested-With']).toBe('signalslate')
+    expect($('dry-running')).not.toBeNull()
+    expect(vi.getTimerCount()).toBeGreaterThan(timers)
+
+    await vi.advanceTimersByTimeAsync(2_100)
+    await vi.advanceTimersByTimeAsync(2_100)
+    expect($('dry-running')).not.toBeNull()
+    expect(calls.filter((call) => call.path === '/api/collectors/dry-run/job-1')).toHaveLength(2)
+
+    await vi.advanceTimersByTimeAsync(2_100)
+    await flushPromises()
+    expect($('dry-running')).toBeNull()
+    expect($('dry-summary')?.textContent).toContain('ok: collected 3 items')
+    expect($('dry-count')?.textContent).toContain('3 items')
+    expect($$('dry-type').map((chip) => chip.textContent?.trim())).toEqual(['message: 2', 'recording: 1'])
+    expect($$('dry-item').map((item) => item.textContent)).toEqual([
+      expect.stringContaining('first preview line'),
+      expect.stringContaining('second preview line'),
+    ])
+    expect($('dry-raw-toggle')).toBeNull()
+    expect(vi.getTimerCount()).toBe(timers)
+    // Terminal state: no more polling.
+    const settled = calls.length
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(calls.length).toBe(settled)
+  })
+
+  it('offers Show raw only when the result carries raw and renders it as text', async () => {
+    state.dryRun = () => ({
+      status: 'done',
+      result: { ...DRY_RESULT, raw: [{ body: '<b>raw</b>' }] } as DryRunResult,
+    })
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+    await openDryRun()
+    await click('dry-start')
+    await vi.advanceTimersByTimeAsync(2_100)
+    await flushPromises()
+
+    expect($('dry-raw')).toBeNull()
+    await click('dry-raw-toggle')
+    const raw = $('dry-raw')
+    expect(raw?.tagName).toBe('PRE')
+    expect(raw?.textContent).toContain('<b>raw</b>')
+    expect(raw?.querySelector('b')).toBeNull()
+  })
+
+  it('shows a failed job without a result and lets the user run again', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+    state.dryRun = () => ({ status: 'failed', result: null })
+    await openDryRun()
+    const timers = vi.getTimerCount()
+    await click('dry-start')
+    await vi.advanceTimersByTimeAsync(2_100)
+    await flushPromises()
+
+    expect($('dry-error')?.textContent).toContain('The dry run failed')
+    expect(vi.getTimerCount()).toBe(timers)
+    await click('dry-again')
+    expect($('dry-start')).not.toBeNull()
+    expect($('dry-error')).toBeNull()
+  })
+
+  it('shows the 429 message and stays on the form', async () => {
+    state.startDryRun = apiFailure(429, { code: 'too_many_dry_runs', message: 'Too many dry runs are in progress; try again shortly' })
+    await openDryRun()
+    await click('dry-start')
+    expect($('dry-error')?.textContent).toContain('Too many dry runs are in progress')
+    expect($('dry-start')).not.toBeNull()
+    expect($('dry-running')).toBeNull()
+  })
+
+  it('does not start with values outside the API limits', async () => {
+    await openDryRun()
+    await type('dry-hours', '169')
+    expect($('dry-start')?.hasAttribute('disabled')).toBe(true)
+    await type('dry-hours', '168')
+    await type('dry-limit', '51')
+    expect($('dry-start')?.hasAttribute('disabled')).toBe(true)
+    await type('dry-limit', '0')
+    expect($('dry-start')?.hasAttribute('disabled')).toBe(false)
+  })
+
+  it('stops polling when the dialog is closed', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+    state.dryRun = () => ({ status: 'running', result: null })
+    await openDryRun()
+    const timers = vi.getTimerCount()
+    await click('dry-start')
+    expect(vi.getTimerCount()).toBeGreaterThan(timers)
+
+    await click('dry-close')
+    expect(vi.getTimerCount()).toBe(timers)
+    const settled = calls.length
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(calls.length).toBe(settled)
+  })
+})
+
+describe('reset watermark and clear failures', () => {
+  async function openReset() {
+    await mountPage()
+    inRow('zoom', 'collector-reset').click()
+    await vi.waitFor(() => expect($('reset-dialog')).not.toBeNull())
+  }
+
+  it('sends the chosen days_back and then shows the note from the response', async () => {
+    await openReset()
+    expect($('reset-note-static')?.textContent).toContain('never further back than 7 days')
+    expect($('reset-note')).toBeNull()
+
+    await click('reset-choice-3')
+    await click('reset-confirm')
+
+    const post = callsTo('POST', '/collectors/zoom/reset')[0]
+    expect(post?.body).toEqual({ days_back: 3 })
+    expect(post?.headers?.['X-Requested-With']).toBe('signalslate')
+    expect($('reset-note')?.textContent).toBe('API note for {"days_back":3}')
+    expect($('reset-result')?.textContent).toContain('Watermark removed')
+    // The list is refreshed in place.
+    expect(listCalls().length).toBe(2)
+  })
+
+  it('defaults to one day back', async () => {
+    await openReset()
+    await click('reset-confirm')
+    expect(callsTo('POST', '/collectors/zoom/reset')[0]?.body).toEqual({ days_back: 1 })
+  })
+
+  it('No watermark sends days_back null and the response watermark is shown', async () => {
+    state.reset = (payload) => ({ source: 'zoom', watermark: payload.days_back === null ? null : ago(1), note: 'Removed. ' + 'Note text' })
+    await openReset()
+    await click('reset-choice-none')
+    await click('reset-confirm')
+    expect(callsTo('POST', '/collectors/zoom/reset')[0]?.body).toEqual({ days_back: null })
+    expect($('reset-result')?.textContent).toContain('Watermark removed')
+    expect($('reset-note')?.textContent).toBe('Removed. Note text')
+  })
+
+  it('shows the API error text and keeps the dialog open', async () => {
+    state.reset = () => apiFailure(404, { code: 'unknown_source', message: 'Unknown source' })
+    await openReset()
+    await click('reset-confirm')
+    expect($('reset-error')?.textContent).toContain('Unknown source')
+    expect($('reset-confirm')).not.toBeNull()
+  })
+
+  it('Clear failures posts and refreshes the streak', async () => {
+    state.collectors = [collector({ consecutive_failures: 2 })]
+    await mountPage()
+    expect(inRow('zoom', 'collector-streak').textContent).toContain('Failure streak: 2 of 3')
+
+    state.collectors = [collector({ consecutive_failures: 0 })]
+    inRow('zoom', 'collector-clear').click()
+    await flushPromises()
+
+    const post = callsTo('POST', '/collectors/zoom/clear-failures')[0]
+    expect(post?.headers?.['X-Requested-With']).toBe('signalslate')
+    expect(inRow('zoom', 'collector-streak').textContent).toContain('Failure streak: 0 of 3')
+    expect(rowOf('zoom').querySelector('[data-testid="streak-warning"]')).toBeNull()
+  })
+})
+
+describe('item browser', () => {
+  async function openItems() {
+    await mountPage()
+    inRow('zoom', 'collector-browse').click()
+    await vi.waitFor(() => expect($('items-dialog')).not.toBeNull())
+    await flushPromises()
+  }
+
+  it('shows the private-content notice and the empty state', async () => {
+    await openItems()
+    expect($('items-notice')?.textContent).toContain('private message content')
+    expect($('items-empty')).not.toBeNull()
+  })
+
+  it('pages with next_before_id and appends the next page', async () => {
+    state.items = (params) =>
+      params.before_id === undefined
+        ? { items: [itemRow(9), itemRow(8)], next_before_id: 8, total: 3 }
+        : { items: [itemRow(7)], next_before_id: null, total: 3 }
+    await openItems()
+
+    expect($$('item-row').map((row) => row.textContent)).toEqual([
+      expect.stringContaining('preview 9'),
+      expect.stringContaining('preview 8'),
+    ])
+    expect($('items-total')?.textContent).toContain('Showing 2 of 3')
+    const first = calls.find((call) => call.path === '/api/collectors/zoom/items')
+    expect(first?.params).toMatchObject({ limit: 50 })
+    expect(first?.params?.before_id).toBeUndefined()
+
+    await click('items-more')
+
+    const itemCalls = calls.filter((call) => call.path === '/api/collectors/zoom/items')
+    expect(itemCalls[1]?.params?.before_id).toBe(8)
+    expect($$('item-row')).toHaveLength(3)
+    expect($$('item-row')[2]?.textContent).toContain('preview 7')
+    expect($('items-more')).toBeNull()
+    expect($('items-total')?.textContent).toContain('Showing 3 of 3')
+  })
+
+  it('the item type filter restarts the list with item_type', async () => {
+    state.items = (params) =>
+      params.item_type === 'file'
+        ? { items: [itemRow(4, { item_type: 'file', preview: 'only file' })], next_before_id: null, total: 1 }
+        : { items: [itemRow(9), itemRow(8)], next_before_id: 8, total: 5 }
+    await openItems()
+    expect($$('item-row')).toHaveLength(2)
+
+    await type('items-filter', 'file')
+    body.querySelector('[data-testid="items-dialog"] form')?.dispatchEvent(new Event('submit', { cancelable: true }))
+    await flushPromises()
+
+    const last = calls.filter((call) => call.path === '/api/collectors/zoom/items').at(-1)
+    expect(last?.params?.item_type).toBe('file')
+    expect(last?.params?.before_id).toBeUndefined()
+    expect($$('item-row').map((row) => row.textContent)).toEqual([expect.stringContaining('only file')])
+    expect($('items-more')).toBeNull()
+  })
+
+  it('shows the error state with a retry', async () => {
+    state.items = () => apiFailure(500, 'The store is unavailable')
+    await openItems()
+    expect($('items-error')?.textContent).toContain('The store is unavailable')
+
+    state.items = () => ({ items: [itemRow(1)], next_before_id: null, total: 1 })
+    $('items-error')?.querySelector('button')?.click()
+    await flushPromises()
+    expect($('items-error')).toBeNull()
+    expect($$('item-row')).toHaveLength(1)
+  })
+
+  it('renders a payload that contains HTML as text inside a pre, not as markup', async () => {
+    const payload = JSON.stringify({ body: '<img src=x onerror=alert(1)><b>bold</b>', from: 'a@example.com' }, null, 2)
+    state.items = () => ({ items: [itemRow(5, { preview: '<i>preview</i>' })], next_before_id: null, total: 1 })
+    state.item = (id) => ({ id, item_type: 'message', external_id: 'ext-5', occurred_at: ago(60), payload, truncated: true })
+    await openItems()
+
+    // The list preview is text too.
+    expect($$('item-row')[0]?.querySelector('i')).toBeNull()
+
+    await click('item-row')
+    await vi.waitFor(() => expect($('detail-payload')).not.toBeNull())
+
+    const pre = $('detail-payload')
+    expect(pre?.tagName).toBe('PRE')
+    expect(pre?.textContent).toBe(payload)
+    expect(pre?.querySelector('img')).toBeNull()
+    expect(pre?.querySelector('b')).toBeNull()
+    expect(body.querySelector('[data-testid="items-dialog"] img')).toBeNull()
+    expect($('detail-truncated')).not.toBeNull()
+    expect(calls.some((call) => call.path === '/api/collectors/zoom/items/5')).toBe(true)
+
+    await click('detail-back')
+    expect($('detail-payload')).toBeNull()
+    expect($$('item-row')).toHaveLength(1)
+  })
+
+  it('shows the API error when an item cannot be loaded', async () => {
+    state.items = () => ({ items: [itemRow(5)], next_before_id: null, total: 1 })
+    state.item = () => apiFailure(404, { code: 'item_not_found', message: 'Item not found' })
+    await openItems()
+    await click('item-row')
+    await vi.waitFor(() => expect($('detail-error')).not.toBeNull())
+    expect($('detail-error')?.textContent).toContain('Item not found')
+    expect($('detail-payload')).toBeNull()
+  })
+})
