@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T07:46:42Z",
+  "updated": "2026-09-21T07:52:00Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2109,11 +2109,53 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T07:52:00Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'noopener' web/components/OAuthDialog.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:51:48Z"
+          },
+          {
+            "cmd": "grep -qE 'oauthPaste' web/components/OAuthDialog.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:51:48Z"
+          },
+          {
+            "cmd": "cd web && npm run typecheck",
+            "exit": 0,
+            "duration_ms": 2547,
+            "tail": "\n> typecheck\n> nuxt typecheck",
+            "recorded_at": "2026-09-21T07:51:51Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/OAuthDialog.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3274,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/OAuthDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·······································\n\n Test Files  1 passed (1)\n      Tests  39 passed (39)\n   Start at  03:51:52\n   Duration  2.16s (tests 42%, transform 41%, environment 8%, import 7%, setup 1%)",
+            "recorded_at": "2026-09-21T07:51:54Z"
+          },
+          {
+            "cmd": "cd web && npm run build",
+            "exit": 0,
+            "duration_ms": 6119,
+            "tail": "yles.Pd4Strki.mjs (3.83 kB) (1.22 kB gzip)\n  ├─ .output/server/chunks/build/error-404-styles.Pd4Strki.mjs.map (196 B) (155 B gzip)\n  ├─ .output/server/chunks/build/error-500-D5UJ6Lpm.mjs (4.72 kB) (1.94 kB gzip)\n  ├─ .output/server/chunks/build/error-500-D5UJ6Lpm.mjs.map (205 B) (175 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs (2.18 kB) (862 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs.map (196 B) (156 B gzip)\n  ├─ .output/server/chunks/build/history-C4ckkQH8.mjs (79.9 kB) (17.8 kB gzip)\n  ├─ .output/server/chunks/build/history-C4ckkQH8.mjs.map (1.73 kB) (505 B gzip)\n  ├─ .output/server/chunks/build/index-s8npBJmF.mjs (40.7 kB) (3.56 kB gzip)\n  ├─ .output/server/chunks/build/index-s8npBJmF.mjs.map (18.3 kB) (2.69 kB gzip)\n  ├─ .output/server/chunks/build/interval-CwAGk-1A.mjs (376 B) (274 B gzip)\n  ├─ .output/server/chunks/build/interval-CwAGk-1A.mjs.map (167 B) (152 B gzip)\n  ├─ .output/server/chunks/build/server.mjs (156 kB) (41.6 kB gzip)\n  ├─ .output/server/chunks/build/server.mjs.map (5.93 kB) (1.33 kB gzip)\n  ├─ .output/server/chunks/build/styles.mjs (497 B) (260 B gzip)\n  ├─ .output/server/chunks/build/styles.mjs.map (395 B) (203 B gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs (166 kB) (41.1 kB gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs.map (3.04 kB) (753 B gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs (14.2 kB) (4.57 kB gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs.map (845 B) (272 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs (94 B) (100 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs.map (88 B) (97 B gzip)\n  ├─ .output/server/index.mjs (353 B) (205 B gzip)\n  └─ .output/server/package.json (723 B) (321 B gzip)\nΣ Total size: 3.02 MB (693 kB gzip)\n[nitro] ✔ You can preview this build using node .output/server/index.mjs\n│\n└  ✨ Build complete!",
+            "recorded_at": "2026-09-21T07:52:00Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research docs/_research/2026-09-21_management-ui.md sections 4, 5 and 6. For gmail and m365 connections show a Sign in button opening OAuthDialog: a mode selector (Paste-back always; Automatic callback only when system.oauth[provider].modes includes callback), a Start button calling oauthStart, then open auth_url in a new tab with window.open(..., '_blank', 'noopener,noreferrer'). Paste-back: explain the browser will end on a page that fails to load (http://127.0.0.1 or http://localhost) and instruct the user to copy the FULL address-bar URL and paste it; show a countdown to expires_at and, for Microsoft, the warning that the code lives about a minute; a paste input plus Submit calling oauthPaste (the pasted URL contains the code: hold it in a local ref, clear it in finally, never log it, never put it in a Notify). On success show connected and refresh the list. Callback mode: after Start poll listConnections every 2 s until expires_at (gmail: secrets_set gains refresh_token; m365: the connection health turns ok), and handle the landing query ?oauth=ok or ?oauth=error&reason= on the connections page (Notify, then remove the query). Map the fixed reason codes to fixed user messages. For Gmail state that the consent screen should be In production or tokens expire after 7 days. Tests: mode availability from system info; start opens the URL with noopener and no code in the page; paste submit clears the input; reason-code messages; callback polling stops at expiry; the landing query is handled; the pasted URL never appears in Notify calls or the DOM after submit."
     },
