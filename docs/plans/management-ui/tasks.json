@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T06:18:57Z",
+  "updated": "2026-09-21T06:23:34Z",
   "tasks": [
     {
       "id": "T-001",
@@ -500,11 +500,53 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T06:23:34Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def seed_from_env' pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:23:32Z"
+          },
+          {
+            "cmd": "grep -qE 'def materialize' pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:23:32Z"
+          },
+          {
+            "cmd": "grep -qE 'def is_family_key' pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:23:33Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:23:33Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_connection_materialize.py tests/test_connections.py -q",
+            "exit": 0,
+            "duration_ms": 1307,
+            "tail": "........................................................................ [ 39%]\n........................................................................ [ 79%]\n.....................................                                    [100%]\n181 passed in 1.12s",
+            "recorded_at": "2026-09-21T06:23:34Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research docs/_research/2026-09-21_management-ui.md section 1 (corrections 1-4, 6). Continue in pipeline/connections.py. (1) seed_from_env(raw_env: Mapping[str,str]) -> list[str]: for every connection the RAW env declares (M365: each M365_ORG<n>_ALIAS with its TENANT_ID and a client id of M365_ORG<n>_CLIENT_ID else the shared M365_CLIENT_ID; zoom when ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET are all present; SLACK_<LABEL>_TOKEN; GMAIL_<LABEL>_REFRESH_TOKEN with client id and secret from GMAIL_<LABEL>_CLIENT_ID and GMAIL_<LABEL>_CLIENT_SECRET else the shared GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET), create it with origin env ONLY IF its id has no live row AND no tombstone; return the seeded ids; idempotent; a malformed declaration (for example a missing tenant id) is skipped and reported, never raises; with no vault it seeds nothing and returns []. Existing rows are never overwritten from .env (STORE WINS). (2) materialize() -> dict[str,str]: the env-style overlay for live rows using EXACTLY the key families health.py already parses: slack -> SLACK_<LABEL upper>_TOKEN; gmail -> GMAIL_<LABEL>_REFRESH_TOKEN (only when set) plus per-label GMAIL_<LABEL>_CLIENT_ID and GMAIL_<LABEL>_CLIENT_SECRET; m365 -> M365_ORG<n>_ALIAS, _TENANT_ID and _CLIENT_ID with n numbered 1..N by row seq then created_at; zoom -> ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET. (3) is_family_key(name) -> bool and FAMILY_KEY_PATTERNS: compiled regexes for every connection-owned key family (M365_ORG<n>_*, M365_CLIENT_ID, SLACK_<L>_TOKEN, ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_<L>_REFRESH_TOKEN, GMAIL_<L>_CLIENT_ID, GMAIL_<L>_CLIENT_SECRET) but NOT SLACK_SKIP_DMS, TZ, ANTHROPIC_API_KEY, SIGNALSLATE_MAP_MODEL or any other non-connection key. (4) secret_values() -> list[str]: every decrypted non-empty secret in the store, for redact(). (5) overlay_provider() -> Optional[dict]: returns a cached immutable dict rebuilt only when current_version() changed (thread-safe swap under a lock) and returns None when no vault is configured, so the caller keeps pure .env behavior. Prove round trip: with health._env monkeypatched to return the materialized dict, the EXISTING health functions m365_aliases, m365_tenant_config, slack_workspaces and gmail_accounts must return the seeded values unchanged. Tests: seed matrix (each kind, shared vs per-org client id, tombstoned id not re-seeded, idempotent second call, malformed skipped, no vault seeds nothing, existing row not overwritten); materialize per kind including M365 numbering stability across delete and re-add; family-key classification including the NOT-family keys above; cache invalidation on a write; the health round trip; secret_values excludes empties. ADDED at build time (from T-006 review): also add a narrow PUBLIC accessor get_secret(connection_id, name) -> Optional[str] returning one decrypted secret (None when absent), documented as for the token-exchange and sign-in flows only: callers must never log or return the value. T-016 needs the Gmail client_secret and T-017 reads nothing secret; do not widen _secrets_for. Test that it returns the stored value, None for a missing name or id, and raises SecretDecryptError-safe generic errors without echoing ciphertext."
     },
@@ -548,7 +590,7 @@
       "attempts": 0,
       "last_verify": null,
       "origin": "plan",
-      "notes": "Research docs/_research/2026-09-21_management-ui.md section 1 (all six corrections). In pipeline/health.py: (a) rename today's _env body to _raw_env() (behavior unchanged; used for seeding) and add a public alias env() for callers outside health (leave auth/gmail_bootstrap.py's private import alone for now). (b) _env() returns the same dict as before, and IF an overlay provider is registered AND it returns a dict: drop every key for which the registered family test is true, then add the overlay keys; otherwise return exactly the old result. health must NOT import pipeline.connections at module level (cycle): add set_env_overlay_provider(provider, family_test) that startup registers; default None so every existing test behaves unchanged. (c) env_snapshot() context manager built on contextvars: on enter it freezes the current _env() result for the entering context so every call inside returns the frozen dict; nested use is a no-op. env_override(mapping) context manager layering candidate keys over the frozen or current env, restoring on exit; both are per-context (threads that did not enter are unaffected). (d) add SIGNALSLATE_SECRET_KEY, WEB_ORIGINS and PUBLIC_BASE_URL to _SINGLE_KEYS and to tests/conftest.py CONFIG_KEYS; accessors secret_key_setting() -> Optional[str], web_origins() -> list[str] (WEB_ORIGINS split on commas, blanks dropped; when unset default to http://localhost:3000 plus http://<LAN_HOST>:3000 when LAN_HOST is set) and public_base_url() -> Optional[str] (must start with https://, trailing slash stripped, else None; never derived from request headers). (e) gmail_token_response(label) must prefer GMAIL_<LABEL>_CLIENT_ID and GMAIL_<LABEL>_CLIENT_SECRET over the shared GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET and fall back to the shared pair (today's configs keep working); the missing-credentials error text stays the same. Tests (new file; the ENTIRE existing suite must pass unchanged): overlay off by default; with a stub provider the raw family keys disappear and overlay keys appear, including the deleted-connection case (os.environ holds SLACK_GONE_TOKEN, the overlay lacks it, slack_workspaces() omits it); non-family keys untouched; a provider returning None leaves env untouched; snapshot freezes across a mid-run overlay change; env_override layers and restores; contextvars isolation between two threads; the settings accessors including https-only public_base_url and the LAN_HOST default origin; per-label Gmail client credentials preferred over the shared pair."
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 1 (all six corrections). In pipeline/health.py: (a) rename today's _env body to _raw_env() (behavior unchanged; used for seeding) and add a public alias env() for callers outside health (leave auth/gmail_bootstrap.py's private import alone for now). (b) _env() returns the same dict as before, and IF an overlay provider is registered AND it returns a dict: drop every key for which the registered family test is true, then add the overlay keys; otherwise return exactly the old result. health must NOT import pipeline.connections at module level (cycle): add set_env_overlay_provider(provider, family_test) that startup registers; default None so every existing test behaves unchanged. (c) env_snapshot() context manager built on contextvars: on enter it freezes the current _env() result for the entering context so every call inside returns the frozen dict; nested use is a no-op. env_override(mapping) context manager layering candidate keys over the frozen or current env, restoring on exit; both are per-context (threads that did not enter are unaffected). (d) add SIGNALSLATE_SECRET_KEY, WEB_ORIGINS and PUBLIC_BASE_URL to _SINGLE_KEYS and to tests/conftest.py CONFIG_KEYS; accessors secret_key_setting() -> Optional[str], web_origins() -> list[str] (WEB_ORIGINS split on commas, blanks dropped; when unset default to http://localhost:3000 plus http://<LAN_HOST>:3000 when LAN_HOST is set) and public_base_url() -> Optional[str] (must start with https://, trailing slash stripped, else None; never derived from request headers). (e) gmail_token_response(label) must prefer GMAIL_<LABEL>_CLIENT_ID and GMAIL_<LABEL>_CLIENT_SECRET over the shared GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET and fall back to the shared pair (today's configs keep working); the missing-credentials error text stays the same. Tests (new file; the ENTIRE existing suite must pass unchanged): overlay off by default; with a stub provider the raw family keys disappear and overlay keys appear, including the deleted-connection case (os.environ holds SLACK_GONE_TOKEN, the overlay lacks it, slack_workspaces() omits it); non-family keys untouched; a provider returning None leaves env untouched; snapshot freezes across a mid-run overlay change; env_override layers and restores; contextvars isolation between two threads; the settings accessors including https-only public_base_url and the LAN_HOST default origin; per-label Gmail client credentials preferred over the shared pair. ADDED at build time (from T-007 review): connections.overlay_provider() returns a read-only MappingProxyType (Optional[Mapping[str,str]]), NOT a dict: accept any Mapping in health (copy it with dict(overlay) before merging; never isinstance-check for dict; never mutate it). Blank primary values are already treated as undeclared by the seeder. Also add a test that the overlay provider's family test and the real connections.is_family_key agree when registered together (register both with the real connections module in one integration test)."
     },
     {
       "id": "T-009",

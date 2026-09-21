@@ -15,3 +15,6 @@ Ruling: defer — redact(): a bare 1-3 digit 'code' value is intentionally kept 
 ## 2026-09-21T06:13:30Z build T-006 start (attempt 1)
 Ruling: defer — connections.secrets_set is derived by decrypting the envelope, so with no vault or a wrong key a view reports [] (the list page stays readable) and update-with-secrets on an undecryptable row raises SecretDecryptError (recovery: delete and recreate). T-007's notes were extended at build time with a narrow public get_secret(id, name) accessor because T-016 needs the Gmail client_secret and _secrets_for must stay private. (T-006, round 1)
 ## 2026-09-21T06:18:57Z verify T-006 ok=true
+## 2026-09-21T06:18:57Z build T-007 start (attempt 1)
+Ruling: defer — overlay_provider returns a read-only MappingProxyType keyed on version plus vault identity; materialize/secret_values skip rows they cannot decrypt (warning names the id only) while get_secret raises the generic crypto errors; blank primary env values count as undeclared. T-008's notes were extended accordingly. (T-007, round 1)
+## 2026-09-21T06:23:34Z verify T-007 ok=true
