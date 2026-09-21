@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T02:44:11Z",
+  "updated": "2026-09-21T02:49:16Z",
   "tasks": [
     {
       "id": "T-001",
@@ -335,11 +335,53 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T02:49:16Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def flatten_message' pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:49:16Z"
+          },
+          {
+            "cmd": "grep -qE 'urlsafe_b64decode' pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:49:16Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:49:16Z"
+          },
+          {
+            "cmd": "venv/bin/python -c 'import json; json.load(open(\"tests/fixtures/gmail_message_multipart.json\"))'",
+            "exit": 0,
+            "duration_ms": 16,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:49:16Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+            "exit": 0,
+            "duration_ms": 227,
+            "tail": "........................................................................ [ 94%]\n....                                                                     [100%]\n76 passed, 51 deselected in 0.08s",
+            "recorded_at": "2026-09-21T02:49:16Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research §4, §7 payload shape. messages.get format=full (20 quota units), sequential and paced (300 gets = the full 6,000 units/min/user budget). Decode base64url with padding fix; walk payload.parts recursively; prefer text/plain, else text/html stripped via stdlib html.parser dropping script/style AND hidden content (display:none, hidden attr, aria-hidden) since hidden HTML is a documented injection vector; charset from the part Content-Type, fallback utf-8 errors=replace. flatten_message() returns top-level keys: subject, from, to, cc, date, messageId, inReplyTo, listUnsubscribe, threadId, labelIds, snippet, internalDate, bodyText (capped, BODY_CAP default 20000 chars, a guess to be re-tuned from the dry run), bodyTruncated, attachments[{filename,mimeType,size}] (metadata only; never call attachments.get). 'subject' MUST be top-level so pipeline.collect PREVIEW_FIELDS shows it. internalDate (ms epoch string) -> naive UTC; unparseable -> None. Fixture tests/fixtures/gmail_message_multipart.json is SYNTHETIC (public repo: no real mail, names, or addresses) and is reused by T-009/T-013."
     },
