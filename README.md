@@ -11,16 +11,18 @@ Self-hosted, LAN-only, runs anywhere Docker runs.
 | Microsoft 365 (any number of tenants) | Mail, calendar, Teams chat, Microsoft To Do | Delegated Graph permissions, one-time interactive sign-in per tenant |
 | Zoom | Yesterday's meetings, participants, AI Companion summaries | Server-to-Server OAuth |
 | Slack (any number of workspaces) | Channels, group DMs, threads since the last run | User token per workspace |
+| Gmail (any number of accounts) | Mail | OAuth Desktop client, one-time interactive sign-in per account |
 | reMarkable | Delivery target for the rendered PDF | One-time device pairing via `rmapi` |
 
-Sources are declared in `.env` and toggled per-run in the web UI. Adding a tenant or workspace is
-one more block of environment variables; nothing in the code is fixed to a count.
+Sources are declared in `.env` and toggled per-run in the web UI. Adding a tenant, workspace or
+account is one more block of environment variables; nothing in the code is fixed to a count.
 
 ## Phases
 
 1. **Auth plumbing** — every token source works and survives unattended reuse. *(code complete;
    awaiting sign-off against live tenants)*
-2. **Collectors** — pull the last 24h from each source. *(built; never yet run against a live API)*
+2. **Collectors** — pull the last 24h from each source (Microsoft 365, Zoom, Slack, Gmail).
+   *(built; never yet run against a live API)*
 3. Synthesis — digest + todo extraction.
 4. Render — PDF.
 5. Deliver — push to reMarkable.
@@ -136,6 +138,43 @@ rotation off. No search scopes: collection is `users.conversations` →
 python auth/slack_verify.py
 ```
 
+### Gmail
+
+One OAuth Desktop client, one refresh token per account. Only `gmail.readonly` is requested;
+`gmail.metadata` cannot search or read bodies, so it is not an option.
+
+1. Google Cloud Console: create **your own** project and enable the **Gmail API** (APIs & Services >
+   Library).
+2. APIs & Services > OAuth consent screen: user type **External**. Add **only** the
+   `https://www.googleapis.com/auth/gmail.readonly` scope.
+3. Click **Publish app** so the status is **In production**. In Testing status refresh tokens expire
+   after 7 days.
+4. APIs & Services > Credentials > Create credentials > OAuth client ID, type **Desktop app**. Put
+   its id and secret in `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET`. Never commit them or share a
+   client id between people. A personal-use app with fewer than 100 users is exempt from Google's
+   verification; you click through the "unverified app" warning once per sign-in.
+5. Sign in once per account on a machine with a browser:
+
+   ```
+   python auth/gmail_bootstrap.py <label>
+   ```
+
+   Paste the printed `GMAIL_<LABEL>_REFRESH_TOKEN=...` line into `.env` on the server; the label
+   becomes the source id (`gmail_<label>`). On a headless box use `--no-browser` (and `--port` to
+   pin the port): open the printed URL on any machine. The redirect goes to `127.0.0.1` on the box
+   running the script, so SSH-forward that port. Every run mints a new token and Google keeps only
+   100 per account per client, so do not re-run it casually.
+
+What kills the token: a Google account password change, revoked access, six months unused, or the
+consent screen left in Testing. The dashboard shows `invalid_grant`; re-running the bootstrap for
+that label fixes it.
+
+Day-8 check: after a week, confirm the Gmail health check is still green. That is the point a
+Testing-status token would have died.
+
+Workspace accounts follow the same flow. If your organization owns the project, an **Internal**
+consent screen skips the unverified-app warning; an admin may still block third-party apps.
+
 ### reMarkable
 
 Deferred to Phase 5. Uses `ddvk/rmapi` (the maintained fork). Pair once with the code from
@@ -161,7 +200,8 @@ python auth/m365_bootstrap.py <alias> && python auth/zoom_s2s_auth.py && python 
 ```
 
 `m365_bootstrap.py` short-circuits to the health check and exits 0 when the cache is still good,
-so it doubles as the second-run check. Set `SLACK_SKIP_DMS=1` in `.env` if you dropped
+so it doubles as the second-run check; `python auth/gmail_bootstrap.py <label>` does the same for
+Gmail. Set `SLACK_SKIP_DMS=1` in `.env` if you dropped
 `im:history` / `im:read`, or the Slack check will fail on the missing scopes.
 
 ### Dry-running a collector
@@ -173,6 +213,7 @@ no cursor advance, no run — so it's safe against production, repeatedly.
 python -m pipeline.collect                 # list declared sources
 python -m pipeline.collect slack_work      # last 24h, one line per item
 python -m pipeline.collect m365_work --hours 2 --limit 3
+python -m pipeline.collect gmail_personal  # last 24h of one Gmail account
 python -m pipeline.collect zoom --raw      # full JSON, for checking field names
 python -m pipeline.collect --all
 ```
@@ -207,6 +248,9 @@ docker compose up -d --build
 both up.
 
 ### Local dev
+
+The container runs Python 3.12 (`python:3.12-slim`), so create the venv with a 3.12 interpreter to
+match; newer interpreters may lack wheels for the pinned dependencies.
 
 ```
 uvicorn api.main:app --reload --port 8000      # terminal 1
