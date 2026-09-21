@@ -426,7 +426,9 @@ def gmail_token_response(label: str) -> dict:
         raise RuntimeError("Missing GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET in .env")
     refresh_token = gmail_accounts().get(label.lower())
     if not refresh_token:
-        raise RuntimeError(f"No GMAIL_{label.upper()}_REFRESH_TOKEN in .env — run auth/gmail_bootstrap.py {label}")
+        raise RuntimeError(
+            f"Not signed in yet: use Sign in, or run auth/gmail_bootstrap.py {label} (no GMAIL_{label.upper()}_REFRESH_TOKEN)"
+        )
 
     resp = requests.post(
         "https://oauth2.googleapis.com/token",
@@ -457,6 +459,10 @@ def gmail_token_response(label: str) -> dict:
 
 def check_gmail(label: str) -> HealthResult:
     source = f"gmail_{label}"
+    # A connection created in the UI has no token until its first sign-in. Answer before any
+    # network call: exchanging an empty refresh token would only produce a confusing Google error.
+    if not gmail_accounts().get(label.lower()):
+        return HealthResult(source, "error", "Not signed in yet: use Sign in")
     try:
         data = gmail_token_response(label)
     except GmailAuthError as exc:

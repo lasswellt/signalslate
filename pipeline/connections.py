@@ -611,7 +611,7 @@ def secret_values() -> list[str]:
     with db.get_session() as session:
         for row in session.exec(select(db.Connection)).all():
             try:
-                found.extend(_envelope(row).values())
+                found.extend(value for value in _envelope(row).values() if value)
             except (SecretKeyMissing, SecretDecryptError):
                 continue
     return found
@@ -738,9 +738,15 @@ def seed_from_env(raw_env: Mapping[str, Optional[str]]) -> list[str]:
     return seeded
 
 
-def materialize() -> dict[str, str]:
+def materialize(*, pending_gmail_token: bool = False) -> dict[str, str]:
     """
     Renders the live connections as the env-style keys pipeline.health already parses.
+
+    pending_gmail_token: emit GMAIL_<L>_REFRESH_TOKEN as "" for a Gmail row that has not signed in
+    yet. health anchors gmail_accounts() on that key, so without it a token-less connection is
+    invisible to known_sources() and the create route (which checks membership) rejects it, which
+    made browser sign-in of a new account unreachable. Only the live overlay asks for it; the default
+    keeps the rendering that lists exactly the credentials that exist.
 
     M365 orgs are numbered 1..N by creation order, so deleting one renumbers the later ones: the
     number is only a key suffix, the alias is what identifies the org everywhere else. A row whose
@@ -772,8 +778,11 @@ def materialize() -> dict[str, str]:
                 if "token" in secrets:
                     out[f"SLACK_{upper}_TOKEN"] = secrets["token"]
             elif row.kind == "gmail":
+                # gmail_accounts() maps "" to None, which check_gmail reports as "Not signed in yet".
                 if "refresh_token" in secrets:
                     out[f"GMAIL_{upper}_REFRESH_TOKEN"] = secrets["refresh_token"]
+                elif pending_gmail_token:
+                    out[f"GMAIL_{upper}_REFRESH_TOKEN"] = ""
                 out[f"GMAIL_{upper}_CLIENT_ID"] = config["client_id"]
                 if "client_secret" in secrets:
                     out[f"GMAIL_{upper}_CLIENT_SECRET"] = secrets["client_secret"]
@@ -809,6 +818,6 @@ def overlay_provider() -> Optional[Mapping[str, str]]:
         cached = _overlay_cache
         if cached is not None and cached[0] == version and cached[1] is vault:
             return cached[2]
-        overlay: Mapping[str, str] = MappingProxyType(materialize())
+        overlay: Mapping[str, str] = MappingProxyType(materialize(pending_gmail_token=True))
         _overlay_cache = (version, vault, overlay)
         return overlay
