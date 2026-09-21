@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T07:37:58Z",
+  "updated": "2026-09-21T07:40:58Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1940,11 +1940,53 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T07:40:58Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'connections' web/app.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:40:47Z"
+          },
+          {
+            "cmd": "grep -qE 'q-route-tab' web/app.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:40:47Z"
+          },
+          {
+            "cmd": "cd web && npm run typecheck",
+            "exit": 0,
+            "duration_ms": 2275,
+            "tail": "\n> typecheck\n> nuxt typecheck",
+            "recorded_at": "2026-09-21T07:40:49Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/connections.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 2629,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/connections.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n···········\n\n Test Files  1 passed (1)\n      Tests  11 passed (11)\n   Start at  03:40:51\n   Duration  1.53s (transform 46%, tests 29%, environment 12%, import 10%, setup 2%)",
+            "recorded_at": "2026-09-21T07:40:52Z"
+          },
+          {
+            "cmd": "cd web && npm run build",
+            "exit": 0,
+            "duration_ms": 5708,
+            "tail": "1-mQeQJ.mjs (16.2 kB) (4.87 kB gzip)\n  ├─ .output/server/chunks/build/error-404-B1-mQeQJ.mjs.map (305 B) (207 B gzip)\n  ├─ .output/server/chunks/build/error-404-styles.Pd4Strki.mjs (3.83 kB) (1.22 kB gzip)\n  ├─ .output/server/chunks/build/error-404-styles.Pd4Strki.mjs.map (196 B) (155 B gzip)\n  ├─ .output/server/chunks/build/error-500-D5UJ6Lpm.mjs (4.72 kB) (1.94 kB gzip)\n  ├─ .output/server/chunks/build/error-500-D5UJ6Lpm.mjs.map (205 B) (175 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs (2.18 kB) (862 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs.map (196 B) (156 B gzip)\n  ├─ .output/server/chunks/build/history-C4ckkQH8.mjs (79.9 kB) (17.8 kB gzip)\n  ├─ .output/server/chunks/build/history-C4ckkQH8.mjs.map (1.72 kB) (501 B gzip)\n  ├─ .output/server/chunks/build/index-P4cebynL.mjs (40.9 kB) (3.7 kB gzip)\n  ├─ .output/server/chunks/build/index-P4cebynL.mjs.map (382 B) (260 B gzip)\n  ├─ .output/server/chunks/build/server.mjs (156 kB) (41.6 kB gzip)\n  ├─ .output/server/chunks/build/server.mjs.map (5.93 kB) (1.33 kB gzip)\n  ├─ .output/server/chunks/build/styles.mjs (497 B) (260 B gzip)\n  ├─ .output/server/chunks/build/styles.mjs.map (395 B) (203 B gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs (166 kB) (41 kB gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs.map (3.04 kB) (753 B gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs (14.2 kB) (4.57 kB gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs.map (845 B) (272 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs (94 B) (100 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs.map (88 B) (97 B gzip)\n  ├─ .output/server/index.mjs (353 B) (205 B gzip)\n  └─ .output/server/package.json (723 B) (321 B gzip)\nΣ Total size: 2.83 MB (674 kB gzip)\n[nitro] ✔ You can preview this build using node .output/server/index.mjs\n│\n└  ✨ Build complete!",
+            "recorded_at": "2026-09-21T07:40:58Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "New route /connections plus a Connections tab in web/app.vue between Dashboard and History (the Collectors tab is added later). On mount fetch getSystem and listConnections. Show a banner when secret_key_configured is false: 'Set SIGNALSLATE_SECRET_KEY in .env to manage connections here; env-only mode keeps working' (and do not offer add or edit). Render one card per connection: id, kind, an origin badge (env or ui), a health dot with the detail (already redacted server side; render as TEXT, never v-html), secrets_set as chips of NAMES only, an active toggle (read-modify-write of active_sources through getConfig and updateConfig) and a Test button calling testConnection with the result shown inline and in a Notify. Add, Edit, Delete and Sign in are added by the next tasks, which MUST extend this page: render NO placeholder or dead buttons now. Loading, empty ('No connections yet') and error states are required; relative times use parseUtc. Tests (mountSuspended with the real composable and vi.stubGlobal on ): the list renders origin, kind and health; the banner when the key is missing; the Test button result; empty and error states; the active toggle round trip."
     },
