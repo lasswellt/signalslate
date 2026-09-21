@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T05:22:25Z",
+  "updated": "2026-09-21T05:24:46Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1730,11 +1730,25 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T05:24:46Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_triage.py -q",
+            "exit": 0,
+            "duration_ms": 679,
+            "tail": "........................................................................ [ 53%]\n...............................................................          [100%]\n135 passed in 0.47s",
+            "recorded_at": "2026-09-21T05:24:46Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "test-only: the product is the missing regression test; there is no production symbol to grep. check finding 3: the mutant 'person = sanitize_text(sender_label, PERSON_MAX)' -> 'person = sender_label' in stub_record (pipeline/triage.py:265) survives all 212 triage tests because no test feeds a hostile From display name. Add tests (tests/test_triage.py only; NEVER edit source) where the sender display name contains http(s) and www URLs, javascript:/mailto: URIs, a markdown link, an HTML tag, control characters and a 5000-char run: stub_record's record.people and one_line contain none of them and respect PERSON_MAX / ONE_LINE_MAX; the same through the whole triage_items path when the fake client fails (stub path) and when it succeeds with a hostile people entry in the model reply. Prove each new test kills the mutant: in a scratch copy of the repo (rsync to /tmp, do not touch the real tree) apply the mutation and show the new test fails; report that in your reply. If a test exposes a real defect, do not weaken it: reply BLOCKED with the failing assertion."
     }

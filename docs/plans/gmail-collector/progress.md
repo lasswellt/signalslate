@@ -65,3 +65,5 @@ Ruling: defer — T-020 found that codecs.lookup(cs)._is_text_encoding is True f
 ## 2026-09-21T05:20:15Z build T-024 start (attempt 1)
 Ruling: defer — T-024 changed one message: a NON-JSON non-200 token response now reads 'token endpoint returned an unexpected body (HTTP <status>)' instead of 'token exchange rejected: http_<status>'; no test or caller referenced the old text. Dict bodies keep 'token exchange rejected: <error>[: <description>]' with both fields bounded (200 chars, control characters stripped). (T-024, round 1)
 ## 2026-09-21T05:22:25Z verify T-024 ok=true
+## 2026-09-21T05:22:25Z build T-025 start (attempt 1)
+## 2026-09-21T05:24:46Z verify T-025 ok=true
