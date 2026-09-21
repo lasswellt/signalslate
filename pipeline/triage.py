@@ -392,20 +392,33 @@ def _describe(exc: Exception) -> str:
 
 def _call(client, model: str, pairs: Sequence[tuple[str, NormalizedItem]]) -> tuple[list[TriageRecord], str]:
     """
-    One parse() call. Returns (records, "") on success, ([], reason) on any API or model failure.
+    One parse() call. Returns (records, "") on success, ([], reason) on any failure inside the call.
 
     Anything short of a parsed TriageBatch is a failure: a refusal or a truncated output is not
     partial data to salvage, and parsed_output None means the SDK found nothing valid to parse.
+
+    The request build, the client call and the response handling are all guarded, because a single
+    unexpected error (a lone surrogate failing the SDK's UTF-8 encode, a malformed response) must cost
+    one batch, not the whole map stage. Only Exception is caught, so KeyboardInterrupt and SystemExit
+    still propagate. `client.messages.parse` is resolved OUTSIDE the guard: a client that has no such
+    method is a wiring bug in the caller, not a per-batch failure, and hiding it would stub every
+    item silently.
     """
+    parse = client.messages.parse
     try:
-        response = client.messages.parse(**build_request(model, pairs))
+        response = parse(**build_request(model, pairs))
+        if response.stop_reason in ("refusal", "max_tokens"):
+            return [], f"stop_reason={response.stop_reason}"
+        if response.parsed_output is None:
+            return [], "no parsed output"
+        return list(response.parsed_output.records), ""
     except (anthropic.APIError, ValidationError) as exc:
+        # These carry API-side messages, so the sanitized message is safe and useful to the operator.
         return [], _describe(exc)
-    if response.stop_reason in ("refusal", "max_tokens"):
-        return [], f"stop_reason={response.stop_reason}"
-    if response.parsed_output is None:
-        return [], "no parsed output"
-    return list(response.parsed_output.records), ""
+    except Exception as exc:
+        # Class name only: an arbitrary exception (UnicodeEncodeError, JSONDecodeError...) can echo
+        # the request or response text, which is email content.
+        return [], type(exc).__name__
 
 
 def triage_items(
@@ -420,8 +433,11 @@ def triage_items(
     `client` is duck-typed: anything whose messages.parse(**kwargs) returns an object with
     parsed_output and stop_reason (an anthropic.Anthropic in production). Each batch gets one call;
     aliases the model omitted are retried ONCE in a fresh call, then stubbed. A failed call stubs the
-    whole batch. API and model failures never raise: a partial digest beats a dead run. A programming
-    error (a client without .messages) is not swallowed.
+    whole batch, and each batch is independent, so one failure never stops the later ones. Any
+    Exception raised while building the request, calling the client or reading the response degrades
+    to stubs and is recorded in `failures` (class name only for unexpected errors): a partial digest
+    beats a dead run. BaseException (KeyboardInterrupt, SystemExit) still propagates, as does an
+    AttributeError from a `client` that has no `messages.parse` at all (a wiring bug, not a call failure).
 
     Raises ValueError for batch_size < 1.
     """

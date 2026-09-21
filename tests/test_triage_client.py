@@ -375,6 +375,109 @@ def test_triage_items_lets_a_programming_error_propagate():
         triage_items(make_items(1), object(), model="m")
 
 
+# --- triage_items: any failed call degrades to stubs -----------------------------------------------
+
+SECRET = "secret-body-text-from-an-email"
+
+UNEXPECTED_ERRORS = [
+    ValueError(SECRET),
+    TypeError(SECRET),
+    KeyError(SECRET),
+    RuntimeError(SECRET),
+    RecursionError(SECRET),
+    UnicodeEncodeError("utf-8", SECRET, 0, 1, SECRET),
+]
+
+
+class RaisingClient:
+    """parse() raises whatever it is given, including BaseException, which FakeClient would return instead."""
+
+    def __init__(self, error: BaseException) -> None:
+        self.messages = SimpleNamespace(parse=self._parse)
+        self._error = error
+
+    def _parse(self, **kwargs: Any) -> Any:
+        raise self._error
+
+
+@pytest.mark.parametrize("error", UNEXPECTED_ERRORS, ids=lambda e: type(e).__name__)
+def test_triage_items_stubs_every_item_when_the_call_raises_an_unexpected_error(error: Exception):
+    items = make_items(3)
+    client = FakeClient(error)
+
+    result = triage_items(items, client, model="m")
+
+    assert [t.item_id for t in result.items] == [item.id for item in items]
+    assert all(t.stubbed for t in result.items)
+    assert result.stubbed_count == 3
+    assert len(result.failures) == 1
+    assert type(error).__name__ in result.failures[0]
+
+
+@pytest.mark.parametrize("error", UNEXPECTED_ERRORS, ids=lambda e: type(e).__name__)
+def test_triage_items_failure_line_for_an_unexpected_error_is_the_class_name_only(error: Exception):
+    result = triage_items(make_items(1), FakeClient(error), model="m")
+
+    assert result.failures == [f"batch 1: call failed, stubbed 1 items ({type(error).__name__})"]
+    assert SECRET not in result.failures[0]
+
+
+@pytest.mark.parametrize("error", [KeyboardInterrupt(), SystemExit(1)], ids=lambda e: type(e).__name__)
+def test_triage_items_lets_base_exceptions_propagate(error: BaseException):
+    with pytest.raises(type(error)):
+        triage_items(make_items(1), RaisingClient(error), model="m")
+
+
+def test_triage_items_stubs_the_batch_when_reading_the_response_raises():
+    # parsed_output is present but has no `records`: the failure is in response handling, not the call.
+    broken = SimpleNamespace(parsed_output=SimpleNamespace(), stop_reason="end_turn")
+
+    result = triage_items(make_items(2), FakeClient(broken), model="m")
+
+    assert all(t.stubbed for t in result.items)
+    assert result.failures == ["batch 1: call failed, stubbed 2 items (AttributeError)"]
+
+
+def test_triage_items_unexpected_error_in_one_batch_does_not_stop_later_batches():
+    client = FakeClient(
+        reply(make_record("m001"), make_record("m002")),
+        RuntimeError(SECRET),
+        reply(make_record("m005")),
+    )
+
+    result = triage_items(make_items(5), client, model="m", batch_size=2)
+
+    assert [t.stubbed for t in result.items] == [False, False, True, True, False]
+    assert len(client.calls) == 3
+    assert result.failures == ["batch 2: call failed, stubbed 2 items (RuntimeError)"]
+
+
+def test_triage_items_stubs_missing_alias_when_the_retry_call_raises_an_unexpected_error():
+    client = FakeClient(reply(make_record("m001")), TypeError(SECRET))
+
+    result = triage_items(make_items(2), client, model="m")
+
+    assert [t.stubbed for t in result.items] == [False, True]
+    assert result.failures == ["batch 1: stubbed 1 items (TypeError)"]
+
+
+def test_triage_items_with_the_real_client_stubs_an_item_holding_a_lone_surrogate():
+    # The real SDK encodes the JSON body to UTF-8 before any network call, so a lone surrogate raises
+    # UnicodeEncodeError inside parse(). The port is closed on loopback, so nothing can leave the machine
+    # even if a request did get past encoding.
+    client = anthropic.Anthropic(
+        api_key="sk-test-not-real", max_retries=0, base_url="http://127.0.0.1:9", timeout=2
+    )
+    poisoned = make_item("a1", body="before \ud800 after")
+    items = [poisoned, make_item("a2")]
+
+    result = triage_items(items, client, model="m")
+
+    assert [t.item_id for t in result.items] == [item.id for item in items]
+    assert all(t.stubbed for t in result.items)
+    assert result.failures == ["batch 1: call failed, stubbed 2 items (UnicodeEncodeError)"]
+
+
 # --- make_client -----------------------------------------------------------------------------------
 
 
