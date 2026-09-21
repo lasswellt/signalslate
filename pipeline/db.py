@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import event
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, col, create_engine, func, select
 
 from pipeline.clock import utcnow
 
@@ -199,6 +199,40 @@ def items_for_source_since(source: str, since: datetime) -> list[CollectedItem]:
     return sorted(rows, key=lambda row: (row.occurred_at, row.id or 0))
 
 
+MAX_ITEM_PAGE = 200
+MAX_DETAIL_CHARS = 500
+
+
+def list_items(
+    source: str, item_type: Optional[str] = None, before_id: Optional[int] = None, limit: int = 50
+) -> list[CollectedItem]:
+    """
+    One source's items, newest first, one keyset page at a time.
+
+    Keyed on id rather than an offset: collection keeps inserting while the UI pages, and an offset
+    would shift under the reader and repeat or skip rows. `before_id` is exclusive, so the last id of
+    one page is passed straight back for the next. `limit` is clamped to 1..MAX_ITEM_PAGE.
+    """
+    limit = max(1, min(limit, MAX_ITEM_PAGE))
+    statement = select(CollectedItem).where(CollectedItem.source == source)
+    if item_type is not None:
+        statement = statement.where(CollectedItem.item_type == item_type)
+    if before_id is not None:
+        statement = statement.where(col(CollectedItem.id) < before_id)
+    statement = statement.order_by(col(CollectedItem.id).desc()).limit(limit)
+    with get_session() as session:
+        return list(session.exec(statement))
+
+
+def count_items(source: str, item_type: Optional[str] = None) -> int:
+    """How many items one source has stored, optionally narrowed to one item_type."""
+    statement = select(func.count()).select_from(CollectedItem).where(CollectedItem.source == source)
+    if item_type is not None:
+        statement = statement.where(CollectedItem.item_type == item_type)
+    with get_session() as session:
+        return session.exec(statement).one()
+
+
 def item_counts_for_run(run_id: int) -> dict[str, int]:
     """{source: count} for one run — feeds the run summary string without loading every payload."""
     counts: dict[str, int] = {}
@@ -253,6 +287,53 @@ def record_failure(source: str) -> int:
         session.add(row)
         session.commit()
         return row.consecutive_failures
+
+
+def reset_cursor(source: str, to: Optional[datetime]) -> None:
+    """
+    Move a source's watermark for a re-backfill. None deletes the row, so the next run collects the
+    full window as on first use; a datetime behaves exactly like set_cursor (and clears the streak).
+    """
+    if to is not None:
+        set_cursor(source, to)
+        return
+    with get_session() as session:
+        row = session.get(SourceCursor, source)
+        if row is not None:
+            session.delete(row)
+            session.commit()
+
+
+def clear_failures(source: str) -> None:
+    """Zero the failure streak only. The watermark stays: the source did not just collect cleanly."""
+    with get_session() as session:
+        row = session.get(SourceCursor, source)
+        if row is not None:
+            row.consecutive_failures = 0
+            session.add(row)
+            session.commit()
+
+
+def record_attempt(
+    source: str, status: str, detail: Optional[str], item_count: Optional[int], at: Optional[datetime] = None
+) -> None:
+    """
+    Note that a collection was attempted, whatever the outcome.
+
+    Deliberately leaves last_success_at and consecutive_failures alone: those belong to set_cursor and
+    record_failure, and a failed attempt must not move the watermark. `detail` is truncated because
+    it can carry an upstream error body.
+    """
+    with get_session() as session:
+        row = session.get(SourceCursor, source)
+        if row is None:
+            row = SourceCursor(source=source)
+        row.last_attempt_at = at if at is not None else utcnow()
+        row.last_status = status
+        row.last_detail = detail[:MAX_DETAIL_CHARS] if detail is not None else None
+        row.last_item_count = item_count
+        session.add(row)
+        session.commit()
 
 
 def reap_orphaned_runs() -> int:
