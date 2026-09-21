@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T03:55:06Z",
+  "updated": "2026-09-21T04:10:25Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1263,11 +1263,39 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T04:10:25Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'UnicodeError' pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T04:10:24Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T04:10:24Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+            "exit": 0,
+            "duration_ms": 252,
+            "tail": "........................................................................ [ 71%]\n.............................                                            [100%]\n101 passed, 51 deselected in 0.10s",
+            "recorded_at": "2026-09-21T04:10:25Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check finding P1 x2, both reproduced 2026-09-21. (1) _decode_part catches only LookupError around raw.decode(charset, errors='replace'), but a sender-controlled Content-Type charset of 'undefined' raises UnicodeError('undefined encoding') and 'idna' raises UnicodeError('Unsupported error handling replace'); catch (LookupError, UnicodeError) and fall back to utf-8 with errors='replace'. (2) collect_gmail calls flatten_message(msg) with no guard, so ONE message that makes it raise (bad charset, a 2000-deep MIME tree -> RecursionError) discards every already-fetched message and no CollectionResult is returned; the runner then counts a hard failure and after MAX_STUCK_RUNS=3 advances the watermark, losing the window. Wrap the per-message flatten in try/except Exception (RecursionError is an Exception), skip that message, count it as a FAILURE (not the 'unplaceable' bucket) with the message id and exception class in the failure list so the result is 'partial' with the first failure named and every other message kept. Tests: charset=undefined and charset=idna decode without raising; a batch of [good, bad, good] returns both good items with status partial; a 1500-deep nested multipart message (build it programmatically) does not escape; the failure detail names the exception class but never the body."
     },
