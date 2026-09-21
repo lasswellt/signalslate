@@ -116,6 +116,74 @@ class Tombstone(SQLModel, table=True):
     deleted_at: datetime = Field(default_factory=utcnow)
 
 
+class Domain(SQLModel, table=True):
+    """
+    A domain in the owner's portfolio — state, not an event. Unlike CollectedItem, one row per
+    domain is updated in place by each refresh rather than appended; `first_seen`/`last_seen`/
+    `missing_since` track that lifecycle without a delete (a registrar drop should read as history,
+    not disappear).
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True, index=True)  # lower-case punycode
+    ownership: str = "owned"  # owned | watched
+    source: str  # namecheap | godaddy | wordpress | manual
+    connection_id: Optional[str] = Field(default=None, foreign_key="connection.id")
+    expires_at: Optional[datetime] = None
+    auto_renew: Optional[bool] = None
+    locked: Optional[bool] = None
+    privacy: Optional[bool] = None
+    first_seen: datetime = Field(default_factory=utcnow)
+    last_seen: datetime = Field(default_factory=utcnow)
+    # Set when a refresh no longer lists this domain at its registrar; cleared if it reappears.
+    # Nullable/no-default columns above stay off an existing install's ALTER TABLE path (db.py:83);
+    # this table is new, so create_all() covers it regardless — kept nullable for future columns.
+    missing_since: Optional[datetime] = None
+
+
+class DomainSnapshot(SQLModel, table=True):
+    """
+    One point-in-time capture of a domain's public state (DNS, RDAP, mail posture) as JSON. The
+    `domains` digest collector diffs consecutive snapshots for one domain rather than re-fetching;
+    `data_hash` lets it skip a full JSON diff when nothing changed.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    domain_id: int = Field(foreign_key="domain.id", index=True)
+    taken_at: datetime = Field(default_factory=utcnow)
+    data: str  # JSON blob: DNS records, RDAP registration, mail posture
+    data_hash: str  # hash of `data`, for cheap unchanged-snapshot detection
+
+
+class DomainQuote(SQLModel, table=True):
+    """
+    A server-issued, short-lived price quote from a registrar `check` call. `id` is a UUID chosen
+    by the caller so it can be handed to the client and referenced by a later purchase without a
+    lookup. Money is stored as decimal strings — SQLite has no native Decimal type and float would
+    silently corrupt cents.
+    """
+    id: str = Field(primary_key=True)  # uuid4 hex
+    name: str = Field(index=True)
+    connection_id: str = Field(foreign_key="connection.id")
+    price: str  # first-year price, decimal as str, account currency
+    renewal_price: Optional[str] = None  # decimal as str
+    currency: str
+    premium: bool = False
+    expires_at: datetime  # quote TTL (5 min); enforced by the purchase route, not the DB
+
+
+class DomainPurchase(SQLModel, table=True):
+    """
+    A purchase intent, inserted as `pending` before the registrar call and updated after. The
+    unique `quote_id` is the whole double-submit guard: a retry (client or user) that references
+    the same quote fails on insert rather than buying twice.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    quote_id: str = Field(unique=True, index=True, foreign_key="domainquote.id")
+    status: str = "pending"  # pending | succeeded | failed | unknown
+    price: str  # decimal as str, what was actually charged/attempted
+    created_at: datetime = Field(default_factory=utcnow)
+    detail: Optional[str] = None  # redacted registrar response/error — never a raw credential
+
+
 def _add_missing_columns() -> None:
     """
     Add columns that exist in the models but not yet on disk.
