@@ -80,3 +80,8 @@ Ruling: descope — T-032 was created with a malformed verify command (tasks.sh 
 ## 2026-09-21T08:00:16Z verify T-030 ok=true
 ## 2026-09-21T08:00:16Z build T-031 start (attempt 1)
 ## 2026-09-21T08:11:48Z verify T-031 ok=true
+
+## 2026-09-21 build management-ui 32/33 done
+Ruling: defer — last_verify tails in tasks.json carry the local checkout path (Linux username, identical to the public GitHub handle); the tasks-guard hook blocks scrubbing tasks.json and the branch history is unpushed, so this is accepted as low risk, not rewritten (final sweep)
+Ruling: defer — T-032 stays blocked (superseded by T-033, malformed verify entry); ignore it in the report (final sweep)
+Final sweep: pytest 1597 passed, pyright 54 (baseline, none added), web typecheck clean, web vitest 128 passed, npm run build ok
