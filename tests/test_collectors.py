@@ -1049,6 +1049,7 @@ def test_gmail_parse_internal_date_is_naive_utc_under_a_non_utc_tz():
         else:
             os.environ["TZ"] = old_tz
         time.tzset()
+    assert got is not None
     assert got == datetime(2026, 9, 15, 14, 30, 5)
     assert got.tzinfo is None
 
@@ -1284,7 +1285,7 @@ def test_gmail_collect_sends_the_access_token_not_the_refresh_token(monkeypatch,
     seen = []
 
     def fake_get(url, headers=None, params=None, timeout=None):
-        seen.append(headers["Authorization"])
+        seen.append((headers or {})["Authorization"])
         return FakeResponse({})
 
     monkeypatch.setattr(gmail.requests, "get", fake_get)

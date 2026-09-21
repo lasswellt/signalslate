@@ -8,7 +8,7 @@ import inspect
 import json
 from datetime import datetime
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import anthropic
 import pytest
@@ -93,7 +93,11 @@ class FakeClient:
 
 
 def connection_error() -> anthropic.APIConnectionError:
-    return anthropic.APIConnectionError(request=SimpleNamespace(method="POST", url="https://example.com/v1/messages"))
+    # The SDK only stores the request and never reads it, so a stand-in avoids importing the HTTP
+    # library it depends on transitively; cast because the parameter is typed as that library's Request.
+    return anthropic.APIConnectionError(
+        request=cast(Any, SimpleNamespace(method="POST", url="https://example.com/v1/messages"))
+    )
 
 
 def user_payload(request: dict) -> dict:
