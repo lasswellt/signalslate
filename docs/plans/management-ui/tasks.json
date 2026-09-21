@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T06:02:52Z",
+  "updated": "2026-09-21T06:04:50Z",
   "tasks": [
     {
       "id": "T-001",
@@ -116,11 +116,53 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T06:04:50Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'class Vault' pipeline/crypto.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:04:50Z"
+          },
+          {
+            "cmd": "grep -qE 'def generate_key' pipeline/crypto.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:04:50Z"
+          },
+          {
+            "cmd": "! grep -nE '^(import|from) pipeline\\.(health|connections)' pipeline/crypto.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:04:50Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/crypto.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:04:50Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_crypto.py -q",
+            "exit": 0,
+            "duration_ms": 190,
+            "tail": "...................................                                      [100%]\n35 passed in 0.05s",
+            "recorded_at": "2026-09-21T06:04:50Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research docs/_research/2026-09-21_management-ui.md section 7 (key management table). Pure module: it must NOT import pipeline.health or pipeline.connections (import cycles later). Define SecretKeyMissing(RuntimeError), SecretKeyInvalid(RuntimeError), SecretDecryptError(RuntimeError). class Vault: Vault(keys: list[str]) builds a cryptography MultiFernet (first key is primary); Vault.from_env_value(value: Optional[str]) -> Optional[Vault] splits on commas, strips, ignores blanks and returns None when no key is present (the caller decides what None means); a malformed key raises SecretKeyInvalid naming the key POSITION only, never the key text. Methods: encrypt(text)->str, decrypt(token)->str (raises SecretDecryptError with a generic message; never echoes ciphertext, plaintext or keys), encrypt_json(dict)->str and decrypt_json(token)->dict (envelope for a secrets dict, unicode safe), rotate(token)->str (re-encrypt under the primary), and module function generate_key()->str. CLI: python -m pipeline.crypto genkey prints a fresh key on one line followed by a second line reminding the operator to keep it in .env, back it up separately from data/, and that losing it loses every stored secret. Never log or print keys anywhere except genkey. Do not pass a ttl to decrypt (secrets are long lived). Tests: round trip; wrong key -> SecretDecryptError; rotation (token from the old key decrypts with a [new, old] vault, after rotate the old key alone fails and the new works); blank, whitespace and comma-only values -> None; malformed key -> SecretKeyInvalid with no key text in str(exc); encrypt_json unicode round trip; no plaintext or ciphertext in any exception message; genkey CLI output is a valid Fernet key (run it via subprocess with the venv python)."
     },

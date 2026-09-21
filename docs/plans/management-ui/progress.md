@@ -3,3 +3,5 @@ Ruling: class=architectural tasks=31 — new subsystem across the store, API, OA
 Ruling: defer — the earlier design summary said the encryption key comes from an env var else a generated key file; research showed a key file beside the database is copied by the same backup and protects almost nothing, so the plan is env-only and fails closed (env-only mode keeps working with a UI banner). Flagged to the owner at hand-off.
 ## 2026-09-21T06:01:51Z build T-001 start (attempt 1)
 ## 2026-09-21T06:02:52Z verify T-001 ok=true
+## 2026-09-21T06:02:52Z build T-002 start (attempt 1)
+## 2026-09-21T06:04:51Z verify T-002 ok=true
