@@ -74,7 +74,27 @@ def _env() -> dict:
 
 # Non-prefixed keys worth picking up from the environment. Deliberately a fixed list rather than
 # merging all of os.environ, which would pull in hundreds of unrelated container variables.
-_SINGLE_KEYS = {"RMAPI_CONFIG", "LAN_HOST", "TZ"}
+_SINGLE_KEYS = {"RMAPI_CONFIG", "LAN_HOST", "TZ", "ANTHROPIC_API_KEY", "SIGNALSLATE_MAP_MODEL"}
+
+# Model ids are config, not code: Anthropic announces retirements with notice, and Haiku 4.5's is
+# "not sooner than October 15, 2026". Re-check the deprecations page before that date and override
+# with SIGNALSLATE_MAP_MODEL rather than editing this default in a hurry.
+DEFAULT_MAP_MODEL = "claude-haiku-4-5-20251001"
+
+
+def llm_settings() -> dict:
+    """
+    The Anthropic API key and the map-stage model id, read through _env().
+
+    Callers must pass the key to the client explicitly: the SDK only reads os.environ, and locally
+    .env is never loaded into it, so relying on the SDK's own lookup works in the container and
+    silently finds nothing on a dev machine. A blank value counts as unset so `ANTHROPIC_API_KEY=`
+    in .env.example (the documented placeholder) yields None, not an empty string the SDK would send.
+    """
+    env = _env()
+    api_key = (env.get("ANTHROPIC_API_KEY") or "").strip() or None
+    map_model = (env.get("SIGNALSLATE_MAP_MODEL") or "").strip() or DEFAULT_MAP_MODEL
+    return {"api_key": api_key, "map_model": map_model}
 
 
 def env_flag(key: str) -> bool:

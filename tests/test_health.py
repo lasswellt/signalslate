@@ -447,3 +447,43 @@ def test_env_flag_false_when_unset(env, monkeypatch):
     env("")
     monkeypatch.delenv("SLACK_SKIP_DMS", raising=False)
     assert health.env_flag("SLACK_SKIP_DMS") is False
+
+
+# --- LLM settings -----------------------------------------------------------------
+
+
+def test_llm_settings_defaults_when_unset(env):
+    env("")
+    assert health.llm_settings() == {"api_key": None, "map_model": health.DEFAULT_MAP_MODEL}
+    assert health.DEFAULT_MAP_MODEL == "claude-haiku-4-5-20251001"
+
+
+def test_llm_settings_read_from_dotenv(env):
+    env("ANTHROPIC_API_KEY=sk-test-dotenv\nSIGNALSLATE_MAP_MODEL=model-from-dotenv\n")
+    assert health.llm_settings() == {"api_key": "sk-test-dotenv", "map_model": "model-from-dotenv"}
+
+
+def test_llm_settings_environment_takes_precedence_over_dotenv(env, monkeypatch):
+    env("ANTHROPIC_API_KEY=sk-test-dotenv\nSIGNALSLATE_MAP_MODEL=model-from-dotenv\n")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-environ")
+    monkeypatch.setenv("SIGNALSLATE_MAP_MODEL", "model-from-environ")
+    assert health.llm_settings() == {"api_key": "sk-test-environ", "map_model": "model-from-environ"}
+
+
+def test_llm_settings_read_from_environment_without_dotenv_entry(env, monkeypatch):
+    env("")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-environ")
+    assert health.llm_settings() == {"api_key": "sk-test-environ", "map_model": health.DEFAULT_MAP_MODEL}
+
+
+def test_llm_settings_blank_values_count_as_unset(env, monkeypatch):
+    env("ANTHROPIC_API_KEY=\nSIGNALSLATE_MAP_MODEL=   \n")
+    assert health.llm_settings() == {"api_key": None, "map_model": health.DEFAULT_MAP_MODEL}
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "  ")
+    monkeypatch.setenv("SIGNALSLATE_MAP_MODEL", "")
+    assert health.llm_settings() == {"api_key": None, "map_model": health.DEFAULT_MAP_MODEL}
+
+
+def test_llm_keys_are_in_single_keys():
+    # Without this the container's environment value is never merged into _env().
+    assert {"ANTHROPIC_API_KEY", "SIGNALSLATE_MAP_MODEL"} <= health._SINGLE_KEYS
