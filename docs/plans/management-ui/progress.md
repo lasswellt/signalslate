@@ -96,3 +96,5 @@ Ruling: accept — T-034 emits the empty GMAIL_<L>_REFRESH_TOKEN via materialize
 ## 2026-09-21T22:55:44Z build T-035 start (attempt 1)
 Ruling: accept — T-035 scope expanded to tests/test_tokencache.py (remove the a.b and a_b invalid-alias params: they encoded the stricter rule that broke legacy installs) and pipeline/oauth_m365.py (explicit strict alias check so UI sign-in stays [A-Za-z0-9-]+ and tests/test_oauth_m365.py is untouched) (T-035, round 1)
 ## 2026-09-21T23:01:35Z verify T-035 ok=true
+## 2026-09-21T23:01:36Z build T-036 start (attempt 1)
+## 2026-09-21T23:06:39Z verify T-036 ok=true

@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T23:01:35Z",
+  "updated": "2026-09-21T23:06:39Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2644,11 +2644,46 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:06:39Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def unseeded_env_keys' pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:06:36Z"
+          },
+          {
+            "cmd": "grep -qE 'unseeded_env' api/routers/status.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:06:36Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/connections.py api/routers/status.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:06:36Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_unseeded_env.py tests/test_connections.py tests/test_env_overlay.py tests/test_api_startup.py -q",
+            "exit": 0,
+            "duration_ms": 2402,
+            "tail": "........................................................................ [ 40%]\n........................................................................ [ 80%]\n....................................                                     [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n180 passed, 1 warning in 2.05s",
+            "recorded_at": "2026-09-21T23:06:39Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check-report finding 3. Once a key is set health._live_env drops every family key from the raw env. seed_from_env only logs and skips a declaration it cannot store (an alias or label that fails validation, an over-long id, a Gmail account with no client id or secret); the skipped .env source therefore silently disappears from known_sources() and stops being collected. Tombstoned (deleted) ids MUST stay dropped and stored ids keep store-wins; only declarations that were REJECTED at seed time are affected. FIX: seed_from_env records the raw env keys (names AND values held only in memory) of declarations it skipped for a validation or incompleteness reason and returns/exposes them through a new connections.unseeded_env_keys() (names only for callers); connections.overlay_provider() merges those retained raw entries into the mapping it hands to health._live_env so those sources keep working exactly as before the key was set (do not change pipeline/health.py). A later successful seed of the same id, a tombstone or a stored row for it removes the retention. The startup log line names the KEY NAMES only, never values. api/routers/status.py: GET /system gains unseeded_env: list of env key NAMES (strings) so the UI can tell the owner which declarations were not imported and why they still run from .env; add the field to the existing /system model and keep every existing field. A row that cannot be decrypted stays fail-closed (unchanged, out of scope). Tests: an env with an M365 alias containing an underscore plus a valid slack workspace, key set: after startup the alias source is still in known_sources() and still resolves m365_tenant_config, /system lists its key name in unseeded_env and no value, the slack workspace is seeded into the store; a deleted (tombstoned) seeded id is NOT retained; editing env for a stored id changes nothing; with no key nothing changes and unseeded_env is []; retained raw values never appear in any API response or log capture."
     },
