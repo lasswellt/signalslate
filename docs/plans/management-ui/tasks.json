@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T06:40:23Z",
+  "updated": "2026-09-21T06:43:15Z",
   "tasks": [
     {
       "id": "T-001",
@@ -953,11 +953,39 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T06:43:15Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def dry_run' pipeline/collect.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:43:14Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collect.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:43:14Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_dry_run.py tests/test_collectors.py -q",
+            "exit": 0,
+            "duration_ms": 777,
+            "tail": "........................................................................ [ 34%]\n........................................................................ [ 68%]\n...................................................................      [100%]\n211 passed in 0.60s",
+            "recorded_at": "2026-09-21T06:43:15Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Codebase finding Q4(a). Extract dry_run(source: str, hours: int = 24, limit: int = 5, *, raw: bool = False) -> dict returning {source, status, detail, window: {since, until, hours}, count, by_type: {item_type: n}, items: [{item_type, occurred_at, external_id, preview}] (first limit items, preview via the existing preview(); when raw is true also include the payload truncated to 4000 chars), duration_ms}. Validate the source is in known_sources() (ValueError), clamp hours to 1..168 and limit to 0..50, and catch a collector crash returning status crashed with the exception CLASS NAME only (no message). It writes NOTHING and must not persist. report() becomes a thin printer over dry_run and its printed output must stay byte-identical: the existing CLI tests in tests/test_collectors.py must pass unchanged. Do not import api.*. Tests: result shape for ok, partial, error and crashed using a stubbed dispatch; clamping; unknown source; raw truncation; no DB writes (temp_db row counts unchanged); report() output unchanged against a captured string."
     },
@@ -1235,7 +1263,7 @@
       "attempts": 0,
       "last_verify": null,
       "origin": "plan",
-      "notes": "Research docs/_research/2026-09-21_management-ui.md section 3. GET /collectors -> per known source {source, active, watermark (iso_z of SourceCursor.last_success_at), consecutive_failures, stuck_threshold (runner.MAX_STUCK_RUNS), last_attempt {at, status, detail (redacted), item_count} or null, item_count (db.count_items)}. POST /collectors/{source}/run -> 202 {accepted: true} via BackgroundTasks running execute_run(trigger='manual', only=source), 409 when has_running_run(), 404 for an unknown source. POST /collectors/{source}/dry-run {hours 1..168 default 24, limit 0..50 default 5} -> 202 {job_id} running pipeline.collect.dry_run in a background thread with a bounded in-memory job table (max 20 jobs, results kept 15 minutes, purged on access); GET /collectors/dry-run/{job_id} -> {status: running or done or failed, result?} with the result text redacted. POST /collectors/{source}/reset {days_back: 1..7 or null} -> db.reset_cursor(source, utcnow() minus days when given else None) and the response includes a note explaining the runner semantics (the window floors at 7 days and a watermark newer than about 24 hours behaves like no cursor). POST /collectors/{source}/clear-failures. GET /collectors/{source}/items?limit=&before_id=&item_type= -> {items: [{id, item_type, external_id, occurred_at (iso_z), preview}], next_before_id, total} where preview comes from pipeline.collect.preview over the parsed payload; the FULL payload is only returned by GET /collectors/{source}/items/{id} (bounded to 20 KB, redacted). Every route 404s on an id not in known_sources(). Reuse api/serialize.py. Tests (router-only app, temp_db, stub dry_run and execute_run): each route including 409 and the 404s, paging with next_before_id, the payload bound, the dry-run job lifecycle and purge, reset semantics, redaction of a last_attempt detail carrying a secret, and that an items response never contains a payload from another source."
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 3. GET /collectors -> per known source {source, active, watermark (iso_z of SourceCursor.last_success_at), consecutive_failures, stuck_threshold (runner.MAX_STUCK_RUNS), last_attempt {at, status, detail (redacted), item_count} or null, item_count (db.count_items)}. POST /collectors/{source}/run -> 202 {accepted: true} via BackgroundTasks running execute_run(trigger='manual', only=source), 409 when has_running_run(), 404 for an unknown source. POST /collectors/{source}/dry-run {hours 1..168 default 24, limit 0..50 default 5} -> 202 {job_id} running pipeline.collect.dry_run in a background thread with a bounded in-memory job table (max 20 jobs, results kept 15 minutes, purged on access); GET /collectors/dry-run/{job_id} -> {status: running or done or failed, result?} with the result text redacted. POST /collectors/{source}/reset {days_back: 1..7 or null} -> db.reset_cursor(source, utcnow() minus days when given else None) and the response includes a note explaining the runner semantics (the window floors at 7 days and a watermark newer than about 24 hours behaves like no cursor). POST /collectors/{source}/clear-failures. GET /collectors/{source}/items?limit=&before_id=&item_type= -> {items: [{id, item_type, external_id, occurred_at (iso_z), preview}], next_before_id, total} where preview comes from pipeline.collect.preview over the parsed payload; the FULL payload is only returned by GET /collectors/{source}/items/{id} (bounded to 20 KB, redacted). Every route 404s on an id not in known_sources(). Reuse api/serialize.py. Tests (router-only app, temp_db, stub dry_run and execute_run): each route including 409 and the 404s, paging with next_before_id, the payload bound, the dry-run job lifecycle and purge, reset semantics, redaction of a last_attempt detail carrying a secret, and that an items response never contains a payload from another source. ADDED at build time (from T-013 review): pipeline.collect.dry_run returns NAIVE UTC datetime objects (window.since, window.until, items[].occurred_at). Convert every datetime to a Z string with api.serialize.iso_z BEFORE storing the job result or returning JSON, and test that the dry-run result is JSON serializable end to end. Also: the run route must allow sources that are toggled off (execute_run(only=id) does), but must still 404 ids not in known_sources()."
     },
     {
       "id": "T-021",

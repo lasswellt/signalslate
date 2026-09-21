@@ -32,3 +32,6 @@ Ruling: defer — execute_run(only=X) validates X against known_sources() before
 ## 2026-09-21T06:37:46Z verify T-011 ok=true
 ## 2026-09-21T06:37:46Z build T-012 start (attempt 1)
 ## 2026-09-21T06:40:24Z verify T-012 ok=true
+## 2026-09-21T06:40:24Z build T-013 start (attempt 1)
+Ruling: defer — dry_run() shares a private _execute with report() (report skips argument validation because main() validates and existing CLI tests call it with undeclared sources); the crashed result carries the exception class name only while the CLI line keeps its old text; dry_run returns naive UTC datetimes, so T-020's notes now require iso_z conversion before JSON. (T-013, round 1)
+## 2026-09-21T06:43:15Z verify T-013 ok=true
