@@ -963,6 +963,64 @@ def test_gmail_html_script_style_head_title_are_dropped():
     assert html_body(html) == "body"
 
 
+def test_gmail_html_title_outside_head_is_still_dropped():
+    assert html_body("<title>T-leak</title><p>body</p>") == "body"
+
+
+def test_gmail_html_head_text_without_a_title_is_still_dropped():
+    assert html_body("<head>H-leak<meta charset=utf-8></head><p>body</p>") == "body"
+
+
+def test_gmail_html_self_closing_hidden_tags_hide_until_their_end_tag():
+    """Was 'SECRETvisible' etc.: the default handle_startendtag closed the region at once."""
+    assert html_body('<div style="display:none"/>SECRET</div>visible') == "visible"
+    assert html_body("<div hidden/>SECRET2 tail</div>") == ""
+    assert html_body('<span aria-hidden="true"/>S3') == ""
+    assert html_body("<script/>alert-S4</script>after") == "after"
+    # Same as a browser: an unclosed hidden self-closing tag hides the rest of its parent.
+    assert html_body('<p>a</p><div><b hidden/>S5</div>after') == "a\nafter"
+
+
+def test_gmail_html_properly_closed_hidden_tag_control_still_hides():
+    assert html_body('<div style="display:none">SECRET</div>visible') == "visible"
+
+
+def test_gmail_html_void_self_closing_tags_are_unaffected():
+    assert html_body("a<br/>b<img src='x' hidden/>c<hr/>d<input aria-hidden='true'/>e") == "a\nbcde"
+
+
+def test_gmail_html_self_closing_non_hidden_tags_leave_visible_text_unchanged():
+    xhtml = "<div><p>one</p><p/><p>two</p><table><tr><td>a</td><td/><td>b</td></tr></table><span/>tail</div>after"
+    assert html_body(xhtml) == html_body(xhtml.replace("<p/>", "").replace("<td/>", "").replace("<span/>", ""))
+    assert html_body(xhtml) == "one\ntwo\nab\ntail\nafter"
+
+
+def test_gmail_html_inline_svg_self_closing_children_do_not_swallow_following_text():
+    assert html_body('<p>before</p><svg><path d="x"/><circle r="1"/></svg><p>after</p>') == "before\nafter"
+
+
+def test_gmail_html_self_closing_tags_keep_counter_and_stack_consistent():
+    parser = gmail._TextExtractor()
+    parser.feed('<div><b/><p/><span hidden/>x<i/></div><div style="display:none"/>y</div><br/><p/>z')
+    assert +parser._open == Counter(tag for tag, _ in parser._stack)
+    parser.close()
+    assert all(count >= 0 for count in parser._open.values())
+
+
+def test_gmail_html_long_run_of_self_closing_tags_is_not_quadratic():
+    parser = gmail._TextExtractor()
+    started = time.perf_counter()
+    parser.feed("<b/>" * 50000 + "x</div>")
+    parser.close()
+    assert time.perf_counter() - started < 1.0
+    assert parser.text() == "x"
+    assert +parser._open == Counter(tag for tag, _ in parser._stack)
+    assert parser._open["b"] == 50000
+    started = time.perf_counter()
+    assert gmail._html_to_text("<div>" + "<b/>" * 50000 + "x</div>after") == "x\nafter"
+    assert time.perf_counter() - started < 1.0
+
+
 def test_gmail_html_block_tags_become_newlines_and_blank_runs_collapse():
     html = "<p>a</p><p></p><p></p><div>b</div>c<br>d<ul><li>x</li><li>y</li></ul><table><tr><td>t1</td></tr><tr><td>t2</td></tr></table>"
     assert html_body(html) == "a\nb\nc\nd\nx\ny\nt1\nt2"
@@ -1342,6 +1400,82 @@ def test_gmail_flatten_non_text_charset_falls_back_to_utf8_instead_of_raising(ch
         "headers": [{"name": "Content-Type", "value": f"text/plain; charset={charset}"}],
     }
     assert gmail.flatten_message(gmail_msg([part]))["bodyText"] == "café"
+
+
+def _no_surrogates(value):
+    """True when no str anywhere in a flattened payload holds a code point in U+D800-U+DFFF."""
+    if isinstance(value, str):
+        return not any(0xD800 <= ord(ch) <= 0xDFFF for ch in value)
+    if isinstance(value, list):
+        return all(_no_surrogates(v) for v in value)
+    if isinstance(value, dict):
+        return all(_no_surrogates(v) for v in value.values())
+    return True
+
+
+def _raw_part(raw, charset):
+    """A text/plain leaf whose body is the given bytes, verbatim, under the given sender-chosen charset."""
+    return {
+        "mimeType": "text/plain",
+        "filename": "",
+        "body": {"data": base64.urlsafe_b64encode(raw).decode().rstrip("=")},
+        "headers": [{"name": "Content-Type", "value": f"text/plain; charset={charset}"}],
+    }
+
+
+@pytest.mark.parametrize(
+    "charset, raw",
+    [
+        ("unicode_escape", rb"hi \ud800 there"),
+        ("raw_unicode_escape", rb"hi \ud800 there"),
+        ("utf-7", b"hi +2AA- there"),
+    ],
+)
+def test_gmail_flatten_surrogate_producing_charset_yields_no_surrogate(charset, raw):
+    # Reproduced: each of these decodes ASCII to a lone U+D800 that later breaks the UTF-8 encode in triage.
+    out = gmail.flatten_message(gmail_msg([_raw_part(raw, charset)]))
+    assert _no_surrogates(out)
+    assert out["bodyText"].startswith("hi ") and out["bodyText"].endswith(" there")
+
+
+@pytest.mark.parametrize("charset", ["unicode_escape", "raw_unicode_escape", "utf-7", "punycode", "rot13", "base64"])
+def test_gmail_flatten_non_text_charsets_are_read_as_utf8(charset):
+    assert gmail.flatten_message(gmail_msg([_raw_part("café".encode("utf-8"), charset)]))["bodyText"] == "café"
+
+
+@pytest.mark.parametrize(
+    "charset, text",
+    [
+        ("windows-1252", "caf\u00e9 \u201cquoted\u201d \u20ac5"),
+        ("shift_jis", "\u3053\u3093\u306b\u3061\u306f"),
+        ("iso-8859-1", "caf\u00e9"),
+        ("gb18030", "\u4f60\u597d"),
+        ("utf-16", "caf\u00e9 \U0001F600"),
+    ],
+)
+def test_gmail_flatten_real_text_charsets_still_decode_correctly(charset, text):
+    assert gmail.flatten_message(gmail_msg([text_part("text/plain", text, charset)]))["bodyText"] == text
+
+
+def test_gmail_flatten_astral_characters_survive_the_scrub():
+    out = gmail.flatten_message(gmail_msg([text_part("text/plain", "party \U0001F600 time")], snippet="\U0001F600"))
+    assert out["bodyText"] == "party \U0001F600 time"
+    assert out["snippet"] == "\U0001F600"
+
+
+def test_gmail_flatten_lone_surrogate_in_api_json_strings_comes_out_clean():
+    # A JSON "\ud800" escape in any header, the snippet, a label or an attachment name reaches Python as a lone surrogate.
+    lone = "x\ud800y"
+    named = {"mimeType": "application/pdf", "filename": f"a{lone}.pdf", "body": {"size": 3}}
+    hdrs = [{"name": n, "value": lone} for n in ("Subject", "From", "To", "Cc", "Message-ID", "List-Unsubscribe", "Date", "In-Reply-To")]
+    msg = gmail_msg([text_part("text/plain", "ok"), named], headers=hdrs, snippet=lone, labelIds=[lone, "INBOX"], threadId=lone)
+    out = gmail.flatten_message(msg)
+    assert _no_surrogates(out)
+    for key in ("subject", "from", "to", "cc", "messageId", "listUnsubscribe", "snippet", "threadId"):
+        assert out[key] == "x?y"
+    assert out["labelIds"] == ["x?y", "INBOX"]
+    assert out["attachments"][0]["filename"] == "ax?y.pdf"
+    json.dumps(out, ensure_ascii=False).encode("utf-8")
 
 
 def deep_mime(depth):

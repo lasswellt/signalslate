@@ -19,13 +19,14 @@ Design decisions (docs/_research/2026-09-20_gmail-collector-and-agents.md ยง4, ย
 """
 import base64
 import binascii
+import codecs
 import random
 import re
 import time
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
-from typing import Optional
+from typing import Optional, TypeVar, cast
 from urllib.parse import quote
 
 import requests
@@ -227,6 +228,13 @@ class _TextExtractor(HTMLParser):
         if not hidden and tag in _BLOCK_TAGS:
             self._newline()
 
+    def handle_startendtag(self, tag: str, attrs: list) -> None:
+        # HTMLParser's default calls start then end, so `<div style="display:none"/>SECRET</div>` closed
+        # its own hidden region at once and leaked SECRET. Browsers ignore the "/" on non-void HTML
+        # elements and keep the element open until its end tag, so mirror that: the model must see what
+        # a human sees, including an unclosed hidden region hiding the rest of its parent.
+        self.handle_starttag(tag, attrs)
+
     def handle_endtag(self, tag: str) -> None:
         if tag in _VOID_TAGS:
             return
@@ -279,6 +287,45 @@ def _html_to_text(html: str) -> str:
     return _html_to_text_capped(html)[0]
 
 
+_T = TypeVar("_T")
+
+
+def _scrub(value: _T) -> _T:
+    """
+    A str with any lone surrogate (U+D800-U+DFFF) replaced by "?"; anything else is returned as is.
+
+    A lone surrogate survives json.dumps (escaped) but makes the later json.dumps(ensure_ascii=False) +
+    UTF-8 encode in the triage request raise UnicodeEncodeError. A Python str never holds a valid
+    surrogate pair (that is one code point), so this cannot touch a legitimate emoji.
+    """
+    if isinstance(value, str):
+        return cast(_T, value.encode("utf-8", "replace").decode("utf-8"))
+    return value
+
+
+# unicode_escape, raw_unicode_escape and utf-7 turn ASCII text such as "\ud800" or "+2AA-" into a lone
+# surrogate, and idna/punycode/undefined are not charsets. codecs.lookup(...)._is_text_encoding is True for
+# all of them (measured), so it only filters the bytes-to-bytes and str-to-str codecs (base64, hex, zlib,
+# rot13...); this denylist, keyed on the canonical codec name, is what closes the rest.
+_NON_CHARSET_CODECS = frozenset(
+    {"unicode_escape", "raw_unicode_escape", "utf_7", "idna", "punycode", "undefined", "rot_13", "base64", "hex", "zlib", "bz2", "uu", "quopri"}
+)
+
+
+def _text_charset(name: str) -> Optional[str]:
+    """The canonical codec name when `name` is a real text charset, else None. `name` is sender-controlled."""
+    try:
+        info = codecs.lookup(name)
+    except (LookupError, ValueError):
+        return None
+    # _is_text_encoding is private: if a future Python drops it, treat the codec as not text (fail closed).
+    if not getattr(info, "_is_text_encoding", False):
+        return None
+    if info.name.lower().replace("-", "_") in _NON_CHARSET_CODECS:
+        return None
+    return info.name
+
+
 def _headers(raw: object) -> dict[str, str]:
     """Header list -> {lowercased name: whitespace-collapsed value}. Gmail preserves the sender's name casing."""
     out: dict[str, str] = {}
@@ -286,7 +333,7 @@ def _headers(raw: object) -> dict[str, str]:
         return out
     for header in raw:
         if isinstance(header, dict) and isinstance(header.get("name"), str) and isinstance(header.get("value"), str):
-            out.setdefault(header["name"].lower(), " ".join(header["value"].split()))
+            out.setdefault(header["name"].lower(), _scrub(" ".join(header["value"].split())))
     return out
 
 
@@ -306,12 +353,12 @@ def _decode_part(part: dict) -> Optional[str]:
     except (binascii.Error, ValueError):
         return None
     match = _CHARSET.search(_headers(part.get("headers")).get("content-type", ""))
+    charset = (_text_charset(match.group(1)) if match else None) or "utf-8"
     try:
-        return raw.decode(match.group(1) if match else "utf-8", errors="replace")
-    except (LookupError, UnicodeError):
-        # The charset is sender-controlled. LookupError: a name Python does not know. UnicodeError: a
-        # name it knows that is not a text codec ("undefined", "idna" reject errors="replace").
-        return raw.decode("utf-8", errors="replace")
+        return _scrub(raw.decode(charset, errors="replace"))
+    except UnicodeError:
+        # A text codec can still reject errors="replace" input it cannot process at all.
+        return _scrub(raw.decode("utf-8", errors="replace"))
 
 
 def _walk(part: dict, plain: list[str], html: list[str], attachments: list[dict]) -> None:
@@ -322,8 +369,8 @@ def _walk(part: dict, plain: list[str], html: list[str], attachments: list[dict]
         size = body.get("size")
         attachments.append(
             {
-                "filename": part["filename"],
-                "mimeType": part.get("mimeType"),
+                "filename": _scrub(part["filename"]),
+                "mimeType": _scrub(part.get("mimeType")),
                 "size": size if isinstance(size, int) else 0,
             }
         )
@@ -373,10 +420,10 @@ def flatten_message(msg: dict) -> dict:
         "messageId": headers.get("message-id"),
         "inReplyTo": headers.get("in-reply-to"),
         "listUnsubscribe": headers.get("list-unsubscribe"),
-        "threadId": msg.get("threadId"),
-        "labelIds": list(msg.get("labelIds") or []),
-        "snippet": msg.get("snippet") or "",
-        "internalDate": msg.get("internalDate"),
+        "threadId": _scrub(msg.get("threadId")),
+        "labelIds": [_scrub(label) for label in msg.get("labelIds") or []],
+        "snippet": _scrub(msg.get("snippet") or ""),
+        "internalDate": _scrub(msg.get("internalDate")),
         "bodyText": text[:BODY_CAP],
         "bodyTruncated": html_cut or len(text) > BODY_CAP,
         "attachments": attachments,

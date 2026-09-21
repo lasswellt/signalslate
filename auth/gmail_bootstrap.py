@@ -257,6 +257,20 @@ def wait_for_code(
     raise AuthorizationError(f"Google returned error={decided['detail']}")
 
 
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+_MAX_ERROR_TEXT = 200
+
+
+def _bounded_text(value: object) -> str:
+    """
+    Render an untrusted JSON value for an error message: str(), control characters removed (no
+    terminal escape or log-line injection), capped so a hostile body cannot flood the terminal.
+    """
+    if value is None:
+        return ""
+    return _CONTROL_CHARS.sub("", str(value))[:_MAX_ERROR_TEXT]
+
+
 def exchange_code(client_id: str, client_secret: str, code: str, verifier: str, redirect_uri: str) -> dict:
     """
     Exchange the auth code (plus PKCE verifier) for tokens.
@@ -265,7 +279,7 @@ def exchange_code(client_id: str, client_secret: str, code: str, verifier: str, 
     the token endpoint requires it.
 
     :returns: the token endpoint's JSON body
-    :raises TokenExchangeError: network failure, non-200, or a non-JSON body
+    :raises TokenExchangeError: network failure, non-200, or a body that is not a JSON object
     """
     try:
         resp = requests.post(
@@ -285,13 +299,14 @@ def exchange_code(client_id: str, client_secret: str, code: str, verifier: str, 
     try:
         body = resp.json()
     except ValueError:
-        body = {}
-    if resp.status_code != 200:
-        error = body.get("error", f"http_{resp.status_code}")
-        description = body.get("error_description", "")
-        raise TokenExchangeError(f"token exchange rejected: {error}" + (f": {description}" if description else ""))
+        body = None
     if not isinstance(body, dict):
-        raise TokenExchangeError("token endpoint returned an unexpected body")
+        # Name the status only: an unexpected body is not ours to echo, it may carry secrets.
+        raise TokenExchangeError(f"token endpoint returned an unexpected body (HTTP {resp.status_code})")
+    if resp.status_code != 200:
+        error = _bounded_text(body.get("error")) or f"http_{resp.status_code}"
+        description = _bounded_text(body.get("error_description"))
+        raise TokenExchangeError(f"token exchange rejected: {error}" + (f": {description}" if description else ""))
     return body
 
 

@@ -1,29 +1,31 @@
 {
   "$schema": "blitz-check-report/1.0",
   "result": "FAIL",
-  "ts": "2026-09-21T04:05:14Z",
-  "ref": "1a3dfe9df2a2d42edae809dcc1e78a8d863aff9d",
+  "ts": "2026-09-21T05:08:29Z",
+  "ref": "5f85deb31f1353d8de2e226fa56c4fff914ba458",
   "scope": "plan",
   "plan": "gmail-collector",
   "stacks": ["python"],
   "lanes": {
     "deterministic": {"selected": 19, "ran": 15, "pass": 14, "finding": 1, "error": 0},
-    "semantic": {"selected": 3, "ran": 3, "pass": 2, "finding": 1, "error": 0}
+    "semantic": {"selected": 3, "ran": 3, "pass": 1, "finding": 2, "error": 0}
   },
   "findings": [
-    {"id": "survey:security", "severity": "P1", "where": "pipeline/collectors/gmail.py:_decode_part", "what": "sender-controlled Content-Type charset (undefined, idna) raises UnicodeError out of flatten_message; only LookupError is caught (reproduced). Tracked as T-017."},
-    {"id": "survey:backend", "severity": "P1", "where": "pipeline/collectors/gmail.py:collect_gmail", "what": "no per-message guard around flatten_message: one bad message discards the fetched batch and the runner's 3-strike watermark advance loses the window. Tracked as T-017."},
-    {"id": "survey:security", "severity": "P2", "where": "pipeline/collectors/gmail.py:_TextExtractor.handle_endtag", "what": "quadratic on unmatched end tags (2.16s at 30KB); unbounded HTML input (reproduced). Tracked as T-018."},
-    {"id": "survey:security", "severity": "P2", "where": "auth/gmail_bootstrap.py:wait_for_code", "what": "no per-connection timeout; an idle local connection blocks past the deadline (reproduced). Tracked as T-019."},
-    {"id": "det-12", "severity": "P0", "where": "repo", "what": "pyright reports 54 errors, identical to main's 54 (0 introduced by this branch); the absolute type-error floor trips on pre-existing debt only."}
+    {"id": "survey:backend", "severity": "P1", "where": "pipeline/collectors/gmail.py:_decode_part -> pipeline/triage.py:triage_items", "what": "sender-chosen charset (unicode_escape, raw_unicode_escape, utf-7) yields a lone surrogate in bodyText; triage_items with the real SDK raises UnicodeEncodeError, breaking its never-raises contract (reproduced end to end)."},
+    {"id": "survey:security", "severity": "P3", "where": "pipeline/collectors/gmail.py:_TextExtractor", "what": "self-closing hidden tags (<div style=display:none/>) leak their text; bypass of the hidden-content guarantee (reproduced). Listed Major."},
+    {"id": "survey:patterns", "severity": "P2", "where": "pipeline/triage.py:265", "what": "mutant removing sanitize_text on the stub sender name survives 212 tests (test gap on a security-relevant path)."},
+    {"id": "survey:security", "severity": "P3", "where": "auth/gmail_bootstrap.py:exchange_code", "what": "non-200 JSON array body raises AttributeError instead of TokenExchangeError (reproduced)."},
+    {"id": "survey:patterns", "severity": "P3", "where": "tests", "what": "surviving mutants: --dry writing a DB row, log_message printing the auth code, head/title masking in _SKIP_TAGS."},
+    {"id": "det-12", "severity": "P0", "where": "repo", "what": "pyright reports 54 errors, identical to the pre-plan main baseline (0 introduced); the absolute type-error floor trips on pre-existing debt only."}
   ],
   "cannot_verify": [
-    {"what": "after:/before: epoch boundary vs internalDate; list ordering", "needs": "real account dry run"},
-    {"what": "RFC 2047 decoding of Subject/From in payload.headers", "needs": "real format=full payload"},
-    {"what": "digest renderer escaping of one_line/action_text/people", "needs": "renderer (Phase 4)"},
-    {"what": "README claims about Google policy", "needs": "human check vs current Google docs"},
-    {"what": "test_triage.py, test_triage_cli.py, T-016 tests could pass on broken behavior", "needs": "mutation run"}
+    {"what": "after:/before: boundary, RFC 2047 header decoding, max MIME depth, Gmail header-size limits", "needs": "real account dry run"},
+    {"what": "lone surrogate in Gmail JSON headers/snippet without the charset trick", "needs": "live messages.get of a CESU-8 or bad encoded-word subject"},
+    {"what": "digest renderer escaping/markdown/autolink of triage text", "needs": "renderer (Phase 4)"},
+    {"what": "outcome-lock race in wait_for_code", "needs": "stress test"}
   ],
   "critic": {"mode": "reject", "verdict": "LGTM"},
-  "tasks": {"verified": 16, "failed": 0}
+  "tasks": {"verified": 19, "failed": 0},
+  "held_out": {"total": 22, "ok": 21, "not_ok": 1, "note": "the one failing extra check reproduces finding 1; the skill treats a failing held-out check as a REJECT while the critic returned LGTM because it is not a new defect. Result is FAIL either way."},
+  "mutation": {"run": 84, "killed": 76}
 }

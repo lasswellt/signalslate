@@ -257,6 +257,96 @@ def test_exchange_code_raises_with_google_error_on_non_200(monkeypatch):
         gb.exchange_code("cid", "sec", "c", "v", "http://127.0.0.1:1")
 
 
+class _NonJsonResponse:
+    def __init__(self, status_code):
+        self.status_code = status_code
+
+    def json(self):
+        raise ValueError("Expecting value: line 1 column 1 (char 0)")
+
+
+@pytest.mark.parametrize("body", [["x"], "just a string", 42, None])
+def test_exchange_code_non_dict_json_body_on_400_raises_token_exchange_error(monkeypatch, body):
+    monkeypatch.setattr(gb.requests, "post", lambda *a, **k: _FakeResponse(400, body))
+    with pytest.raises(gb.TokenExchangeError, match="HTTP 400") as exc_info:
+        gb.exchange_code("cid", "sec", "c", "v", "http://127.0.0.1:1")
+    assert isinstance(exc_info.value, gb.BootstrapError)
+
+
+@pytest.mark.parametrize("body", [["x"], "just a string", 42, None])
+def test_exchange_code_non_dict_json_body_on_200_raises_token_exchange_error(monkeypatch, body):
+    monkeypatch.setattr(gb.requests, "post", lambda *a, **k: _FakeResponse(200, body))
+    with pytest.raises(gb.TokenExchangeError, match="HTTP 200"):
+        gb.exchange_code("cid", "sec", "c", "v", "http://127.0.0.1:1")
+
+
+def test_exchange_code_non_json_body_raises_token_exchange_error(monkeypatch):
+    monkeypatch.setattr(gb.requests, "post", lambda *a, **k: _NonJsonResponse(400))
+    with pytest.raises(gb.TokenExchangeError, match="HTTP 400") as exc_info:
+        gb.exchange_code("cid", "sec", "c", "v", "http://127.0.0.1:1")
+    assert isinstance(exc_info.value, gb.BootstrapError)
+
+
+def test_exchange_code_empty_body_raises_token_exchange_error(monkeypatch):
+    monkeypatch.setattr(gb.requests, "post", lambda *a, **k: _NonJsonResponse(502))
+    with pytest.raises(gb.TokenExchangeError, match="HTTP 502"):
+        gb.exchange_code("cid", "sec", "c", "v", "http://127.0.0.1:1")
+
+
+@pytest.mark.parametrize("make_body", [
+    lambda code, secret, verifier: [code, secret, verifier],
+    lambda code, secret, verifier: f"echo {code} {secret} {verifier}",
+])
+def test_exchange_code_non_dict_body_never_echoes_request_secrets(monkeypatch, make_body):
+    code, secret, verifier = "CODE-SENTINEL-1", "SECRET-SENTINEL-2", "VERIFIER-SENTINEL-3"
+    monkeypatch.setattr(gb.requests, "post", lambda *a, **k: _FakeResponse(400, make_body(code, secret, verifier)))
+    with pytest.raises(gb.TokenExchangeError) as exc_info:
+        gb.exchange_code("cid", secret, code, verifier, "http://127.0.0.1:1")
+    message = str(exc_info.value)
+    for sentinel in (code, secret, verifier):
+        assert sentinel not in message
+
+
+@pytest.mark.parametrize("value", [{"nested": ["a", 1]}, ["a", "b"], 12345])
+def test_exchange_code_coerces_non_string_error_fields(monkeypatch, value):
+    body = {"error": value, "error_description": value}
+    monkeypatch.setattr(gb.requests, "post", lambda *a, **k: _FakeResponse(400, body))
+    with pytest.raises(gb.TokenExchangeError, match="token exchange rejected: ") as exc_info:
+        gb.exchange_code("cid", "sec", "c", "v", "http://127.0.0.1:1")
+    assert str(value) in str(exc_info.value)
+
+
+def test_exchange_code_caps_and_strips_control_characters_in_error_fields(monkeypatch):
+    body = {"error": "bad\x1b[31m\nline", "error_description": "x" * 5000}
+    monkeypatch.setattr(gb.requests, "post", lambda *a, **k: _FakeResponse(400, body))
+    with pytest.raises(gb.TokenExchangeError) as exc_info:
+        gb.exchange_code("cid", "sec", "c", "v", "http://127.0.0.1:1")
+    message = str(exc_info.value)
+    assert message.startswith("token exchange rejected: bad[31mline: xxx")
+    assert not any(ch in message for ch in "\x1b\n")
+    assert len(message) < 500
+
+
+def test_exchange_code_falls_back_to_http_status_when_error_field_absent(monkeypatch):
+    monkeypatch.setattr(gb.requests, "post", lambda *a, **k: _FakeResponse(503, {}))
+    with pytest.raises(gb.TokenExchangeError, match="token exchange rejected: http_503$"):
+        gb.exchange_code("cid", "sec", "c", "v", "http://127.0.0.1:1")
+
+
+def test_wait_for_code_never_prints_the_auth_code(capsys):
+    recognizable = "RECOGNIZABLE-CODE-1234"
+    port, result, thread = _serve("good-state", timeout=3)
+    resp = requests.get(
+        f"http://127.0.0.1:{port}/", params={"state": "good-state", "code": recognizable}, timeout=5
+    )
+    thread.join(5)
+    captured = capsys.readouterr()
+    assert resp.status_code == 200
+    assert result == {"code": recognizable}
+    assert recognizable not in captured.out
+    assert recognizable not in captured.err
+
+
 def test_exchange_code_wraps_network_failure(monkeypatch):
     def boom(*a, **k):
         raise requests.ConnectionError("down")

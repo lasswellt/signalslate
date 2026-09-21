@@ -52,3 +52,18 @@ Ruling: defer — sanitize_text now removes any scheme:// URL (generic, a supers
 ## 2026-09-21T04:38:02Z verify T-018 ok=true
 ## 2026-09-21T04:38:02Z build T-019 start (attempt 1)
 ## 2026-09-21T04:41:07Z verify T-019 ok=true
+## 2026-09-21T05:09:39Z check FAIL check-report.md
+## 2026-09-21T05:11:41Z build T-020 start (attempt 1)
+## 2026-09-21T05:14:06Z verify T-020 ok=true
+## 2026-09-21T05:14:06Z build T-021 start (attempt 1)
+## 2026-09-21T05:16:15Z verify T-021 ok=true
+## 2026-09-21T05:16:15Z build T-022 start (attempt 1)
+Ruling: defer — T-020 found that codecs.lookup(cs)._is_text_encoding is True for unicode_escape, raw_unicode_escape, utf-7, idna and punycode, so the private flag alone cannot close the surrogate hole; the fix is a canonical-name denylist plus the flag (fail-closed via getattr) plus a single _scrub helper over every string in the flattened payload. T-021 resolves client.messages.parse OUTSIDE the broad except so a client wired without .messages still raises (an existing test pins that); everything inside the call degrades to stubs and BaseException propagates. T-022 leaves operator-supplied argv text (args.source, NoAdapterError text) unwrapped by _safe; a hostile failure line has no dedicated test (triage._describe already sanitizes). (T-020..T-022, round 1)
+## 2026-09-21T05:18:30Z verify T-022 ok=true
+## 2026-09-21T05:18:30Z build T-023 start (attempt 1)
+## 2026-09-21T05:20:15Z verify T-023 ok=true
+## 2026-09-21T05:20:15Z build T-024 start (attempt 1)
+Ruling: defer — T-024 changed one message: a NON-JSON non-200 token response now reads 'token endpoint returned an unexpected body (HTTP <status>)' instead of 'token exchange rejected: http_<status>'; no test or caller referenced the old text. Dict bodies keep 'token exchange rejected: <error>[: <description>]' with both fields bounded (200 chars, control characters stripped). (T-024, round 1)
+## 2026-09-21T05:22:25Z verify T-024 ok=true
+## 2026-09-21T05:22:25Z build T-025 start (attempt 1)
+## 2026-09-21T05:24:46Z verify T-025 ok=true
