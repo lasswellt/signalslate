@@ -5,6 +5,7 @@
         <q-toolbar-title>SignalSlate</q-toolbar-title>
         <q-tabs shrink stretch>
           <q-route-tab to="/" exact label="Dashboard" />
+          <q-route-tab to="/connections" label="Connections" />
           <q-route-tab to="/history" label="History" />
           <q-route-tab to="/config" label="Config" />
         </q-tabs>
