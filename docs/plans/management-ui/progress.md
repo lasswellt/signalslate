@@ -54,3 +54,5 @@ Ruling: defer — connections router: create is a discriminated union with a cal
 ## 2026-09-21T07:09:22Z verify T-019 ok=true
 ## 2026-09-21T07:09:22Z build T-020 start (attempt 1)
 ## 2026-09-21T07:16:05Z verify T-020 ok=true
+## 2026-09-21T07:16:10Z build T-021 start (attempt 1)
+## 2026-09-21T07:23:40Z verify T-021 ok=true
