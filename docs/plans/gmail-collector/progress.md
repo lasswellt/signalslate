@@ -34,3 +34,6 @@ Ruling: defer — anthropic==1.7.0 pinned (venv/bin/pip check clean; no existing
 ## 2026-09-21T03:05:21Z build T-012 start (attempt 1)
 Ruling: split — build_request sends participants as bare 'Name <addr>' strings (my spec), so the model cannot tell sender from recipients, which weakens action_needed. Fix is a new task T-015 (role prefix per participant) rather than widening T-012; it also drops tests' direct import of httpx2, a transitive dependency of the pinned SDK. Runs after T-013/T-014, which do not depend on the participant format. (T-012, round 1)
 ## 2026-09-21T03:08:46Z verify T-012 ok=true
+## 2026-09-21T03:08:46Z build T-013 start (attempt 1)
+Ruling: split — sanitize_text only strips http(s):// and www. URLs, so ftp:, mailto:, javascript:, data:, file: and protocol-relative //host forms in a model reply survive into the digest; T-013's tests pin only what T-010 specified. New task T-016 hardens the sanitizer (explicit risky schemes and //host; bare domains are deliberately left alone: too many false positives on company names). The white-on-white/font-size:0 leak stays a recorded known limit with a test that fails on purpose when stripping is extended. (T-013, round 1)
+## 2026-09-21T03:16:30Z verify T-013 ok=true
