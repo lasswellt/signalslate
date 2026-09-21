@@ -80,6 +80,8 @@ __all__ = [
     "current_version",
     "get_secret",
     "secret_values",
+    "RotationResult",
+    "rotate_all",
     "seed_from_env",
     "unseeded_env_keys",
     "materialize",
@@ -655,6 +657,65 @@ def secret_values() -> list[str]:
             except (SecretKeyMissing, SecretDecryptError):
                 continue
     return found
+
+
+@dataclass(frozen=True)
+class RotationResult:
+    """
+    What rotate_all did, as counts and ids only. A non-empty `unreadable` means nothing was written
+    (and `rotated` is then 0). Connection ids come from validated labels, so they are safe to print.
+    """
+
+    rotated: int
+    without_secrets: int
+    unreadable: tuple[str, ...]
+
+
+def rotate_all(vault: Optional[Vault] = None) -> RotationResult:
+    """
+    Re-encrypts every row's secret envelope under the primary key, so the old keys can be dropped
+    from SIGNALSLATE_SECRET_KEY afterwards. Vault.rotate is only ever called from here: rows
+    otherwise stay under whichever key wrote them until each is edited, and removing the old key
+    then makes every untouched secret undecryptable.
+
+    Every row is handled whatever its kind: the ciphertext is opaque here, never parsed. It is
+    all-or-nothing in ONE transaction: if any row cannot be opened, nothing is written and the
+    offending ids are returned, because a half-rotated store would make "which key can I drop?"
+    unanswerable. BEGIN IMMEDIATE takes SQLite's write lock before the read: _write_lock only
+    serialises writers inside this process, and the CLI runs in another one, so without it an edit
+    made through the running API could land between the read and the write and be overwritten with
+    a stale envelope. updated_at is left alone (nobody edited the connection) and so is the version counter: the
+    decrypted content is unchanged, so a cached overlay stays valid.
+
+    vault: the key list to rotate under; defaults to the installed vault. Old keys must still be in
+    it, or those rows are reported as unreadable.
+    Returns RotationResult. Raises SecretKeyMissing when there is no vault at all.
+    """
+    active = vault if vault is not None else _require_vault()
+    with _write_lock:
+        with db.get_session() as session:
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            rows = session.exec(select(db.Connection).order_by(col(db.Connection.seq), col(db.Connection.id))).all()
+            fresh: dict[str, str] = {}
+            unreadable: list[str] = []
+            without_secrets = 0
+            for row in rows:
+                if not row.secret_ciphertext:
+                    without_secrets += 1
+                    continue
+                try:
+                    fresh[row.id] = active.rotate(row.secret_ciphertext)
+                except SecretDecryptError:
+                    unreadable.append(row.id)
+            if unreadable:
+                session.rollback()
+                return RotationResult(0, without_secrets, tuple(unreadable))
+            for row in rows:
+                if row.id in fresh:
+                    row.secret_ciphertext = fresh[row.id]
+                    session.add(row)
+            session.commit()
+    return RotationResult(len(fresh), without_secrets, ())
 
 
 # Every env-style key a connection owns. is_family_key is what lets the overlay REPLACE these keys

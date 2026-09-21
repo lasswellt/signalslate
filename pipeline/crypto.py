@@ -15,6 +15,11 @@ embed the offending bytes, and chaining would put them back into a traceback.
 
 decrypt is called without a ttl: stored secrets are long lived, an expiring token would silently
 break a connection.
+
+The CLI has two commands. `genkey` is the one place a key is ever printed. `rotate` re-encrypts every
+stored secret under the primary key (connections.rotate_all) and prints counts and connection ids,
+never a key, a secret or a ciphertext; it imports the database layer lazily so the module itself
+stays import-cycle free. Rotation is what makes it safe to drop an old key from the list.
 """
 import json
 import sys
@@ -115,15 +120,65 @@ _GENKEY_REMINDER = (
 )
 
 
-def main(argv: list[str]) -> int:
-    """`genkey` is the only command: it is the one place a key is ever printed."""
-    if argv != ["genkey"]:
-        print("usage: python -m pipeline.crypto genkey", file=sys.stderr)
+_USAGE = "usage: python -m pipeline.crypto genkey | rotate"
+
+
+def _rotate_command() -> int:
+    """
+    Exit 0 on success, 1 when a row cannot be decrypted or the database fails (nothing changed
+    either way), 2 when there is no usable SIGNALSLATE_SECRET_KEY. The key is checked BEFORE the
+    database is opened so a misconfigured run never touches data/.
+    """
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from pipeline import connections, db, health
+
+    try:
+        vault = Vault.from_env_value(health.secret_key_setting())
+    except SecretKeyInvalid as exc:
+        print(f"error: SIGNALSLATE_SECRET_KEY is not usable ({exc})", file=sys.stderr)
         return 2
-    print(generate_key())
-    print(_GENKEY_REMINDER)
+    if vault is None:
+        print("error: SIGNALSLATE_SECRET_KEY is not set; there is no key to rotate to", file=sys.stderr)
+        return 2
+    try:
+        db.init_db()
+        result = connections.rotate_all(vault)
+    except SQLAlchemyError as exc:
+        # Only the class name: SQLAlchemy's message embeds the statement parameters, which here
+        # are the ciphertexts.
+        print(f"error: database failure ({type(exc).__name__}); nothing was changed", file=sys.stderr)
+        return 1
+    if result.unreadable:
+        print(
+            f"error: {len(result.unreadable)} connection(s) cannot be decrypted with the configured "
+            "keys; nothing was changed. Keep the old key in SIGNALSLATE_SECRET_KEY, or re-enter the "
+            "secrets of: " + ", ".join(result.unreadable),
+            file=sys.stderr,
+        )
+        return 1
+    print(
+        f"rotated {result.rotated} connection(s) to the primary key; "
+        f"{result.without_secrets} had no stored secrets."
+    )
     return 0
 
 
+def main(argv: list[str]) -> int:
+    """`genkey` is the one place a key is ever printed; `rotate` prints counts and ids only."""
+    if argv == ["genkey"]:
+        print(generate_key())
+        print(_GENKEY_REMINDER)
+        return 0
+    if argv == ["rotate"]:
+        return _rotate_command()
+    print(_USAGE, file=sys.stderr)
+    return 2
+
+
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    # Re-imported under its real name: run as __main__ this file defines its own SecretDecryptError,
+    # which connections.rotate_all would not recognise (it catches pipeline.crypto's).
+    from pipeline.crypto import main as _main
+
+    sys.exit(_main(sys.argv[1:]))
