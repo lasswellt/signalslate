@@ -9,11 +9,23 @@ Design decisions (docs/_research/2026-09-20_gmail-collector-and-agents.md §4, �
   a full-sync fallback. A timestamp read self-heals, those don't.
 - No parallel calls. Gmail returns 429 for a per-user concurrent-request limit, so requests go
   strictly one at a time and lean on backoff instead of bursting.
+- Messages are fetched format=full (20 units) and flattened in the collector (research §4, §7): the raw
+  form is a nested base64url MIME tree with both a text/plain and a text/html copy of the body, and
+  that decoding is Gmail-specific. Attachments are recorded as metadata only; attachments.get is never
+  called.
+- HTML bodies are untrusted input that an LLM will read. Hidden content (display:none, the hidden
+  attribute, aria-hidden, script/style/head/title) is dropped because hidden text is a documented
+  prompt-injection carrier that a human reading the same mail never sees.
 """
+import base64
+import binascii
 import random
+import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from html.parser import HTMLParser
 from typing import Optional
+from urllib.parse import quote
 
 import requests
 
@@ -31,6 +43,11 @@ MAX_BACKOFF = 32
 RETRY_STATUS = {429, 500, 502, 503, 504}
 # Compared after lowercasing and dropping underscores, so RATE_LIMIT_EXCEEDED matches too.
 RATE_REASONS = {"ratelimitexceeded", "userratelimitexceeded"}
+# get costs 20 units against 6,000/min/user, so 300/min is the ceiling. 0.3s between sequential gets
+# is ~200/min (call latency adds to it): headroom for the list calls and a retry burst.
+GET_PACE_SECONDS = 0.3
+# Characters of bodyText kept per message. A guess: re-tune from the dry run's real payload sizes.
+BODY_CAP = 20000
 
 # Indirections so tests neither wait nor depend on real randomness.
 _sleep = time.sleep
@@ -135,3 +152,236 @@ def list_message_ids(token: str, since: datetime, until: datetime) -> list[dict]
             return out
 
     raise GmailError(f"more than {MAX_PAGES} pages — window too large, results truncated")
+
+
+# Void elements never get an end tag, so they must not push onto the open-element stack.
+_VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+# Their text is never shown to a reader (script/style are code, head/title are chrome).
+_SKIP_TAGS = {"script", "style", "head", "title"}
+_BLOCK_TAGS = {"p", "div", "br", "li", "tr", "ul", "ol", "table", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6"}
+_HIDDEN_STYLE = re.compile(r"(?:display\s*:\s*none|visibility\s*:\s*hidden)\b", re.IGNORECASE)
+_CHARSET = re.compile(r"charset\s*=\s*[\"']?([^\s\"';]+)", re.IGNORECASE)
+
+
+def _is_hidden(attrs: list) -> bool:
+    for name, value in attrs:
+        if name == "hidden":  # boolean attribute: present means hidden, whatever the value
+            return True
+        if name == "aria-hidden" and (value or "").strip().lower() == "true":
+            return True
+        if name == "style" and _HIDDEN_STYLE.search(value or ""):
+            return True
+    return False
+
+
+class _TextExtractor(HTMLParser):
+    """
+    HTML -> visible text.
+
+    Open elements sit on a stack of (tag, hidden-including-ancestors) rather than a bare depth counter,
+    because real mail leaves <p>/<li> unclosed: an end tag pops back to its nearest matching open tag,
+    so a stray unclosed child cannot leave a hidden region open (dropping the rest of the mail) or
+    close it early (leaking the hidden text).
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._stack: list[tuple[str, bool]] = []
+        self._out: list[str] = []
+
+    def _hidden(self) -> bool:
+        return bool(self._stack) and self._stack[-1][1]
+
+    def _newline(self) -> None:
+        # Nested blocks (<ul><li>, <table><tr>) open and close back to back; one break is enough, and
+        # only <br> runs may make a deliberate blank line.
+        if self._out and not self._out[-1].endswith("\n"):
+            self._out.append("\n")
+
+    def handle_starttag(self, tag: str, attrs: list) -> None:
+        if tag in _VOID_TAGS:
+            if tag == "br" and not self._hidden():
+                self._out.append("\n")
+            return
+        hidden = self._hidden() or tag in _SKIP_TAGS or _is_hidden(attrs)
+        self._stack.append((tag, hidden))
+        if not hidden and tag in _BLOCK_TAGS:
+            self._newline()
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in _VOID_TAGS:
+            return
+        for i in range(len(self._stack) - 1, -1, -1):
+            if self._stack[i][0] == tag:
+                was_hidden = self._stack[i][1]
+                del self._stack[i:]
+                if not was_hidden and tag in _BLOCK_TAGS:
+                    self._newline()
+                return
+
+    def handle_data(self, data: str) -> None:
+        if self._hidden():
+            return
+        collapsed = re.sub(r"\s+", " ", data)
+        # Source-formatting whitespace between tags is not content; keeping it would defeat _newline.
+        if not collapsed.strip() and (not self._out or self._out[-1].endswith("\n")):
+            return
+        self._out.append(collapsed)
+
+    def text(self) -> str:
+        return "".join(self._out)
+
+
+def _tidy(text: str) -> str:
+    """Strip each line and collapse runs of blank lines to one."""
+    lines = [line.strip() for line in text.replace("\r\n", "\n").replace("\r", "\n").replace("\xa0", " ").split("\n")]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
+def _html_to_text(html: str) -> str:
+    parser = _TextExtractor()
+    parser.feed(html)
+    parser.close()
+    return _tidy(parser.text())
+
+
+def _headers(raw: object) -> dict[str, str]:
+    """Header list -> {lowercased name: whitespace-collapsed value}. Gmail preserves the sender's name casing."""
+    out: dict[str, str] = {}
+    if not isinstance(raw, list):
+        return out
+    for header in raw:
+        if isinstance(header, dict) and isinstance(header.get("name"), str) and isinstance(header.get("value"), str):
+            out.setdefault(header["name"].lower(), " ".join(header["value"].split()))
+    return out
+
+
+def _decode_part(part: dict) -> Optional[str]:
+    """
+    Decode one leaf part's body, or None when there is nothing usable.
+
+    Gmail's base64url omits padding, which urlsafe_b64decode rejects, so it is restored first. A part
+    whose data is missing (a large body Gmail only serves through attachments.get) or is corrupt yields
+    None: one bad part must not fail the whole message.
+    """
+    data = (part.get("body") or {}).get("data")
+    if not isinstance(data, str) or not data:
+        return None
+    try:
+        raw = base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))
+    except (binascii.Error, ValueError):
+        return None
+    match = _CHARSET.search(_headers(part.get("headers")).get("content-type", ""))
+    try:
+        return raw.decode(match.group(1) if match else "utf-8", errors="replace")
+    except LookupError:  # a charset name Python does not know
+        return raw.decode("utf-8", errors="replace")
+
+
+def _walk(part: dict, plain: list[str], html: list[str], attachments: list[dict]) -> None:
+    """Collect body text and attachment metadata from the MIME tree, depth first, in document order."""
+    body = part.get("body") or {}
+    if part.get("filename"):
+        # A named part is an attachment even when its type is text/*: it is not the message body.
+        size = body.get("size")
+        attachments.append(
+            {
+                "filename": part["filename"],
+                "mimeType": part.get("mimeType"),
+                "size": size if isinstance(size, int) else 0,
+            }
+        )
+        return
+
+    children = part.get("parts")
+    if isinstance(children, list) and children:
+        for child in children:
+            if isinstance(child, dict):
+                _walk(child, plain, html, attachments)
+        return
+
+    mime = (part.get("mimeType") or "").lower()
+    if mime in ("text/plain", "text/html"):
+        text = _decode_part(part)
+        if text is not None:
+            (plain if mime == "text/plain" else html).append(text)
+
+
+def flatten_message(msg: dict) -> dict:
+    """
+    A messages.get format=full response -> the compact payload stored on the Item.
+
+    `subject` stays top-level so pipeline.collect's PREVIEW_FIELDS shows it. `internalDate` keeps the
+    API's own string; parse_internal_date() turns it into the Item's occurred_at. Absent headers are
+    None, not "", so "no Cc" and "empty Cc" stay distinguishable downstream.
+    """
+    payload = msg.get("payload") or {}
+    headers = _headers(payload.get("headers"))
+    plain: list[str] = []
+    html: list[str] = []
+    attachments: list[dict] = []
+    _walk(payload, plain, html, attachments)
+
+    # text/plain wins when it has any content; an HTML-only or whitespace-only-plain mail falls back.
+    text = _tidy("\n".join(plain))
+    if not text:
+        text = _html_to_text("\n".join(html))
+
+    return {
+        "subject": headers.get("subject"),
+        "from": headers.get("from"),
+        "to": headers.get("to"),
+        "cc": headers.get("cc"),
+        "date": headers.get("date"),
+        "messageId": headers.get("message-id"),
+        "inReplyTo": headers.get("in-reply-to"),
+        "listUnsubscribe": headers.get("list-unsubscribe"),
+        "threadId": msg.get("threadId"),
+        "labelIds": list(msg.get("labelIds") or []),
+        "snippet": msg.get("snippet") or "",
+        "internalDate": msg.get("internalDate"),
+        "bodyText": text[:BODY_CAP],
+        "bodyTruncated": len(text) > BODY_CAP,
+        "attachments": attachments,
+    }
+
+
+def parse_internal_date(value: object) -> Optional[datetime]:
+    """
+    internalDate (milliseconds since epoch, as a string) -> naive UTC, or None when unparseable.
+
+    Not parse_iso: internalDate is not ISO. Arithmetic from the epoch keeps it naive UTC with no
+    dependence on the machine's timezone.
+    """
+    try:
+        return datetime(1970, 1, 1) + timedelta(milliseconds=int(value))  # type: ignore[arg-type]
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def fetch_message(token: str, message_id: str) -> dict:
+    """
+    GET one message at format=full.
+
+    Raises GmailError on failure. The id is quoted so a hostile value cannot rewrite the request path.
+    """
+    return _call(token, f"/messages/{quote(message_id, safe='')}", {"format": "full"})
+
+
+def fetch_messages(token: str, message_ids: list[str]) -> tuple[list[dict], list[dict]]:
+    """
+    Fetch each id sequentially, paced by GET_PACE_SECONDS.
+
+    Returns (messages, failures). One unfetchable message (deleted between list and get, say) is a
+    failure entry {"id", "error"}, not an abort: the caller decides what a partial batch means.
+    """
+    messages: list[dict] = []
+    failures: list[dict] = []
+    for i, message_id in enumerate(message_ids):
+        if i:
+            _sleep(GET_PACE_SECONDS)
+        try:
+            messages.append(fetch_message(token, message_id))
+        except GmailError as exc:
+            failures.append({"id": message_id, "error": str(exc)})
+    return messages, failures

@@ -7,6 +7,9 @@ The traps these pin, all from docs/_research/2026-09-13_phase2-collectors.md:
   - Slack's non-Marketplace cap returns exactly 15 objects regardless of the requested limit.
   - Zoom UUIDs containing "/" must be double-encoded.
 """
+import base64
+import copy
+import json
 import os
 import sys
 import time
@@ -807,3 +810,307 @@ def test_gmail_call_sends_bearer_token(monkeypatch):
     monkeypatch.setattr(gmail.requests, "get", fake_get)
     gmail._call("tok-1", "/messages", {})
     assert seen == {"headers": {"Authorization": "Bearer tok-1"}, "timeout": gmail.TIMEOUT}
+
+
+# --- gmail fetch + flatten ----------------------------------------------------------
+
+FIXTURE = Path(__file__).resolve().parent / "fixtures" / "gmail_message_multipart.json"
+
+
+def gmail_fixture():
+    """A fresh copy per call: tests reshape it. The fixture is synthetic (reserved example domains)."""
+    with open(FIXTURE, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def b64url(text, charset="utf-8"):
+    """Unpadded base64url, the way Gmail serves body data."""
+    return base64.urlsafe_b64encode(text.encode(charset)).decode().rstrip("=")
+
+
+def gmail_msg(parts=None, headers=None, **extra):
+    """A minimal messages.get response; `parts` are leaf parts under a multipart/mixed root."""
+    msg = {"id": "m1", "threadId": "t1", "payload": {"mimeType": "multipart/mixed", "headers": headers or [], "parts": parts or []}}
+    msg.update(extra)
+    return msg
+
+
+def text_part(mime, text, charset=None):
+    part = {"mimeType": mime, "filename": "", "body": {"data": b64url(text, charset or "utf-8")}}
+    if charset:
+        part["headers"] = [{"name": "Content-Type", "value": f'{mime}; charset="{charset}"'}]
+    return part
+
+
+def html_body(html):
+    return gmail.flatten_message(gmail_msg([text_part("text/html", html)]))["bodyText"]
+
+
+def test_gmail_flatten_fixture_extracts_every_field():
+    out = gmail.flatten_message(gmail_fixture())
+
+    assert out == {
+        "subject": "Planning session: agenda and café booking",
+        "from": "Alex Example <alex@example.com>",
+        "to": "Sam Sample <sam@example.org>, team@example.org",
+        "cc": "Robin Placeholder <robin@example.com>",
+        "date": "Tue, 15 Sep 2026 14:30:00 +0000",
+        "messageId": "<planning-0001@example.com>",
+        "inReplyTo": "<planning-0000@example.com>",
+        "listUnsubscribe": "<mailto:unsubscribe@example.com>",
+        "threadId": "18c0ffee00000000",
+        "labelIds": ["INBOX", "UNREAD", "CATEGORY_UPDATES"],
+        "snippet": "Hi team, The café booking for the planning session moved to Thursday at 10:00.",
+        "internalDate": "1789482605000",
+        "bodyText": (
+            "Hi team,\n\nThe café booking for the planning session moved to Thursday at 10:00.\n"
+            "Budget check: Q2 >>> Q1 ???\n\nAgenda attached.\n\nRegards,\nAlex Example"
+        ),
+        "bodyTruncated": False,
+        "attachments": [{"filename": "agenda.pdf", "mimeType": "application/pdf", "size": 48213}],
+    }
+
+
+def test_gmail_flatten_fixture_exercises_the_decode_traps():
+    """Guards the fixture itself: if it stops needing padding repair or charset handling, the tests above prove less."""
+    plain = gmail_fixture()["payload"]["parts"][0]["parts"][0]
+    data = plain["body"]["data"]
+    assert len(data) % 4 != 0  # unpadded: urlsafe_b64decode alone would raise
+    assert "-" in data or "_" in data  # url-safe alphabet, not standard base64
+    assert "iso-8859-1" in plain["headers"][0]["value"]  # bytes are latin-1: utf-8 would mangle the é
+
+
+def test_gmail_flatten_subject_is_top_level_for_the_preview():
+    from pipeline.collect import preview
+
+    assert preview(gmail.flatten_message(gmail_fixture())).startswith("Planning session")
+
+
+def test_gmail_flatten_prefers_plain_over_html():
+    out = gmail.flatten_message(gmail_msg([text_part("text/html", "<p>from html</p>"), text_part("text/plain", "from plain")]))
+    assert out["bodyText"] == "from plain"
+
+
+def test_gmail_flatten_falls_back_to_html_when_plain_is_blank():
+    out = gmail.flatten_message(gmail_msg([text_part("text/plain", " \n "), text_part("text/html", "<p>from html</p>")]))
+    assert out["bodyText"] == "from html"
+
+
+def test_gmail_flatten_html_only_message():
+    assert html_body("<html><body><p>Hello <b>there</b></p></body></html>") == "Hello there"
+
+
+def test_gmail_flatten_fixture_html_part_drops_the_injection_text():
+    msg = gmail_fixture()
+    alternative = msg["payload"]["parts"][0]
+    alternative["parts"] = [p for p in alternative["parts"] if p["mimeType"] == "text/html"]
+    body = gmail.flatten_message(msg)["bodyText"]
+
+    assert body == "Hi team,\nThe café booking moved to Thursday at 10:00.\nAgenda attached."
+    assert "SYSTEM" not in body and "ignore all previous" not in body and "reveal" not in body
+
+
+@pytest.mark.parametrize(
+    "open_tag",
+    [
+        '<div style="display:none">',
+        '<div style="display: none">',
+        '<div style="DISPLAY : NONE !important">',
+        '<div style="color:red; visibility:hidden">',
+        '<div style="VISIBILITY: Hidden">',
+        "<div hidden>",
+        '<div hidden="hidden">',
+        '<div aria-hidden="true">',
+        '<div aria-hidden="TRUE">',
+    ],
+)
+def test_gmail_html_hidden_content_is_dropped(open_tag):
+    assert html_body(f"<p>shown</p>{open_tag}secret</div><p>after</p>") == "shown\nafter"
+
+
+def test_gmail_html_hidden_nesting_drops_inner_text_and_keeps_text_after_the_close():
+    assert html_body('<div style="display:none"><span>x</span></div>tail') == "tail"
+    assert html_body("<div hidden><div>a</div>b</div>c") == "c"
+    assert html_body('<div hidden><div hidden>a</div>b</div>c') == "c"
+
+
+def test_gmail_html_visible_child_of_a_hidden_parent_stays_hidden():
+    assert html_body('<div hidden><p style="display:block">still secret</p></div>after') == "after"
+
+
+def test_gmail_html_unclosed_children_do_not_leak_or_swallow():
+    """<p>/<li> are routinely left open; the hidden region must still end at its own close tag."""
+    assert html_body("<div hidden><p>secret<p>more<li>item</div>visible") == "visible"
+
+
+def test_gmail_html_aria_hidden_false_is_visible():
+    assert html_body('<div aria-hidden="false">shown</div>') == "shown"
+
+
+def test_gmail_html_void_tags_never_open_a_hidden_region():
+    assert html_body('<input aria-hidden="true">one<img hidden src="x">two<br hidden>three<hr hidden>four') == "onetwo\nthreefour"
+    assert html_body('<meta hidden><link hidden>five') == "five"
+
+
+def test_gmail_html_script_style_head_title_are_dropped():
+    html = (
+        "<html><head><title>T</title><style>p{}</style></head><body>"
+        "<script>var leaked = 1;</script><p>body</p><style>.x{}</style></body></html>"
+    )
+    assert html_body(html) == "body"
+
+
+def test_gmail_html_block_tags_become_newlines_and_blank_runs_collapse():
+    html = "<p>a</p><p></p><p></p><div>b</div>c<br>d<ul><li>x</li><li>y</li></ul><table><tr><td>t1</td></tr><tr><td>t2</td></tr></table>"
+    assert html_body(html) == "a\nb\nc\nd\nx\ny\nt1\nt2"
+    assert html_body("a<br><br><br><br>b") == "a\n\nb"  # deliberate <br> runs collapse to one blank line
+    assert html_body("<div>\n  <p>a</p>\n  <p>b</p>\n</div>") == "a\nb"  # source formatting adds no blank lines
+
+
+def test_gmail_html_entities_and_nbsp_are_decoded_and_spacing_collapsed():
+    assert html_body("<p>Tom &amp; Jerry&nbsp;&nbsp;   ok\n\n  fine &#233;</p>") == "Tom & Jerry ok fine é"
+
+
+def test_gmail_flatten_missing_headers_are_none_and_nothing_raises():
+    out = gmail.flatten_message({"id": "m1"})
+    assert out["subject"] is None and out["from"] is None and out["cc"] is None
+    assert out["messageId"] is None and out["inReplyTo"] is None and out["listUnsubscribe"] is None
+    assert out["bodyText"] == "" and out["bodyTruncated"] is False
+    assert out["labelIds"] == [] and out["attachments"] == [] and out["snippet"] == ""
+    assert out["internalDate"] is None and out["threadId"] is None
+
+
+def test_gmail_flatten_header_names_are_case_insensitive_and_values_unfolded():
+    headers = [{"name": "SUBJECT", "value": "a\r\n  folded   subject"}, {"name": "sUbJeCt", "value": "second loses"}]
+    assert gmail.flatten_message(gmail_msg(headers=headers))["subject"] == "a folded subject"
+
+
+def test_gmail_flatten_caps_the_body_and_flags_truncation(monkeypatch):
+    monkeypatch.setattr(gmail, "BODY_CAP", 10)
+    over = gmail.flatten_message(gmail_msg([text_part("text/plain", "x" * 25)]))
+    assert over["bodyText"] == "x" * 10 and over["bodyTruncated"] is True
+
+    exact = gmail.flatten_message(gmail_msg([text_part("text/plain", "x" * 10)]))
+    assert exact["bodyText"] == "x" * 10 and exact["bodyTruncated"] is False
+
+
+def test_gmail_body_cap_default():
+    assert gmail.BODY_CAP == 20000
+
+
+def test_gmail_flatten_charset_falls_back_to_utf8_when_absent_or_unknown():
+    unknown = {"mimeType": "text/plain", "body": {"data": b64url("café")}, "headers": [{"name": "Content-Type", "value": "text/plain; charset=bogus-9"}]}
+    absent = {"mimeType": "text/plain", "body": {"data": b64url("café")}}
+    assert gmail.flatten_message(gmail_msg([unknown]))["bodyText"] == "café"
+    assert gmail.flatten_message(gmail_msg([absent]))["bodyText"] == "café"
+
+
+def test_gmail_flatten_undecodable_bytes_are_replaced_not_raised():
+    bad = base64.urlsafe_b64encode(b"ok \xff\xfe end").decode().rstrip("=")
+    part = {"mimeType": "text/plain", "body": {"data": bad}}
+    assert gmail.flatten_message(gmail_msg([part]))["bodyText"] == "ok \ufffd\ufffd end"
+
+
+def test_gmail_flatten_corrupt_part_is_skipped_not_fatal():
+    corrupt = {"mimeType": "text/plain", "body": {"data": "a"}}  # one base64 char cannot be padded into valid data
+    out = gmail.flatten_message(gmail_msg([corrupt, text_part("text/html", "<p>still here</p>")]))
+    assert out["bodyText"] == "still here"
+
+
+def test_gmail_flatten_named_text_part_is_an_attachment_not_body():
+    notes = {"mimeType": "text/plain", "filename": "notes.txt", "body": {"attachmentId": "A1", "size": 12}}
+    out = gmail.flatten_message(gmail_msg([notes, text_part("text/plain", "real body")]))
+    assert out["bodyText"] == "real body"
+    assert out["attachments"] == [{"filename": "notes.txt", "mimeType": "text/plain", "size": 12}]
+
+
+def test_gmail_flatten_part_without_data_contributes_nothing():
+    big = {"mimeType": "text/plain", "filename": "", "body": {"attachmentId": "A2", "size": 900000}}
+    assert gmail.flatten_message(gmail_msg([big]))["bodyText"] == ""
+
+
+def test_gmail_flatten_walks_deeply_nested_parts_in_order():
+    inner = {"mimeType": "multipart/alternative", "parts": [text_part("text/plain", "deep")]}
+    outer = {"mimeType": "multipart/related", "parts": [inner]}
+    assert gmail.flatten_message(gmail_msg([outer]))["bodyText"] == "deep"
+
+
+def test_gmail_parse_internal_date_is_naive_utc_under_a_non_utc_tz():
+    old_tz = os.environ.get("TZ")
+    os.environ["TZ"] = "America/Los_Angeles"
+    time.tzset()
+    try:
+        got = gmail.parse_internal_date("1789482605000")
+    finally:
+        if old_tz is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = old_tz
+        time.tzset()
+    assert got == datetime(2026, 9, 15, 14, 30, 5)
+    assert got.tzinfo is None
+
+
+def test_gmail_parse_internal_date_keeps_milliseconds():
+    assert gmail.parse_internal_date("1789482605123") == datetime(2026, 9, 15, 14, 30, 5, 123000)
+
+
+@pytest.mark.parametrize("value", [None, "", "abc", "12.5", [], {}, "9" * 30])
+def test_gmail_parse_internal_date_unparseable_is_none(value):
+    assert gmail.parse_internal_date(value) is None
+
+
+def test_gmail_flatten_keeps_the_original_internal_date_string():
+    assert gmail.flatten_message(gmail_msg(internalDate="not-a-number"))["internalDate"] == "not-a-number"
+
+
+def test_gmail_fetch_message_is_a_single_full_format_get(monkeypatch):
+    """Exactly one request: the attachment part carries an attachmentId, and attachments.get must never fire."""
+    calls = route(monkeypatch, gmail, lambda url, params: FakeResponse(gmail_fixture()))
+
+    msg = gmail.fetch_message("tok", "18c0ffee00000001")
+    gmail.flatten_message(msg)
+
+    assert len(calls) == 1
+    assert calls[0]["url"] == "https://gmail.googleapis.com/gmail/v1/users/me/messages/18c0ffee00000001"
+    assert calls[0]["params"] == {"format": "full"}
+    assert "attachments" not in calls[0]["url"]
+
+
+def test_gmail_fetch_message_quotes_the_id(monkeypatch):
+    calls = route(monkeypatch, gmail, lambda url, params: FakeResponse({}))
+    gmail.fetch_message("tok", "a/../b?x=1")
+    assert calls[0]["url"] == "https://gmail.googleapis.com/gmail/v1/users/me/messages/a%2F..%2Fb%3Fx%3D1"
+
+
+def test_gmail_fetch_message_error_raises_gmail_error(monkeypatch):
+    route(monkeypatch, gmail, lambda url, params: gmail_error(404, "notFound"))
+    with pytest.raises(gmail.GmailError, match="HTTP 404"):
+        gmail.fetch_message("tok", "gone")
+
+
+def test_gmail_fetch_messages_paces_between_gets_and_collects_failures(monkeypatch, gmail_sleeps):
+    def handler(url, params):
+        if url.endswith("/bad"):
+            return gmail_error(404, "notFound")
+        return FakeResponse({"id": url.rsplit("/", 1)[1]})
+
+    calls = route(monkeypatch, gmail, handler)
+    messages, failures = gmail.fetch_messages("tok", ["a", "bad", "c"])
+
+    assert [m["id"] for m in messages] == ["a", "c"]
+    assert [f["id"] for f in failures] == ["bad"] and "404" in failures[0]["error"]
+    assert len(calls) == 3
+    assert gmail_sleeps == [gmail.GET_PACE_SECONDS, gmail.GET_PACE_SECONDS]  # between gets, never before the first
+
+
+def test_gmail_fetch_messages_empty_and_single_do_not_sleep(monkeypatch, gmail_sleeps):
+    route(monkeypatch, gmail, lambda url, params: FakeResponse({"id": "a"}))
+    assert gmail.fetch_messages("tok", []) == ([], [])
+    assert gmail.fetch_messages("tok", ["a"]) == ([{"id": "a"}], [])
+    assert gmail_sleeps == []
+
+
+def test_gmail_get_pace_keeps_the_per_user_quota():
+    """20 units per get against 6,000/min: the pace alone must stay under the ceiling of 300 gets/min."""
+    assert 60 / gmail.GET_PACE_SECONDS * 20 < 6000
