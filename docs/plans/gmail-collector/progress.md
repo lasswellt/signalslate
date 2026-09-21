@@ -20,3 +20,5 @@ Ruling: defer — flatten_message passes snippet through HTML-entity-escaped; T-
 ## 2026-09-21T02:51:47Z build T-007 start (attempt 1)
 Ruling: defer — a state-mismatched loopback callback aborts the bootstrap run instead of continuing to wait (spec: reject mismatches); a stray local request can force a retry. Acceptable for a one-shot interactive CLI. main(argv) is only covered for bad-label and --help; the browser flow and healthy short-circuit are manual. (T-007, round 1)
 ## 2026-09-21T02:54:33Z verify T-007 ok=true
+## 2026-09-21T02:54:33Z build T-008 start (attempt 1)
+## 2026-09-21T02:55:38Z verify T-008 ok=true

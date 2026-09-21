@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T02:54:33Z",
+  "updated": "2026-09-21T02:55:38Z",
   "tasks": [
     {
       "id": "T-001",
@@ -590,11 +590,60 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T02:55:38Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^GMAIL_CLIENT_ID=' .env.example",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:55:38Z"
+          },
+          {
+            "cmd": "grep -qE '^GMAIL_CLIENT_SECRET=' .env.example",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:55:38Z"
+          },
+          {
+            "cmd": "grep -qE '^GMAIL_PERSONAL_REFRESH_TOKEN=' .env.example",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:55:38Z"
+          },
+          {
+            "cmd": "grep -qE 'In production' README.md",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:55:38Z"
+          },
+          {
+            "cmd": "grep -qE 'gmail_bootstrap.py' README.md",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:55:38Z"
+          },
+          {
+            "cmd": "! grep -nE \"/home/[a-z]|(^|[^0-9])(10\\.[0-9]+\\.[0-9]+\\.[0-9]+|192\\.168\\.[0-9]+\\.[0-9]+)\" README.md .env.example",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:55:38Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Public repo: generic wording only, no account names, addresses, or hosts. README: add Gmail to the Sources table and Phases text; a Setup > Gmail section covering create your OWN GCP project + Desktop client (never commit or share a client id), enable the Gmail API, consent screen External + add gmail.readonly, PUBLISH to In production (Testing = 7-day refresh tokens), accept the unverified-app click-through, run auth/gmail_bootstrap.py, paste the token line; a warning that a Google password change or revoked access kills the token; and the day-8 check. .env.example: GMAIL_CLIENT_ID=, GMAIL_CLIENT_SECRET=, GMAIL_PERSONAL_REFRESH_TOKEN= with comments. Add the Gmail dry-run line next to the existing ones."
     },
