@@ -52,3 +52,5 @@ Ruling: defer — api/security.py is a pure ASGI guard (nothing buffered, before
 ## 2026-09-21T07:03:23Z build T-019 start (attempt 1)
 Ruling: defer — connections router: create is a discriminated union with a callable Discriminator and a generic unknown-field error so a credential pasted into the wrong box is never echoed (pydantic's defaults would); create verifies known_sources() membership before set_source_active(id, False) and otherwise rolls back (restoring the tombstone state) with 503 store_inactive; extra stable code secret_decrypt_failed (503) for a PATCH the installed key cannot open; residual: a JSON key inside 'secrets' with a non-string value can surface in a 422 loc (needs a credential pasted as a JSON KEY, not reachable from the UI). The router is registered in main.py by T-022. (T-019, round 1)
 ## 2026-09-21T07:09:22Z verify T-019 ok=true
+## 2026-09-21T07:09:22Z build T-020 start (attempt 1)
+## 2026-09-21T07:16:05Z verify T-020 ok=true

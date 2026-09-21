@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T07:09:22Z",
+  "updated": "2026-09-21T07:16:05Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1474,11 +1474,46 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T07:16:05Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'router = APIRouter' api/routers/collectors.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:16:03Z"
+          },
+          {
+            "cmd": "grep -qE 'dry-run' api/routers/collectors.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:16:03Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/collectors.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:16:03Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_collectors.py -q",
+            "exit": 0,
+            "duration_ms": 1710,
+            "tail": ".........................................................                [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n57 passed, 1 warning in 1.49s",
+            "recorded_at": "2026-09-21T07:16:05Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research docs/_research/2026-09-21_management-ui.md section 3. GET /collectors -> per known source {source, active, watermark (iso_z of SourceCursor.last_success_at), consecutive_failures, stuck_threshold (runner.MAX_STUCK_RUNS), last_attempt {at, status, detail (redacted), item_count} or null, item_count (db.count_items)}. POST /collectors/{source}/run -> 202 {accepted: true} via BackgroundTasks running execute_run(trigger='manual', only=source), 409 when has_running_run(), 404 for an unknown source. POST /collectors/{source}/dry-run {hours 1..168 default 24, limit 0..50 default 5} -> 202 {job_id} running pipeline.collect.dry_run in a background thread with a bounded in-memory job table (max 20 jobs, results kept 15 minutes, purged on access); GET /collectors/dry-run/{job_id} -> {status: running or done or failed, result?} with the result text redacted. POST /collectors/{source}/reset {days_back: 1..7 or null} -> db.reset_cursor(source, utcnow() minus days when given else None) and the response includes a note explaining the runner semantics (the window floors at 7 days and a watermark newer than about 24 hours behaves like no cursor). POST /collectors/{source}/clear-failures. GET /collectors/{source}/items?limit=&before_id=&item_type= -> {items: [{id, item_type, external_id, occurred_at (iso_z), preview}], next_before_id, total} where preview comes from pipeline.collect.preview over the parsed payload; the FULL payload is only returned by GET /collectors/{source}/items/{id} (bounded to 20 KB, redacted). Every route 404s on an id not in known_sources(). Reuse api/serialize.py. Tests (router-only app, temp_db, stub dry_run and execute_run): each route including 409 and the 404s, paging with next_before_id, the payload bound, the dry-run job lifecycle and purge, reset semantics, redaction of a last_attempt detail carrying a secret, and that an items response never contains a payload from another source. ADDED at build time (from T-013 review): pipeline.collect.dry_run returns NAIVE UTC datetime objects (window.since, window.until, items[].occurred_at). Convert every datetime to a Z string with api.serialize.iso_z BEFORE storing the job result or returning JSON, and test that the dry-run result is JSON serializable end to end. Also: the run route must allow sources that are toggled off (execute_run(only=id) does), but must still 404 ids not in known_sources()."
     },
