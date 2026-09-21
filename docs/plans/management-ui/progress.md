@@ -46,3 +46,6 @@ Ruling: defer — oauth_gmail.finish_callback gained an optional error= argument
 ## 2026-09-21T06:54:15Z build T-017 start (attempt 1)
 Ruling: defer — oauth_m365 returns FinishResult(connection, account) while oauth_gmail returns a bare ConnectionView (T-021 normalizes); Microsoft error_description is never surfaced (fixed-message errors; only the digits-only AADSTS code is logged); login_hint is not supported on start(); two extra errors InvalidAlias and CacheWriteFailed. (T-017, round 1)
 ## 2026-09-21T06:59:59Z verify T-017 ok=true
+## 2026-09-21T06:59:59Z build T-018 start (attempt 1)
+Ruling: defer — api/security.py is a pure ASGI guard (nothing buffered, before routing) rejecting every method except GET/HEAD/OPTIONS unless X-Requested-With: signalslate is present and any Origin matches the normalized allow-list (whitespace, trailing slash, case, default ports; path/userinfo/null/* entries dropped); CORS is the outermost layer; the 422 handler returns type/loc/msg only. Verified against the real api.main app. CONSEQUENCE: from this task until T-025 the EXISTING web client (Run now, Config save) does not send the header and would be rejected; nothing is deployed mid-build and T-025 fixes it in the same PR. (T-018, round 1)
+## 2026-09-21T07:03:23Z verify T-018 ok=true
