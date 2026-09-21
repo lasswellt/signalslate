@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "zoom-collector",
-  "updated": "2026-09-21T23:02:41Z",
+  "updated": "2026-09-21T23:08:56Z",
   "tasks": [
     {
       "id": "T-001",
@@ -102,11 +102,46 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:08:56Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '\"auth_mode\"' pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:08:52Z"
+          },
+          {
+            "cmd": "grep -qE 'include_transcripts' pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:08:52Z"
+          },
+          {
+            "cmd": "grep -qE 'auth_mode' api/routers/connections.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:08:52Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_connections.py tests/test_api_connections.py tests/test_connection_materialize.py tests/test_management_e2e.py -q",
+            "exit": 0,
+            "duration_ms": 3387,
+            "tail": "........................................................................ [ 27%]\n........................................................................ [ 55%]\n........................................................................ [ 83%]\n..........................................                               [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate-zoom-collector/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n258 passed, 1 warning in 3.09s",
+            "recorded_at": "2026-09-21T23:08:56Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Step 1. Keep label_field=None (singleton id 'zoom'; do not break e2e singleton assertions). config=('client_id',), optional_config=('auth_mode','account_id','redirect_mode','include_transcripts'), secrets=('client_secret','refresh_token'), required_secrets=('client_secret',). auth_mode absent => 's2s' if account_id set else 'oauth'; expose a helper (e.g. connections.zoom_auth_mode(view)). redirect_mode accepts only 'callback' for zoom. include_transcripts is a bool, default TRUE (owner decision 2026-09-21); absent = true. .env seeding (connections.py:536,613-618): ZOOM_AUTH_MODE optional key; existing ZOOM_ACCOUNT_ID/CLIENT_ID/CLIENT_SECRET setups must seed as s2s unchanged. refresh_token is never materialized to env and never returned by any view. Extend ZoomCreate (api/routers/connections.py:67) with optional account_id, auth_mode, include_transcripts."
     },
