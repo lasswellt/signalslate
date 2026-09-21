@@ -7,7 +7,9 @@ The traps these pin, all from docs/_research/2026-09-13_phase2-collectors.md:
   - Slack's non-Marketplace cap returns exactly 15 objects regardless of the requested limit.
   - Zoom UUIDs containing "/" must be double-encoded.
 """
+import os
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -16,7 +18,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from pipeline.collectors import Item, parse_iso, parse_slack_ts, to_graph_time  # noqa: E402
-from pipeline.collectors import graph, slack, zoom  # noqa: E402
+from pipeline.collectors import gmail, graph, slack, zoom  # noqa: E402
 
 SINCE = datetime(2026, 9, 12, 6, 0, 0)
 UNTIL = datetime(2026, 9, 13, 6, 0, 0)
@@ -613,3 +615,195 @@ def test_cli_report_returns_false_on_error_status(monkeypatch):
 
     monkeypatch.setattr(collect, "dispatch", lambda s, a, b: CollectionResult(s, "error", "dead token"))
     assert collect.report("zoom", hours=24, limit=5, raw=False) is False
+
+
+# --- gmail transport ----------------------------------------------------------------
+
+
+def gmail_error(status, reason=None, key="errors"):
+    body = {"error": {"code": status, "message": "x"}}
+    if reason:
+        body["error"][key] = [{"reason": reason}]
+    return FakeResponse(body, status, text=f"HTTP {status} {reason}")
+
+
+@pytest.fixture
+def gmail_sleeps(monkeypatch):
+    """Records backoff sleeps instead of waiting, with zero jitter so delays are exact."""
+    sleeps = []
+    monkeypatch.setattr(gmail, "_sleep", sleeps.append)
+    monkeypatch.setattr(gmail, "_random", lambda: 0.0)
+    return sleeps
+
+
+def test_gmail_epoch_is_utc_not_local(monkeypatch):
+    """
+    SINCE is naive UTC; .timestamp() would read it as local time.
+
+    Pinned under a non-UTC TZ (UTC-7/-8 here) so the test fails on the naive form even when the
+    machine running it happens to be in UTC.
+    """
+    expected = int(SINCE.replace(tzinfo=timezone.utc).timestamp())
+    old_tz = os.environ.get("TZ")
+    os.environ["TZ"] = "America/Los_Angeles"
+    time.tzset()
+    try:
+        assert int(SINCE.timestamp()) != expected  # the trap is live under this TZ
+        assert gmail.to_epoch_seconds(SINCE) == expected
+    finally:
+        if old_tz is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = old_tz
+        time.tzset()
+
+
+def test_gmail_list_uses_epoch_seconds_not_date_strings(monkeypatch):
+    calls = route(monkeypatch, gmail, lambda url, params: FakeResponse({"messages": []}))
+    gmail.list_message_ids("tok", SINCE, UNTIL)
+
+    after = int(SINCE.replace(tzinfo=timezone.utc).timestamp())
+    before = int(UNTIL.replace(tzinfo=timezone.utc).timestamp())
+    assert calls[0]["url"] == "https://gmail.googleapis.com/gmail/v1/users/me/messages"
+    assert calls[0]["params"]["q"] == f"after:{after} before:{before}"
+    assert calls[0]["params"]["maxResults"] == 500
+
+
+def test_gmail_list_drains_every_page(monkeypatch):
+    pages = {
+        None: {"messages": [{"id": "a", "threadId": "t1"}], "nextPageToken": "p2"},
+        "p2": {"messages": [{"id": "b", "threadId": "t2"}], "nextPageToken": "p3"},
+        "p3": {"messages": [{"id": "c", "threadId": "t3"}]},
+    }
+    calls = route(monkeypatch, gmail, lambda url, params: FakeResponse(pages[params.get("pageToken")]))
+
+    found = gmail.list_message_ids("tok", SINCE, UNTIL)
+
+    assert [m["id"] for m in found] == ["a", "b", "c"]
+    # The window is re-sent with every page: pageToken alone does not carry the query.
+    assert all(c["params"]["q"] == calls[0]["params"]["q"] for c in calls)
+    assert "pageToken" not in calls[0]["params"]
+
+
+def test_gmail_list_empty_window_has_no_messages_key(monkeypatch):
+    route(monkeypatch, gmail, lambda url, params: FakeResponse({"resultSizeEstimate": 0}))
+    assert gmail.list_message_ids("tok", SINCE, UNTIL) == []
+
+
+def test_gmail_list_raises_rather_than_truncating_silently(monkeypatch):
+    route(
+        monkeypatch,
+        gmail,
+        lambda url, params: FakeResponse({"messages": [{"id": "x", "threadId": "t"}], "nextPageToken": "more"}),
+    )
+    with pytest.raises(gmail.GmailError, match="truncated"):
+        gmail.list_message_ids("tok", SINCE, UNTIL)
+
+
+def test_gmail_list_does_not_raise_on_the_last_allowed_page(monkeypatch):
+    state = {"n": 0}
+
+    def handler(url, params):
+        state["n"] += 1
+        last = state["n"] == gmail.MAX_PAGES
+        return FakeResponse({"messages": [], **({} if last else {"nextPageToken": "more"})})
+
+    route(monkeypatch, gmail, handler)
+    assert gmail.list_message_ids("tok", SINCE, UNTIL) == []
+
+
+@pytest.mark.parametrize(
+    "first",
+    [
+        gmail_error(403, "rateLimitExceeded"),
+        gmail_error(403, "userRateLimitExceeded"),
+        gmail_error(403, "RATE_LIMIT_EXCEEDED", key="details"),
+        gmail_error(429),
+        gmail_error(500),
+        gmail_error(502),
+        gmail_error(503),
+        gmail_error(504),
+    ],
+)
+def test_gmail_call_retries_transient_failures(monkeypatch, gmail_sleeps, first):
+    responses = [first, FakeResponse({"ok": True})]
+    calls = route(monkeypatch, gmail, lambda url, params: responses.pop(0))
+
+    assert gmail._call("tok", "/messages", {}) == {"ok": True}
+    assert len(calls) == 2
+    assert gmail_sleeps == [1.0]
+
+
+def test_gmail_call_403_reads_the_status_field_too(monkeypatch, gmail_sleeps):
+    body = {"error": {"code": 403, "status": "userRateLimitExceeded"}}
+    responses = [FakeResponse(body, 403), FakeResponse({"ok": True})]
+    route(monkeypatch, gmail, lambda url, params: responses.pop(0))
+    assert gmail._call("tok", "/messages", {}) == {"ok": True}
+
+
+@pytest.mark.parametrize(
+    "resp",
+    [
+        gmail_error(403, "insufficientPermissions"),
+        gmail_error(403),
+        FakeResponse(None, 403, text="<html>forbidden</html>"),
+        gmail_error(401, "authError"),
+        gmail_error(400, "invalidArgument"),
+        gmail_error(404, "notFound"),
+    ],
+)
+def test_gmail_call_does_not_retry_permanent_errors(monkeypatch, gmail_sleeps, resp):
+    calls = route(monkeypatch, gmail, lambda url, params: resp)
+
+    with pytest.raises(gmail.GmailError, match=f"HTTP {resp.status_code}"):
+        gmail._call("tok", "/messages", {})
+    assert len(calls) == 1
+    assert gmail_sleeps == []
+
+
+def test_gmail_backoff_doubles_and_is_truncated_at_32s(monkeypatch, gmail_sleeps):
+    calls = route(monkeypatch, gmail, lambda url, params: gmail_error(429))
+
+    with pytest.raises(gmail.GmailError, match="attempts"):
+        gmail._call("tok", "/messages", {})
+
+    assert len(calls) == gmail.MAX_ATTEMPTS
+    # No sleep after the final attempt: it would delay the failure and buy nothing.
+    assert gmail_sleeps == [min(2.0**n, 32.0) for n in range(gmail.MAX_ATTEMPTS - 1)]
+    assert max(gmail_sleeps) == 32.0
+
+
+def test_gmail_backoff_never_exceeds_the_cap_with_jitter(monkeypatch):
+    monkeypatch.setattr(gmail, "_random", lambda: 0.999)
+    assert gmail._backoff(0) == pytest.approx(1.999)
+    assert gmail._backoff(5) == 32
+    assert gmail._backoff(20) == 32
+
+
+def test_gmail_call_recovers_after_repeated_throttling(monkeypatch, gmail_sleeps):
+    responses = [gmail_error(429), gmail_error(403, "rateLimitExceeded"), FakeResponse({"ok": True})]
+    route(monkeypatch, gmail, lambda url, params: responses.pop(0))
+
+    assert gmail._call("tok", "/messages", {}) == {"ok": True}
+    assert gmail_sleeps == [1.0, 2.0]
+
+
+def test_gmail_call_network_error_raises_gmail_error(monkeypatch, gmail_sleeps):
+    def boom(url, headers=None, params=None, timeout=None):
+        raise gmail.requests.ConnectionError("down")
+
+    monkeypatch.setattr(gmail.requests, "get", boom)
+    with pytest.raises(gmail.GmailError, match="down"):
+        gmail._call("tok", "/messages", {})
+
+
+def test_gmail_call_sends_bearer_token(monkeypatch):
+    seen = {}
+
+    def fake_get(url, headers=None, params=None, timeout=None):
+        seen.update(headers=headers, timeout=timeout)
+        return FakeResponse({})
+
+    monkeypatch.setattr(gmail.requests, "get", fake_get)
+    gmail._call("tok-1", "/messages", {})
+    assert seen == {"headers": {"Authorization": "Bearer tok-1"}, "timeout": gmail.TIMEOUT}
