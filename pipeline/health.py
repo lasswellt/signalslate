@@ -4,11 +4,13 @@ GET /api/status and the pipeline runner. Each returns a plain result instead of 
 and exiting, so callers (API, scheduler) can handle failure without a crashed process.
 """
 import base64
+import contextvars
 import os
 import re
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Iterator, Mapping, Optional
 
 import msal
 import requests
@@ -57,13 +59,15 @@ class HealthResult:
     detail: str
 
 
-def _env() -> dict:
+def _raw_env() -> dict:
     """
-    Config from .env, with the real environment taking precedence.
+    Config from .env, with the real environment taking precedence, and NO connection-store overlay.
 
-    Both are needed. Local dev reads the file; the container has no .env at all — the Dockerfile
-    doesn't copy it and compose's `env_file:` injects it into the process environment instead — so
-    reading only the file made every tenant and workspace invisible once deployed.
+    Both sources are needed. Local dev reads the file; the container has no .env at all — the
+    Dockerfile doesn't copy it and compose's `env_file:` injects it into the process environment
+    instead — so reading only the file made every tenant and workspace invisible once deployed.
+    Startup seeding reads this, not _env(): it must see what .env declares, not what the store
+    already replaced.
     """
     merged = dict(dotenv_values(ROOT / ".env"))
     for key, value in os.environ.items():
@@ -72,9 +76,105 @@ def _env() -> dict:
     return merged
 
 
+# Registered by startup, never imported: pipeline.connections imports the database layer and this
+# module is imported by nearly everything, so a module-level import back would be a cycle. The
+# provider and its family test are ONE tuple so a reader on another thread can never see a new
+# provider paired with the old test.
+_overlay: Optional[tuple[Callable[[], Optional[Mapping[str, str]]], Callable[[str], bool]]] = None
+# Per-context, not per-process: only the run (or test-connection) that entered sees its own view.
+# A thread that never entered reads None and takes the live path.
+_frozen_env: contextvars.ContextVar[Optional[dict]] = contextvars.ContextVar("signalslate_frozen_env", default=None)
+_env_layer: contextvars.ContextVar[Optional[dict]] = contextvars.ContextVar("signalslate_env_layer", default=None)
+
+
+def set_env_overlay_provider(
+    provider: Optional[Callable[[], Optional[Mapping[str, str]]]],
+    family_test: Optional[Callable[[str], bool]],
+) -> None:
+    """
+    Registers where the connection store's env-style keys come from, or removes it.
+
+    provider: returns the overlay mapping, or None to leave the environment untouched (no vault).
+    family_test: True for a key the store owns; those keys are DROPPED from the raw environment
+    before the overlay is added, so a connection deleted in the UI cannot come back through a
+    stale .env line or the container's injected environment. Passing None for either clears both.
+    """
+    global _overlay
+    _overlay = (provider, family_test) if provider is not None and family_test is not None else None
+
+
+def _live_env() -> dict:
+    """The raw environment with the registered overlay applied. Identical to _raw_env() when none is."""
+    merged = _raw_env()
+    registered = _overlay
+    if registered is None:
+        return merged
+    provider, family_test = registered
+    overlay = provider()
+    if overlay is None:
+        return merged
+    # The provider hands out a read-only mapping shared between threads: copy it, never mutate it.
+    merged = {key: value for key, value in merged.items() if not family_test(key)}
+    merged.update(dict(overlay))
+    return merged
+
+
+def _env() -> dict:
+    """
+    The config every collector and health check reads: the overlaid environment, frozen when the
+    calling context holds an env_snapshot, with any env_override layered on top.
+
+    Always a fresh dict, so a caller that edits it cannot corrupt a frozen snapshot.
+    """
+    frozen = _frozen_env.get()
+    env = dict(frozen) if frozen is not None else _live_env()
+    layer = _env_layer.get()
+    if layer:
+        env.update(layer)
+    return env
+
+
+def env() -> dict:
+    """Public read of the same config for callers outside this module."""
+    return _env()
+
+
+@contextmanager
+def env_snapshot() -> Iterator[None]:
+    """
+    Freezes the overlaid environment for the calling context, so every _env() inside sees one
+    consistent view even if a connection is edited meanwhile (known_sources() and dispatch() must
+    agree within a run). Nested use keeps the outer snapshot. Threads that did not enter are unaffected.
+    """
+    if _frozen_env.get() is not None:
+        yield
+        return
+    token = _frozen_env.set(_live_env())
+    try:
+        yield
+    finally:
+        _frozen_env.reset(token)
+
+
+@contextmanager
+def env_override(mapping: Mapping[str, str]) -> Iterator[None]:
+    """
+    Layers candidate keys over the frozen or current environment for the calling context, so a
+    connection can be tested with credentials that are not saved yet. Restored on exit; nests.
+    """
+    token = _env_layer.set({**(_env_layer.get() or {}), **mapping})
+    try:
+        yield
+    finally:
+        _env_layer.reset(token)
+
+
 # Non-prefixed keys worth picking up from the environment. Deliberately a fixed list rather than
 # merging all of os.environ, which would pull in hundreds of unrelated container variables.
-_SINGLE_KEYS = {"RMAPI_CONFIG", "LAN_HOST", "TZ", "ANTHROPIC_API_KEY", "SIGNALSLATE_MAP_MODEL"}
+_SINGLE_KEYS = {
+    "RMAPI_CONFIG", "LAN_HOST", "TZ", "ANTHROPIC_API_KEY", "SIGNALSLATE_MAP_MODEL",
+    "SIGNALSLATE_SECRET_KEY", "WEB_ORIGINS", "PUBLIC_BASE_URL",
+}
 
 # Model ids are config, not code: Anthropic announces retirements with notice, and Haiku 4.5's is
 # "not sooner than October 15, 2026". Re-check the deprecations page before that date and override
@@ -95,6 +195,38 @@ def llm_settings() -> dict:
     api_key = (env.get("ANTHROPIC_API_KEY") or "").strip() or None
     map_model = (env.get("SIGNALSLATE_MAP_MODEL") or "").strip() or DEFAULT_MAP_MODEL
     return {"api_key": api_key, "map_model": map_model}
+
+
+def secret_key_setting() -> Optional[str]:
+    """SIGNALSLATE_SECRET_KEY as written (a comma-separated key list), None when unset or blank."""
+    return (_env().get("SIGNALSLATE_SECRET_KEY") or "").strip() or None
+
+
+def web_origins() -> list[str]:
+    """
+    Origins allowed to make mutating requests: WEB_ORIGINS split on commas, blanks dropped.
+
+    Unset (or all blank) defaults to the dev frontend, plus the same port on LAN_HOST when that is
+    set, since that is the address the UI is opened at from another machine on the network.
+    """
+    env = _env()
+    origins = [part.strip() for part in (env.get("WEB_ORIGINS") or "").split(",") if part.strip()]
+    if origins:
+        return origins
+    origins = ["http://localhost:3000"]
+    lan_host = (env.get("LAN_HOST") or "").strip()
+    if lan_host:
+        origins.append(f"http://{lan_host}:3000")
+    return origins
+
+
+def public_base_url() -> Optional[str]:
+    """
+    PUBLIC_BASE_URL without a trailing slash, or None when unset or not https. It comes from config
+    only, never from request headers: OAuth redirect URIs built from a Host header are spoofable.
+    """
+    url = (_env().get("PUBLIC_BASE_URL") or "").strip().rstrip("/")
+    return url if url.lower().startswith("https://") else None
 
 
 def env_flag(key: str) -> bool:
@@ -279,8 +411,11 @@ def gmail_token_response(label: str) -> dict:
     requests.RequestException (incl. HTTPError) for every other failure.
     """
     env = _env()
-    client_id = env.get("GMAIL_CLIENT_ID")
-    client_secret = env.get("GMAIL_CLIENT_SECRET")
+    # A per-label pair wins so one account can use its own OAuth client; today's configs only
+    # declare the shared pair and keep working through the fallback.
+    upper = label.upper()
+    client_id = env.get(f"GMAIL_{upper}_CLIENT_ID") or env.get("GMAIL_CLIENT_ID")
+    client_secret = env.get(f"GMAIL_{upper}_CLIENT_SECRET") or env.get("GMAIL_CLIENT_SECRET")
     if not all([client_id, client_secret]):
         raise RuntimeError("Missing GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET in .env")
     refresh_token = gmail_accounts().get(label.lower())
