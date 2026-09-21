@@ -1,0 +1,1224 @@
+{
+  "$schema": "blitz-tasks/1.0",
+  "plan": "management-ui",
+  "updated": "2026-09-21T05:56:25Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Add cryptography and httpx pins for the connection store and API tests",
+      "role": "infra",
+      "files": [
+        "requirements.txt"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qE '^cryptography==' requirements.txt",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^httpx==' requirements.txt",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -c 'import cryptography, httpx; from fastapi.testclient import TestClient'",
+          "timeout": 30
+        },
+        {
+          "cmd": "venv/bin/pip check",
+          "timeout": 60
+        },
+        {
+          "cmd": "venv/bin/python -m pytest -q",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md sections 7 and 8. Install cryptography and httpx into venv with pip, read the installed versions with pip show, and pin exactly what installed as name==version at the end of requirements.txt (the research resolved cryptography 50.0.1 and httpx 0.28.1 on Python 3.12 against fastapi 0.115.0; record what you actually get, never guess). httpx is needed because fastapi.testclient requires it; nothing else in requirements.txt provides it. pip check must be clean and NO existing pin may change: if an install would change an existing pin STOP and report BLOCKED with the pip output. The full existing suite must stay green."
+    },
+    {
+      "id": "T-002",
+      "title": "pipeline/crypto.py: Fernet vault with key rotation, fail-closed key handling",
+      "role": "backend",
+      "files": [
+        "pipeline/crypto.py",
+        "tests/test_crypto.py"
+      ],
+      "depends_on": [
+        "T-001"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'class Vault' pipeline/crypto.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def generate_key' pipeline/crypto.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE '^(import|from) pipeline\\.(health|connections)' pipeline/crypto.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/crypto.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_crypto.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 7 (key management table). Pure module: it must NOT import pipeline.health or pipeline.connections (import cycles later). Define SecretKeyMissing(RuntimeError), SecretKeyInvalid(RuntimeError), SecretDecryptError(RuntimeError). class Vault: Vault(keys: list[str]) builds a cryptography MultiFernet (first key is primary); Vault.from_env_value(value: Optional[str]) -> Optional[Vault] splits on commas, strips, ignores blanks and returns None when no key is present (the caller decides what None means); a malformed key raises SecretKeyInvalid naming the key POSITION only, never the key text. Methods: encrypt(text)->str, decrypt(token)->str (raises SecretDecryptError with a generic message; never echoes ciphertext, plaintext or keys), encrypt_json(dict)->str and decrypt_json(token)->dict (envelope for a secrets dict, unicode safe), rotate(token)->str (re-encrypt under the primary), and module function generate_key()->str. CLI: python -m pipeline.crypto genkey prints a fresh key on one line followed by a second line reminding the operator to keep it in .env, back it up separately from data/, and that losing it loses every stored secret. Never log or print keys anywhere except genkey. Do not pass a ttl to decrypt (secrets are long lived). Tests: round trip; wrong key -> SecretDecryptError; rotation (token from the old key decrypts with a [new, old] vault, after rotate the old key alone fails and the new works); blank, whitespace and comma-only values -> None; malformed key -> SecretKeyInvalid with no key text in str(exc); encrypt_json unicode round trip; no plaintext or ciphertext in any exception message; genkey CLI output is a valid Fernet key (run it via subprocess with the venv python)."
+    },
+    {
+      "id": "T-003",
+      "title": "pipeline/redact.py: one redaction function for persisted and returned text",
+      "role": "backend",
+      "files": [
+        "pipeline/redact.py",
+        "tests/test_redact.py"
+      ],
+      "depends_on": [
+        "T-001"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def redact' pipeline/redact.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/redact.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_redact.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 2 (leak surface): HealthResult.detail, CollectionResult.detail, Run.error and Run.summary carry str(exc) and upstream error bodies into the DB and /api/status. Implement redact(text: object, secrets: Iterable[str] = (), *, max_len: Optional[int] = None) -> str. Never raises: non-str input is converted with str(). Replaces every supplied secret value of length >= 6 (longest first; also its URL-encoded and JSON-escaped forms) and every known token shape with the literal [redacted]: Slack tokens xox[abprs]-..., Authorization values (Bearer and Basic), key=value or JSON pairs for refresh_token, access_token, client_secret, code, code_verifier, password, Google ya29. access tokens, 1// refresh tokens and GOCSPX- client secrets, Anthropic sk-ant- keys, and JWT-shaped strings (eyJ....). Truncates to max_len AFTER redaction when given. Patterns compiled once and linear-time safe: no nested quantifiers; a test feeds 200000-character adversarial inputs and asserts completion well under a second. Idempotent (redacting twice equals once). Must not mangle ordinary text: ISO dates, email addresses, UUIDs, short words. Tests: each pattern; supplied secret in plain, URL-encoded and JSON-escaped form; short secrets (under 6) ignored; overlapping secrets; non-str input; the adversarial timing; idempotence; the not-mangled set."
+    },
+    {
+      "id": "T-004",
+      "title": "DB: Connection and Tombstone tables plus per-source last-attempt columns",
+      "role": "backend",
+      "files": [
+        "pipeline/db.py",
+        "tests/test_connection_tables.py"
+      ],
+      "depends_on": [
+        "T-001"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'class Connection' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'class Tombstone' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'last_attempt_at' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_connection_tables.py tests/test_runner.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Codebase findings (research docs/_research/2026-09-21_management-ui.md sections 1, 3, 7). In pipeline/db.py add Connection(SQLModel, table=True): id (str primary key, equals the source id), kind (m365|zoom|slack|gmail), label (str; the alias for m365, the literal zoom for zoom), origin (env|ui), seq (int, default 0: stable creation order used to number M365_ORG<n> keys), config (str: JSON of NON-secret fields), secret_ciphertext (Optional[str], nullable TEXT: an encrypted JSON envelope of the secrets dict; ciphertext lives in this plain column and is encrypted and decrypted only in the service module, not by a TypeDecorator), created_at and updated_at (naive UTC via pipeline.clock.utcnow). Tombstone(SQLModel, table=True): id (str primary key), deleted_at. Add nullable columns to SourceCursor: last_attempt_at (Optional[datetime]), last_status (Optional[str]), last_detail (Optional[str]), last_item_count (Optional[int]). CRITICAL: _add_missing_columns() silently skips a NOT NULL column that has no Python default, so every new column on an existing table must be nullable. Change no existing behavior. Update the source-id comment style only if needed. Tests (temp_db pattern from tests/test_runner.py): create_all makes both tables; an EXISTING sqlite database created with the OLD SourceCursor schema (build it with raw SQL) gains the four columns through the migration helper and keeps its rows; Connection round trip including a None ciphertext; Tombstone primary key uniqueness; tests/test_runner.py still passes."
+    },
+    {
+      "id": "T-005",
+      "title": "DB helpers for collector controls: item paging, counts, reset, clear failures, last attempt",
+      "role": "backend",
+      "files": [
+        "pipeline/db.py",
+        "tests/test_db_collector_helpers.py"
+      ],
+      "depends_on": [
+        "T-004"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def list_items' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def record_attempt' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_db_collector_helpers.py tests/test_connection_tables.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Codebase finding Q4 (missing pieces). Add to pipeline/db.py, all using get_session and naive UTC: list_items(source, item_type=None, before_id=None, limit=50) -> list[CollectedItem] with keyset paging newest first (ORDER BY id DESC, WHERE id < before_id) and limit clamped to 1..200; count_items(source, item_type=None) -> int; reset_cursor(source, to: Optional[datetime]) -> None (None deletes the SourceCursor row; a datetime sets last_success_at and zeroes consecutive_failures exactly like set_cursor); clear_failures(source) -> None (zero consecutive_failures only, keep the watermark); record_attempt(source, status, detail, item_count, at=None) -> None which upserts last_attempt_at, last_status, last_detail (truncate to 500 chars) and last_item_count on the SourceCursor row WITHOUT touching last_success_at or consecutive_failures (create the row when absent with those two left at their defaults). Existing helpers unchanged. Tests with the temp_db pattern: paging boundaries and before_id exclusivity, limit clamp, empty source, count with and without item_type, reset delete vs set, clear_failures keeps the watermark, record_attempt creates the row when absent and never disturbs existing fields, detail truncation."
+    },
+    {
+      "id": "T-006",
+      "title": "pipeline/connections.py: validated CRUD with write-only views",
+      "role": "backend",
+      "files": [
+        "pipeline/connections.py",
+        "tests/test_connections.py"
+      ],
+      "depends_on": [
+        "T-002",
+        "T-003",
+        "T-004"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'class ConnectionView' pipeline/connections.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def create' pipeline/connections.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE '^(import|from) pipeline\\.config_store' pipeline/connections.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/connections.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_connections.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Contracts are in plan.md (Contracts section) and research docs/_research/2026-09-21_management-ui.md Decisions. The module must NOT import pipeline.config_store and must not import pipeline.health at module level. KINDS spec: m365 {config: alias(label), tenant_id, client_id; secrets: none}; zoom {config: account_id, client_id; secrets: client_secret; singleton with label zoom}; slack {config: label; secrets: token}; gmail {config: label, client_id, redirect_mode (paste_back|callback, default paste_back); secrets: client_secret, refresh_token (optional at create: sign-in sets it)}. Validation (raise ConnectionError subclasses that carry a FIELD NAME and a message that NEVER contains a submitted value): slack and gmail labels ^[a-z0-9]+$ max 32; m365 alias ^[A-Za-z0-9-]+$ max 40 (it becomes a token file name, so no path characters); id is derived (m365_<alias>, zoom, slack_<label>, gmail_<label>); ids and identifiers non-empty with a sane charset and length; secret values non-empty strings; unknown kinds and unknown fields rejected. Vault: set_vault(vault) and get_vault() module state (loaded elsewhere); a write that includes secrets and has no vault raises SecretKeyMissing (from pipeline.crypto). API: create(kind, fields) -> ConnectionView; update(id, config=None, secrets=None) replaces only the secret names provided and leaves others untouched; delete(id) writes a Tombstone, removes the row and returns bool; get(id); list_connections(); exists(id); set_secret(id, name, value) (used by sign-in). ConnectionView is a plain dataclass with id, kind, label, origin, config, secrets_set (sorted NAMES of secrets that have a value), created_at, updated_at and NEVER a secret value or ciphertext. Creating an id that has a live row raises DuplicateConnection; creating a tombstoned id clears its tombstone. Every write bumps a module-level version counter exposed by current_version(). A module-private _secrets_for(id) -> dict returns decrypted secrets for the materialize task only. Tests (temp_db plus a Vault from crypto.generate_key()): each kind's create, update and delete; the validation matrix including traversal aliases (../x, a/b, a b), uppercase labels rejected for slack and gmail, zoom singleton; the write-only property (json.dumps of every view contains no secret value and no ciphertext); update replaces only named secrets; delete tombstones; no vault plus secrets raises SecretKeyMissing; error messages never contain a submitted secret."
+    },
+    {
+      "id": "T-007",
+      "title": "Connections: seed from env once, materialize env-style keys, secret values, overlay provider",
+      "role": "backend",
+      "files": [
+        "pipeline/connections.py",
+        "tests/test_connection_materialize.py"
+      ],
+      "depends_on": [
+        "T-006"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def seed_from_env' pipeline/connections.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def materialize' pipeline/connections.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def is_family_key' pipeline/connections.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/connections.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_connection_materialize.py tests/test_connections.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 1 (corrections 1-4, 6). Continue in pipeline/connections.py. (1) seed_from_env(raw_env: Mapping[str,str]) -> list[str]: for every connection the RAW env declares (M365: each M365_ORG<n>_ALIAS with its TENANT_ID and a client id of M365_ORG<n>_CLIENT_ID else the shared M365_CLIENT_ID; zoom when ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET are all present; SLACK_<LABEL>_TOKEN; GMAIL_<LABEL>_REFRESH_TOKEN with client id and secret from GMAIL_<LABEL>_CLIENT_ID and GMAIL_<LABEL>_CLIENT_SECRET else the shared GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET), create it with origin env ONLY IF its id has no live row AND no tombstone; return the seeded ids; idempotent; a malformed declaration (for example a missing tenant id) is skipped and reported, never raises; with no vault it seeds nothing and returns []. Existing rows are never overwritten from .env (STORE WINS). (2) materialize() -> dict[str,str]: the env-style overlay for live rows using EXACTLY the key families health.py already parses: slack -> SLACK_<LABEL upper>_TOKEN; gmail -> GMAIL_<LABEL>_REFRESH_TOKEN (only when set) plus per-label GMAIL_<LABEL>_CLIENT_ID and GMAIL_<LABEL>_CLIENT_SECRET; m365 -> M365_ORG<n>_ALIAS, _TENANT_ID and _CLIENT_ID with n numbered 1..N by row seq then created_at; zoom -> ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET. (3) is_family_key(name) -> bool and FAMILY_KEY_PATTERNS: compiled regexes for every connection-owned key family (M365_ORG<n>_*, M365_CLIENT_ID, SLACK_<L>_TOKEN, ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_<L>_REFRESH_TOKEN, GMAIL_<L>_CLIENT_ID, GMAIL_<L>_CLIENT_SECRET) but NOT SLACK_SKIP_DMS, TZ, ANTHROPIC_API_KEY, SIGNALSLATE_MAP_MODEL or any other non-connection key. (4) secret_values() -> list[str]: every decrypted non-empty secret in the store, for redact(). (5) overlay_provider() -> Optional[dict]: returns a cached immutable dict rebuilt only when current_version() changed (thread-safe swap under a lock) and returns None when no vault is configured, so the caller keeps pure .env behavior. Prove round trip: with health._env monkeypatched to return the materialized dict, the EXISTING health functions m365_aliases, m365_tenant_config, slack_workspaces and gmail_accounts must return the seeded values unchanged. Tests: seed matrix (each kind, shared vs per-org client id, tombstoned id not re-seeded, idempotent second call, malformed skipped, no vault seeds nothing, existing row not overwritten); materialize per kind including M365 numbering stability across delete and re-add; family-key classification including the NOT-family keys above; cache invalidation on a write; the health round trip; secret_values excludes empties."
+    },
+    {
+      "id": "T-008",
+      "title": "health.py: env overlay seam, run snapshot, override, new settings, per-label Gmail client credentials",
+      "role": "backend",
+      "files": [
+        "pipeline/health.py",
+        "tests/conftest.py",
+        "tests/test_env_overlay.py"
+      ],
+      "depends_on": [
+        "T-007"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def set_env_overlay_provider' pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def env_snapshot' pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'SIGNALSLATE_SECRET_KEY' tests/conftest.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_env_overlay.py tests/test_health.py tests/test_runner.py tests/test_collectors.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 1 (all six corrections). In pipeline/health.py: (a) rename today's _env body to _raw_env() (behavior unchanged; used for seeding) and add a public alias env() for callers outside health (leave auth/gmail_bootstrap.py's private import alone for now). (b) _env() returns the same dict as before, and IF an overlay provider is registered AND it returns a dict: drop every key for which the registered family test is true, then add the overlay keys; otherwise return exactly the old result. health must NOT import pipeline.connections at module level (cycle): add set_env_overlay_provider(provider, family_test) that startup registers; default None so every existing test behaves unchanged. (c) env_snapshot() context manager built on contextvars: on enter it freezes the current _env() result for the entering context so every call inside returns the frozen dict; nested use is a no-op. env_override(mapping) context manager layering candidate keys over the frozen or current env, restoring on exit; both are per-context (threads that did not enter are unaffected). (d) add SIGNALSLATE_SECRET_KEY, WEB_ORIGINS and PUBLIC_BASE_URL to _SINGLE_KEYS and to tests/conftest.py CONFIG_KEYS; accessors secret_key_setting() -> Optional[str], web_origins() -> list[str] (WEB_ORIGINS split on commas, blanks dropped; when unset default to http://localhost:3000 plus http://<LAN_HOST>:3000 when LAN_HOST is set) and public_base_url() -> Optional[str] (must start with https://, trailing slash stripped, else None; never derived from request headers). (e) gmail_token_response(label) must prefer GMAIL_<LABEL>_CLIENT_ID and GMAIL_<LABEL>_CLIENT_SECRET over the shared GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET and fall back to the shared pair (today's configs keep working); the missing-credentials error text stays the same. Tests (new file; the ENTIRE existing suite must pass unchanged): overlay off by default; with a stub provider the raw family keys disappear and overlay keys appear, including the deleted-connection case (os.environ holds SLACK_GONE_TOKEN, the overlay lacks it, slack_workspaces() omits it); non-family keys untouched; a provider returning None leaves env untouched; snapshot freezes across a mid-run overlay change; env_override layers and restores; contextvars isolation between two threads; the settings accessors including https-only public_base_url and the LAN_HOST default origin; per-label Gmail client credentials preferred over the shared pair."
+    },
+    {
+      "id": "T-009",
+      "title": "pipeline/tokencache.py: per-alias lock, atomic 0600 writes, corrupt-file tolerance",
+      "role": "backend",
+      "files": [
+        "pipeline/tokencache.py",
+        "tests/test_tokencache.py"
+      ],
+      "depends_on": [
+        "T-001"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def alias_lock' pipeline/tokencache.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'os.replace' pipeline/tokencache.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/tokencache.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_tokencache.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Codebase finding Q3: the MSAL cache read-modify-write has no lock and writes with write_text (truncate then write, default umask), and a truncated file makes deserialize raise out of check_all_configured and fails the whole run. New module: cache_path(alias) -> Path (TOKEN_DIR defaults to the repo tokens/ directory and is monkeypatchable; validates alias against ^[A-Za-z0-9-]+$ and raises ValueError otherwise: path traversal guard), alias_lock(alias) -> threading.Lock (one lock per alias, created under a module lock), load(alias) -> Optional[msal.SerializableTokenCache] (None when the file is absent; a corrupt or truncated file also returns None and never raises), save(alias, cache) -> None (only when cache.has_state_changed; atomic: write a temp file in the same directory with mode 0600 then os.replace; mkdir(parents=True, exist_ok=True)), and a context manager locked(alias) that holds the alias lock around a load-modify-save sequence. Stdlib plus msal only. Tests: path validation (traversal, separators, empty); atomic replace (make os.replace raise between write and replace: the old file stays intact); file mode 0600; corrupt file -> None; absent -> None; save skipped when state unchanged; two threads on the same alias serialize while different aliases do not block each other."
+    },
+    {
+      "id": "T-010",
+      "title": "Use tokencache in check_m365 and the Graph collector",
+      "role": "backend",
+      "files": [
+        "pipeline/health.py",
+        "pipeline/collectors/graph.py",
+        "tests/test_tokencache_wiring.py"
+      ],
+      "depends_on": [
+        "T-008",
+        "T-009"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'tokencache' pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'tokencache' pipeline/collectors/graph.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/graph.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_tokencache_wiring.py tests/test_health.py tests/test_collectors.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Replace the two duplicated cache read-modify-write sites: health.check_m365 (~lines 193-204) and collectors/graph.py access_token (~lines 51-65). Both must hold tokencache.locked(alias) across load, acquire_token_silent_with_error and save. Keep every existing behavior and message: tests/test_health.py and tests/test_collectors.py m365 tests must pass UNCHANGED, including the missing-file message 'No token cache: run auth/m365_bootstrap.py once on a machine with a browser'. New: a corrupt or unreadable cache now yields an error HealthResult ('Token cache unreadable: re-run sign-in') and an error CollectionResult instead of an exception escaping check_all_configured. Keep health.m365_cache_path() as a thin wrapper over tokencache.cache_path so existing imports and tests keep working. auth/m365_bootstrap.py still writes its own file: leave it. Tests: a corrupt cache makes check_m365 return an error HealthResult (no raise) and collect_m365 return an error CollectionResult; a concurrent check and collect on the same alias serialize (assert with a lock-order probe on a stubbed app); the refreshed state is persisted atomically with mode 0600."
+    },
+    {
+      "id": "T-011",
+      "title": "Runner: single-source runs, atomic run guard, per-run snapshot, last-attempt recording, config toggles",
+      "role": "backend",
+      "files": [
+        "pipeline/runner.py",
+        "pipeline/config_store.py",
+        "tests/test_runner_only.py"
+      ],
+      "depends_on": [
+        "T-005",
+        "T-008"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'only: Optional' pipeline/runner.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def forget_source' pipeline/config_store.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def set_source_active' pipeline/config_store.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/runner.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_runner_only.py tests/test_runner.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 3 and codebase findings Q4 and Q6. (1) execute_run(trigger='manual', only: Optional[str]=None): when only is given, validate it is in known_sources() (ValueError before any Run row is written), run the health check and collection for that source only (check_all_configured({only: True}) and the existing _active filter) while still creating the Run row, SourceHealth rows and using the same per-source cursor, backfill and failure-streak logic; Run.trigger for such runs is manual-source (do NOT edit db.py: mention it in the docstring; the web type is extended in the API and web tasks). (2) Close the check-then-insert race: a module-level threading.Lock around has_running_run() plus the Run insert so the scheduler and UI triggers cannot both start; the loser still raises RunAlreadyInProgress (contract unchanged). (3) Wrap the body of the run in health.env_snapshot() so one run sees one consistent config even if the store changes mid-run. (4) After each source's collection call db.record_attempt(source, result.status, result.detail, persisted_count); also for a raised exception (status error, detail = the exception CLASS NAME only). Do not change any status, cursor or streak logic. (5) config_store.py: add forget_source(source_id) (remove the id from the stored active_sources under the module _lock and write the file) and set_source_active(source_id, active: bool) (load merged, set, save). Neither may call into pipeline.connections (deadlock hazard: load_config holds _lock while known_sources() runs). tests/test_runner.py must pass unchanged. Tests: only=X collects only X and leaves other sources' cursors untouched; unknown only raises ValueError and writes no Run; the lock: two concurrent execute_run calls yield exactly one Run row and one RunAlreadyInProgress; snapshot: a store change injected between the health and collect phases is not observed inside the run; record_attempt written for ok, partial, error and raised-exception cases; forget_source and set_source_active round trip and a deleted id's old toggle does not resurrect on re-create."
+    },
+    {
+      "id": "T-012",
+      "title": "Runner: redact secrets at every persist point",
+      "role": "backend",
+      "files": [
+        "pipeline/runner.py",
+        "tests/test_runner_redaction.py"
+      ],
+      "depends_on": [
+        "T-011",
+        "T-003",
+        "T-007"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'redact' pipeline/runner.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/runner.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_runner_redaction.py tests/test_runner.py tests/test_runner_only.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 2. Apply pipeline.redact.redact(text, connections.secret_values()) wherever the runner persists free text that can carry upstream error text: Run.error, Run.summary and SourceHealth.detail (the _summarize output, the failures list, the fatal message, and the 'source: ExceptionClass: message' line for raised exceptions). Import connections lazily inside the helper and tolerate its absence or failure: redaction must never raise or block a run (on any failure fall back to pattern-only redaction). Also cap each persisted text at 1000 characters after redaction. Existing runner tests unchanged. Tests: a collector detail containing a stored secret value, a Bearer token and a client_secret= query fragment leaves none of them in Run.error, Run.summary or SourceHealth.detail rows; a collector that RAISES with the secret in its message is redacted; when redact is monkeypatched to raise, the run still persists with pattern-only redaction; long details are capped."
+    },
+    {
+      "id": "T-013",
+      "title": "collect.py: pure dry_run() returning data; report() delegates",
+      "role": "backend",
+      "files": [
+        "pipeline/collect.py",
+        "tests/test_dry_run.py"
+      ],
+      "depends_on": [
+        "T-001"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def dry_run' pipeline/collect.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collect.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_dry_run.py tests/test_collectors.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Codebase finding Q4(a). Extract dry_run(source: str, hours: int = 24, limit: int = 5, *, raw: bool = False) -> dict returning {source, status, detail, window: {since, until, hours}, count, by_type: {item_type: n}, items: [{item_type, occurred_at, external_id, preview}] (first limit items, preview via the existing preview(); when raw is true also include the payload truncated to 4000 chars), duration_ms}. Validate the source is in known_sources() (ValueError), clamp hours to 1..168 and limit to 0..50, and catch a collector crash returning status crashed with the exception CLASS NAME only (no message). It writes NOTHING and must not persist. report() becomes a thin printer over dry_run and its printed output must stay byte-identical: the existing CLI tests in tests/test_collectors.py must pass unchanged. Do not import api.*. Tests: result shape for ok, partial, error and crashed using a stubbed dispatch; clamping; unknown source; raw truncation; no DB writes (temp_db row counts unchanged); report() output unchanged against a captured string."
+    },
+    {
+      "id": "T-014",
+      "title": "Move the pure Google OAuth helpers out of the CLI into pipeline/oauth_google.py",
+      "role": "backend",
+      "files": [
+        "pipeline/oauth_google.py",
+        "auth/gmail_bootstrap.py",
+        "tests/test_oauth_google.py"
+      ],
+      "depends_on": [
+        "T-001"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def make_pkce' pipeline/oauth_google.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'oauth_google' auth/gmail_bootstrap.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/oauth_google.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_oauth_google.py tests/test_gmail_bootstrap.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Codebase finding Q3: the API must not import a CLI module. Move the PURE helpers (make_pkce, build_auth_url, check_state, exchange_code, assert_granted, the auth and token endpoint constants, and the exception classes they raise) into pipeline/oauth_google.py. auth/gmail_bootstrap.py imports them back under the SAME names (re-exports) so 'from auth import gmail_bootstrap as gb; gb.make_pkce' and every existing reference keep working. The listener (wait_for_code, bind_listener, the Handler), main(), printing and browser code stay in the CLI. build_auth_url gains an optional login_hint: Optional[str] = None and its output is byte-for-byte unchanged when it is absent. The existing 42 tests in tests/test_gmail_bootstrap.py must pass UNCHANGED. New tests import from pipeline.oauth_google directly: the helpers behave identically, login_hint is added when given, and importing pipeline.oauth_google does not import auth.gmail_bootstrap (no cycle)."
+    },
+    {
+      "id": "T-015",
+      "title": "pipeline/oauth_flows.py: pending-flow store, nonce binding, paste-back URL validation",
+      "role": "backend",
+      "files": [
+        "pipeline/oauth_flows.py",
+        "tests/test_oauth_flows.py"
+      ],
+      "depends_on": [
+        "T-001"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'class FlowStore' pipeline/oauth_flows.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def parse_pasted_url' pipeline/oauth_flows.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/oauth_flows.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_oauth_flows.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 6 (every rule). Provider-agnostic pure logic with an in-process store (single uvicorn process; pending flows do not survive a restart: document it). PendingFlow dataclass: flow_id, provider, connection_id, mode (paste_back|callback), state, redirect_uri, payload (provider flow dict including code_verifier: NEVER returned to a browser), nonce_hash, created_at, expires_at. FlowStore with a lock: create(provider, connection_id, mode, state, redirect_uri, payload, ttl_seconds=900, now=None) -> (PendingFlow, nonce) where nonce = secrets.token_urlsafe(32) and only its sha256 is stored; consume(state=None, flow_id=None, nonce=None, provider=None, now=None) -> PendingFlow atomically removes the record and raises FlowError subclasses (UnknownFlow, ExpiredFlow, NonceMismatch, ProviderMismatch) with generic messages; comparisons via hmac.compare_digest; a wrong nonce must NOT consume the record (so an attacker cannot burn a victim's flow; document and test); expired records are purged on every call; at most 20 pending flows (oldest evicted). parse_pasted_url(url, *, allowed_hosts=('127.0.0.1','localhost')) -> dict returns only {code, state, error, error_description} (each str capped at 2 KB): reject length over 4096, a non-http scheme, a host that is not exactly in allowed_hosts (case-insensitive), userinfo, a missing query; NEVER fetch the URL; a fragment-only response (code after #) raises a specific FlowError telling the user to use query mode; no exception message ever contains the code or the full URL. build_callback_url(public_base_url, provider) -> f'{base}/api/oauth/callback/{provider}' (https only; provider in google or microsoft). Tests: TTL with an injected clock; single use; nonce binding; provider mismatch; eviction cap; purge; parse_pasted_url matrix (good loopback with a port, localhost, https rejected, other host rejected, the userinfo trick http://127.0.0.1@evil.example/, http://evil.example/?x=http://127.0.0.1, oversize, fragment-only, missing state, an error response); and a property test that FlowError messages never include the code."
+    },
+    {
+      "id": "T-016",
+      "title": "pipeline/oauth_gmail.py: start and finish Google sign-in (paste-back and callback)",
+      "role": "backend",
+      "files": [
+        "pipeline/oauth_gmail.py",
+        "tests/test_oauth_gmail.py"
+      ],
+      "depends_on": [
+        "T-014",
+        "T-015",
+        "T-007"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def start' pipeline/oauth_gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def finish' pipeline/oauth_gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/oauth_gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_oauth_gmail.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md sections 4 and 6. start(connection_id, mode, *, store, public_base_url=None) -> StartResult(flow_id, auth_url, mode, expires_at, nonce, instructions): loads the gmail connection (client_id and client_secret via pipeline.connections; a clear error when either is missing), builds PKCE and state through pipeline.oauth_google, redirect_uri = for paste_back http://127.0.0.1:<port> with a fixed documented port constant (default 8765: nothing listens; a Desktop client accepts any loopback port) and for callback build_callback_url(public_base_url,'google') (an error when public_base_url is None: callback needs https); auth URL from oauth_google.build_auth_url (scope gmail.readonly ONLY, access_type=offline, prompt=consent, S256); the PendingFlow stores the code_verifier server-side. finish(flow, code, ...) -> ConnectionView: exchanges the code with the STORED redirect_uri and verifier via oauth_google.exchange_code, runs assert_granted (refresh token present and gmail.readonly granted, else a clear error), then connections.set_secret(connection_id, 'refresh_token', token) and returns the updated view (no secrets). finish_paste(store, flow_id, pasted_url, nonce) and finish_callback(store, state, code, nonce) wrap parse or consume plus finish. Errors map to typed exceptions with user-safe messages (denied consent, state problems, expired flow, exchange rejected with the status only). Never log or return the code, verifier, refresh token or client secret. Tests (network stubbed at requests.post inside pipeline.oauth_google): paste_back and callback happy paths store the refresh token ENCRYPTED (decrypt through the connections internals in the test); scope missing refused; no refresh token refused; callback without public_base_url refused; denied consent (error=access_denied); replay of the same state fails; expired flow; the exchange uses the STORED redirect_uri not a pasted one (assert the request body); the token and secrets never appear in any exception string or returned dict."
+    },
+    {
+      "id": "T-017",
+      "title": "pipeline/oauth_m365.py: start and finish Microsoft sign-in with the MSAL two-step flow",
+      "role": "backend",
+      "files": [
+        "pipeline/oauth_m365.py",
+        "tests/test_oauth_m365.py"
+      ],
+      "depends_on": [
+        "T-015",
+        "T-009",
+        "T-006"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'initiate_auth_code_flow' pipeline/oauth_m365.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'acquire_token_by_auth_code_flow' pipeline/oauth_m365.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/oauth_m365.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_oauth_m365.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 5. start(connection_id, mode, *, store, public_base_url=None): loads the m365 connection (tenant_id, client_id), builds msal.PublicClientApplication with the tenant-specific authority (the health.m365_app pattern), redirect_uri = http://localhost for paste_back (Entra ignores the port; that URI is what the app registration holds today) or build_callback_url(public_base_url,'microsoft') for callback, and calls app.initiate_auth_code_flow(SCOPES, redirect_uri=..., login_hint optional) with the default response_mode=query (form_post would put the code in a POST body, not the address bar). Store the FULL msal flow dict server-side in the PendingFlow payload (it contains code_verifier; never sent to the browser). Return auth_uri, flow id, nonce, expires_at and a note that Microsoft codes live about a minute so the pasted URL must be submitted immediately. finish: under tokencache.locked(alias) load or create the SerializableTokenCache, build the app with that cache, call app.acquire_token_by_auth_code_flow(flow, auth_response) where auth_response is the parsed {code, state, ...} dict of str values, treat an error key or a missing access_token as failure with error_description bounded to 200 characters, save the cache atomically with tokencache.save, and return the connection view plus the account label (the preferred_username claim). Catch ValueError from MSAL (state mismatch: usually CSRF) and map it to a generic safe error. Tests with a fake msal app (monkeypatch pipeline.oauth_m365.msal.PublicClientApplication with a fake exposing initiate_auth_code_flow, acquire_token_by_auth_code_flow and get_accounts): paste and callback happy paths write the cache file with mode 0600 for the right alias; the flow dict never appears in returned data; MSAL ValueError -> safe error; an error response (AADSTS text) is bounded and no token appears; concurrent finish on one alias serializes; expired flow; a traversal alias is rejected (tokencache validation)."
+    },
+    {
+      "id": "T-018",
+      "title": "api/security.py: origin allow-list, required header, JSON-only bodies, non-echoing 422",
+      "role": "backend",
+      "files": [
+        "api/security.py",
+        "api/main.py",
+        "tests/test_api_security.py"
+      ],
+      "depends_on": [
+        "T-008"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def install_security' api/security.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'X-Requested-With' api/security.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'allow_origins=\\[\"\\*\"\\]' api/main.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/security.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_api_security.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md sections 8 and 9 (verified by experiment): with today's wildcard CORS a custom header defense is void, strict CORS alone does not stop a simple POST (the handler still runs), body-less POSTs are the exposed ones, and the default 422 handler ECHOES submitted secrets in the input field. api/security.py: install_security(app, *, allowed_origins: list[str]) adds (a) CORSMiddleware with the explicit origin list, methods GET, POST, PATCH, PUT, DELETE and OPTIONS, allow_headers Content-Type and X-Requested-With, allow_credentials False; (b) a middleware that for every non-safe method (POST, PUT, PATCH, DELETE) answers 403 unless the header X-Requested-With equals signalslate and, when an Origin header is present, it is in allowed_origins by exact match (GET and OPTIONS and the health route are exempt; the OAuth callback is a GET); requests that carry a body must have Content-Type application/json else 415; (c) a RequestValidationError handler returning 422 with per-error {type, loc, msg} ONLY (drop input, ctx and url) and NEVER using exc.body anywhere. hide_input_in_errors does not help under FastAPI. api/main.py: replace the wildcard CORS with install_security(app, allowed_origins=health.web_origins()); change nothing else. Tests with a router-only FastAPI app and TestClient without the lifespan: missing header -> 403 for POST, PUT, PATCH, DELETE and a body-less POST; wrong Origin -> 403; correct header and Origin -> passes; GET unaffected; preflight from an unlisted origin -> 400 with no allow-origin header; text/plain and form bodies -> 415 or 422; a too-short SecretStr field posted -> the 422 body does NOT contain the submitted string, also for a model_validator failure and a wrong content type (regression for the echo); the JSON decode error shape."
+    },
+    {
+      "id": "T-019",
+      "title": "api/routers/connections.py: list, create, update, delete and test connections (write-only)",
+      "role": "backend",
+      "files": [
+        "api/routers/connections.py",
+        "api/serialize.py",
+        "tests/test_api_connections.py"
+      ],
+      "depends_on": [
+        "T-018",
+        "T-011",
+        "T-007",
+        "T-003"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'router = APIRouter' api/routers/connections.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def iso_z' api/serialize.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/connections.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_api_connections.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Contracts in plan.md. api/serialize.py: iso_z(dt) -> Optional[str] (naive UTC -> YYYY-MM-DDTHH:MM:SSZ; the web parses naive ISO as LOCAL time today). Router (the /api prefix is added in main by a later task): GET /connections -> list of {id, kind, label, origin, config, secrets_set, active, health} where health is the latest SourceHealth for that id or null (via pipeline.db.latest_source_health), every text passed through redact(); POST /connections -> request models per kind with SecretStr secret fields, creates via pipeline.connections and then sets the connection INACTIVE with config_store.set_source_active(id, False) until it is tested; 201 with the view; 409 duplicate; 422 validation (field names only, no values); 503 with the stable error code secret_key_missing when the write includes secrets and no key is configured; PATCH /connections/{id} replaces config and or ONLY the secrets provided (an empty string means leave as is, never clear); DELETE /connections/{id} -> 204: connections.delete plus config_store.forget_source plus db.reset_cursor(id, None) (collected items are kept); env-seeded connections are deletable too (the tombstone prevents re-seeding); POST /connections/{id}/test -> {status: ok or error, detail} running the matching pipeline.health check_* function inside health.env_snapshot() with the detail redacted, 404 for an unknown id, and on ok it does NOT auto-activate (the UI toggles through PUT /config). Never return a secret, ciphertext or raw exception text; use explicit response_model classes. Tests (router-only app with install_security, temp_db, an in-memory Vault): the write-only property across list, create, patch and test responses (a json string search for every submitted secret AND its ciphertext), inactive-on-create, duplicate, PATCH partial secrets, delete tombstones and cannot be re-seeded, delete removes the toggle and the cursor, health null vs present, redaction of a health detail carrying a stored secret, 503 secret_key_missing, 422 does not echo secrets, test endpoint 404, the test endpoint maps check results (stub the check functions)."
+    },
+    {
+      "id": "T-020",
+      "title": "api/routers/collectors.py: state, run one, dry run, reset, clear failures, items",
+      "role": "backend",
+      "files": [
+        "api/routers/collectors.py",
+        "tests/test_api_collectors.py"
+      ],
+      "depends_on": [
+        "T-019",
+        "T-013",
+        "T-011",
+        "T-005"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'router = APIRouter' api/routers/collectors.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'dry-run' api/routers/collectors.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/collectors.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_api_collectors.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 3. GET /collectors -> per known source {source, active, watermark (iso_z of SourceCursor.last_success_at), consecutive_failures, stuck_threshold (runner.MAX_STUCK_RUNS), last_attempt {at, status, detail (redacted), item_count} or null, item_count (db.count_items)}. POST /collectors/{source}/run -> 202 {accepted: true} via BackgroundTasks running execute_run(trigger='manual', only=source), 409 when has_running_run(), 404 for an unknown source. POST /collectors/{source}/dry-run {hours 1..168 default 24, limit 0..50 default 5} -> 202 {job_id} running pipeline.collect.dry_run in a background thread with a bounded in-memory job table (max 20 jobs, results kept 15 minutes, purged on access); GET /collectors/dry-run/{job_id} -> {status: running or done or failed, result?} with the result text redacted. POST /collectors/{source}/reset {days_back: 1..7 or null} -> db.reset_cursor(source, utcnow() minus days when given else None) and the response includes a note explaining the runner semantics (the window floors at 7 days and a watermark newer than about 24 hours behaves like no cursor). POST /collectors/{source}/clear-failures. GET /collectors/{source}/items?limit=&before_id=&item_type= -> {items: [{id, item_type, external_id, occurred_at (iso_z), preview}], next_before_id, total} where preview comes from pipeline.collect.preview over the parsed payload; the FULL payload is only returned by GET /collectors/{source}/items/{id} (bounded to 20 KB, redacted). Every route 404s on an id not in known_sources(). Reuse api/serialize.py. Tests (router-only app, temp_db, stub dry_run and execute_run): each route including 409 and the 404s, paging with next_before_id, the payload bound, the dry-run job lifecycle and purge, reset semantics, redaction of a last_attempt detail carrying a secret, and that an items response never contains a payload from another source."
+    },
+    {
+      "id": "T-021",
+      "title": "api/routers/oauth.py: start, paste-back finish and the real HTTPS callback",
+      "role": "backend",
+      "files": [
+        "api/routers/oauth.py",
+        "tests/test_api_oauth.py"
+      ],
+      "depends_on": [
+        "T-016",
+        "T-017",
+        "T-018"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'oauth/callback' api/routers/oauth.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qiE 'samesite' api/routers/oauth.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/oauth.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_api_oauth.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 6. POST /oauth/{provider}/start {connection_id, mode} (provider google or microsoft; the connection kind must match: gmail with google, m365 with microsoft, else 400) -> {flow_id, auth_url, mode, expires_at, instructions}; the response sets an HttpOnly, SameSite=Lax cookie named ss_oauth_<flow_id> whose value is the nonce (Path=/api/oauth, Secure only when public_base_url is https, Max-Age = ttl); POST /oauth/{provider}/paste {flow_id, url} reads the nonce cookie, calls the provider finish_paste and returns {status: connected, connection: view}; GET /oauth/callback/{provider}?state=&code=&error= is unauthenticated by necessity: it validates state plus the nonce cookie through FlowStore.consume, calls finish_callback, then answers 302 to a FIXED target (the first allowed web origin plus /connections?oauth=ok, or ?oauth=error&reason=<code> where the reason is one of a small fixed set and never text from the provider or the query), always deletes the cookie, and never logs or echoes the code or state; an unknown or mismatched provider path gets the same generic error redirect. mode callback is refused with a clear 400 when health.public_base_url() is None. The FlowStore is a module singleton exposed for tests. Tests (router-only app, stubbed provider modules): start sets a cookie with HttpOnly, SameSite=lax and the Path, and no code_verifier or secret state appears in any response; paste happy path; paste with a missing or wrong cookie fails WITHOUT consuming; callback happy path redirects to the fixed target; callback with a forged state -> generic error redirect and no side effects; replay; provider mismatch (a google state on the microsoft path); callback mode refused without public_base_url; kind and provider mismatch -> 400; fuzz state, code and error params to prove the redirect never contains an attacker-controlled URL; no exception or redirect string contains the code."
+    },
+    {
+      "id": "T-022",
+      "title": "Startup wiring: register routers, seed once, register the overlay, /system, redacted /status",
+      "role": "backend",
+      "files": [
+        "api/main.py",
+        "api/routers/status.py",
+        "tests/test_api_startup.py"
+      ],
+      "depends_on": [
+        "T-019",
+        "T-020",
+        "T-021"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'seed_from_env' api/main.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '/system' api/routers/status.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'oauth' api/main.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/main.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_api_startup.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md Decisions. (1) Register the connections, collectors and oauth routers in api/main.py under /api. (2) In the lifespan after init_db(): build the Vault from health.secret_key_setting() with crypto.Vault.from_env_value (on SecretKeyInvalid print ONE non-secret line and continue WITHOUT a vault), connections.set_vault(vault), and only when a vault exists: connections.seed_from_env(health._raw_env()) then health.set_env_overlay_provider(connections.overlay_provider, connections.is_family_key). Without a vault everything behaves exactly as today. Print one startup line with counts only (seeded N, store M), never values. (3) status.py: add GET /system -> {secret_key_configured, store_active, public_base_url_configured, web_origins, oauth: {google: {modes}, microsoft: {modes}}} where callback is listed only when public_base_url is https; pass /status source_health and last_run text through redact() and datetimes through iso_z; extend the web-facing trigger comment for manual-source. Tests (build the app with the REAL lifespan against a temp DB and env, TestClient as a context manager, scheduler start monkeypatched): no key -> store inactive, /system says so, .env-only behavior unchanged; with a key -> seeded connections appear via GET /connections with origin env and the overlay makes them appear in known_sources; a second startup does NOT re-seed a tombstoned id nor overwrite an edited one (STORE WINS); an invalid key -> the app still starts env-only; /status text is redacted."
+    },
+    {
+      "id": "T-023",
+      "title": "web: dev dependencies and scripts for typecheck and component tests",
+      "role": "infra",
+      "files": [
+        "web/package.json",
+        "web/package-lock.json"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qE '\"typecheck\"' web/package.json",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '\"test\": \"vitest run\"' web/package.json",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '\"typescript\": \"~6' web/package.json",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npm ci",
+          "timeout": 300
+        },
+        {
+          "cmd": "cd web && npm run build",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 10 exactly. Add devDependencies typescript (~6.0.x: NOT 7.x, which crashes vue-tsc with ERR_PACKAGE_PATH_NOT_EXPORTED), vue-tsc, @types/node, vitest, @vue/test-utils, @nuxt/test-utils and happy-dom at the versions in the research table (confirm each with npm view before pinning; a newer compatible version is fine except typescript stays ~6.0.x), plus scripts typecheck = nuxt typecheck and test = vitest run. Run npm install so package-lock.json updates, then npm ci must succeed cleanly. Do NOT change existing dependencies or scripts. web/node_modules is gitignored and is required by every later web task's verify: leave it in place. Change no other file."
+    },
+    {
+      "id": "T-024",
+      "title": "web: tsconfig, vitest config and a smoke test that proves the harness",
+      "role": "frontend",
+      "files": [
+        "web/tsconfig.json",
+        "web/vitest.config.ts",
+        "web/tests/smoke.test.ts"
+      ],
+      "depends_on": [
+        "T-023"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'environment' web/vitest.config.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'extends' web/tsconfig.json",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/smoke.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 10. web/tsconfig.json = { extends: ./.nuxt/tsconfig.json }. web/vitest.config.ts uses defineVitestConfig from @nuxt/test-utils/config with test.environment nuxt and include tests/**/*.test.ts. web/tests/smoke.test.ts mounts a Quasar password input with mountSuspended (q-input type=password autocomplete=new-password model-value empty) and asserts the rendered input has type password, the autocomplete attribute and an empty value: it mirrors the research experiment and proves the harness works with Quasar. Do NOT fix the pre-existing typecheck errors here (nuxt.config.ts is edited by the next web task). Keep every added file minimal."
+    },
+    {
+      "id": "T-025",
+      "title": "web: typed API client with the CSRF header, error normalization and nuxt.config fixes",
+      "role": "frontend",
+      "files": [
+        "web/composables/useApi.ts",
+        "web/nuxt.config.ts",
+        "web/tests/useApi.test.ts"
+      ],
+      "depends_on": [
+        "T-024",
+        "T-018"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'X-Requested-With' web/composables/useApi.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'fontIcons' web/nuxt.config.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'Dialog' web/nuxt.config.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npm run typecheck",
+          "timeout": 300
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/useApi.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md sections 9 and 10, plan.md Contracts. (1) nuxt.config.ts: rename extras.icons to fontIcons (the pre-existing typecheck error; confirm material icons are still emitted: after npm run build grep the build output for material-icons), add Dialog to quasar.plugins (keep Notify), change nothing else; the process typing error is cleared by @types/node from the deps task. (2) useApi.ts: keep every existing export and behavior; add interfaces mirroring the API contract (ConnectionKind, ConnectionView, per-kind create and update payloads with optional secret string fields, SystemInfo, CollectorState, DryRunJob, DryRunResult, ItemRow, ItemDetail, OAuthStart) and methods getSystem, listConnections, createConnection, updateConnection, deleteConnection, testConnection, listCollectors, runCollector, startDryRun, getDryRun, resetCollector, clearFailures, listItems, getItem, oauthStart, oauthPaste. Every mutating call sends the header X-Requested-With: signalslate and a JSON body through ONE small wrapper; errors are normalized to ApiError {status, code?, message} where message is built from the response's detail and msg fields and NEVER contains the request body; add parseUtc(iso) for the Z-suffixed timestamps; extend RunSummary trigger with manual-source. The composable never stores or logs secrets. Tests (vitest, no network, stub  with vi.stubGlobal): mutating calls send the header and JSON content type, an error with a 422 array detail becomes a readable message without submitted values, bodies never appear in ApiError.message, parseUtc treats Z as UTC."
+    },
+    {
+      "id": "T-026",
+      "title": "web: Connections overview page with health, key banner, active toggle and Test",
+      "role": "frontend",
+      "files": [
+        "web/pages/connections.vue",
+        "web/app.vue",
+        "web/tests/connections.test.ts"
+      ],
+      "depends_on": [
+        "T-025",
+        "T-019"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'connections' web/app.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'q-route-tab' web/app.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npm run typecheck",
+          "timeout": 300
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/connections.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "cd web && npm run build",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "New route /connections plus a Connections tab in web/app.vue between Dashboard and History (the Collectors tab is added later). On mount fetch getSystem and listConnections. Show a banner when secret_key_configured is false: 'Set SIGNALSLATE_SECRET_KEY in .env to manage connections here; env-only mode keeps working' (and do not offer add or edit). Render one card per connection: id, kind, an origin badge (env or ui), a health dot with the detail (already redacted server side; render as TEXT, never v-html), secrets_set as chips of NAMES only, an active toggle (read-modify-write of active_sources through getConfig and updateConfig) and a Test button calling testConnection with the result shown inline and in a Notify. Add, Edit, Delete and Sign in are added by the next tasks, which MUST extend this page: render NO placeholder or dead buttons now. Loading, empty ('No connections yet') and error states are required; relative times use parseUtc. Tests (mountSuspended with the real composable and vi.stubGlobal on ): the list renders origin, kind and health; the banner when the key is missing; the Test button result; empty and error states; the active toggle round trip."
+    },
+    {
+      "id": "T-027",
+      "title": "web: add, edit and delete connections with write-only secret inputs",
+      "role": "frontend",
+      "files": [
+        "web/components/ConnectionDialog.vue",
+        "web/pages/connections.vue",
+        "web/tests/ConnectionDialog.test.ts"
+      ],
+      "depends_on": [
+        "T-026"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'new-password' web/components/ConnectionDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'persistent' web/components/ConnectionDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npm run typecheck",
+          "timeout": 300
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/ConnectionDialog.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "cd web && npm run build",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md (write-only inputs, Quasar dialog and form docs). ConnectionDialog: a persistent QDialog (QCard plus a greedy QForm) with a kind selector (m365, zoom, slack, gmail) and the per-kind fields exactly as the API contract: m365 alias, tenant_id, client_id; zoom account_id, client_id, client_secret; slack label, token; gmail label, client_id, client_secret, redirect_mode. Secret inputs are type password with autocomplete new-password, NEVER prefilled and never shown; in edit mode show a Saved chip and a Replace control that reveals an EMPTY input; only fields the user touched are sent (PATCH semantics); secrets live in a component-local ref that is cleared in a finally block after every request and on close, and never enter a Notify message, route or store. Client validation mirrors the server (label ^[a-z0-9]+$, alias ^[A-Za-z0-9-]+$, required fields) and server 422 field errors are mapped onto fields by name. Env-seeded connections are editable with a note that the UI store is authoritative. Delete: a confirm dialog naming the id that states what is removed (credentials, watermark, toggle), what is kept (collected items) and that a .env entry will NOT bring it back. Created connections start inactive: after create show 'Created inactive: press Test, then enable'. connections.vue wires Add, Edit and Delete to the dialog and refreshes. Tests (mountSuspended): per-kind field sets; password attributes and an empty value in edit mode; only touched fields are sent; the secret is cleared after a successful and after a failed submit; 422 mapping; the delete confirm text; the secret string never appears in the DOM text or in Notify calls after save."
+    },
+    {
+      "id": "T-028",
+      "title": "web: browser sign-in dialog for Gmail and Microsoft (paste-back and callback)",
+      "role": "frontend",
+      "files": [
+        "web/components/OAuthDialog.vue",
+        "web/pages/connections.vue",
+        "web/tests/OAuthDialog.test.ts"
+      ],
+      "depends_on": [
+        "T-027",
+        "T-021"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'noopener' web/components/OAuthDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'oauthPaste' web/components/OAuthDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npm run typecheck",
+          "timeout": 300
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/OAuthDialog.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "cd web && npm run build",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md sections 4, 5 and 6. For gmail and m365 connections show a Sign in button opening OAuthDialog: a mode selector (Paste-back always; Automatic callback only when system.oauth[provider].modes includes callback), a Start button calling oauthStart, then open auth_url in a new tab with window.open(..., '_blank', 'noopener,noreferrer'). Paste-back: explain the browser will end on a page that fails to load (http://127.0.0.1 or http://localhost) and instruct the user to copy the FULL address-bar URL and paste it; show a countdown to expires_at and, for Microsoft, the warning that the code lives about a minute; a paste input plus Submit calling oauthPaste (the pasted URL contains the code: hold it in a local ref, clear it in finally, never log it, never put it in a Notify). On success show connected and refresh the list. Callback mode: after Start poll listConnections every 2 s until expires_at (gmail: secrets_set gains refresh_token; m365: the connection health turns ok), and handle the landing query ?oauth=ok or ?oauth=error&reason= on the connections page (Notify, then remove the query). Map the fixed reason codes to fixed user messages. For Gmail state that the consent screen should be In production or tokens expire after 7 days. Tests: mode availability from system info; start opens the URL with noopener and no code in the page; paste submit clears the input; reason-code messages; callback polling stops at expiry; the landing query is handled; the pasted URL never appears in Notify calls or the DOM after submit."
+    },
+    {
+      "id": "T-029",
+      "title": "web: Collectors page with run one, dry run, reset, clear failures and item browser",
+      "role": "frontend",
+      "files": [
+        "web/pages/collectors.vue",
+        "web/app.vue",
+        "web/tests/collectors.test.ts"
+      ],
+      "depends_on": [
+        "T-026",
+        "T-020"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'collectors' web/app.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'startDryRun' web/pages/collectors.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npm run typecheck",
+          "timeout": 300
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/collectors.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "cd web && npm run build",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 3. Add the Collectors tab in web/app.vue (order: Dashboard, Connections, Collectors, History, Config). Per collector row: source id, an enabled toggle (same read-modify-write as connections), the watermark (relative and absolute via parseUtc), the failure streak with a warning chip when streak >= stuck_threshold minus 1 explaining that after the threshold the watermark advances and missing data is not retried, the last attempt status and detail, the item count, and actions: Run now (runCollector; a 409 shows 'A run is already in progress'; poll listCollectors until last_attempt.at changes); Dry run (a dialog with hours and limit -> startDryRun -> poll getDryRun -> counts by type and preview lines, plus a Show raw toggle only when the API returned raw); Reset watermark (a dialog: 1..7 days back or no watermark, displaying the API's note about the runner window semantics); Clear failures; and Items (a dialog or drawer with keyset paging via next_before_id, an item_type filter and a detail view rendering the payload as pretty-printed TEXT in a pre element, NEVER v-html, with a notice that items contain private message content). Loading, empty and error states. Tests: rows and the streak warning; run 409; the dry-run polling lifecycle; reset dialog values sent; items paging appends; a payload containing HTML is rendered as text, not interpreted; toggle round trip."
+    },
+    {
+      "id": "T-030",
+      "title": "Docs: management UI, security model, key handling and sign-in registration steps",
+      "role": "infra",
+      "files": [
+        "README.md",
+        ".env.example"
+      ],
+      "depends_on": [
+        "T-022",
+        "T-028",
+        "T-029"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^SIGNALSLATE_SECRET_KEY=' .env.example",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^PUBLIC_BASE_URL=' .env.example",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'genkey' README.md",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'oauth/callback' README.md",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"/home/[a-z]|(^|[^0-9])(10\\.[0-9]+\\.[0-9]+\\.[0-9]+|192\\.168\\.[0-9]+\\.[0-9]+)\" README.md .env.example",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "PUBLIC REPO: generic wording only. NEVER a real hostname, IP address, tenant, workspace label or personal detail: use <your-host> and <label>. README: a Management UI section under Web interface covering what it manages; the security model stated plainly (there is NO login, so run it behind your network or a reverse proxy; secrets are write-only; encryption at rest needs SIGNALSLATE_SECRET_KEY: generate with python -m pipeline.crypto genkey, losing it loses every stored secret, back it up separately from data/, rotate with a comma-separated list with the primary key first; without the key the app keeps using .env exactly as before); the store-wins rule (after the first seed the UI store is authoritative: editing .env for an existing id has no effect and deleting is permanent even if .env still lists it); WEB_ORIGINS and PUBLIC_BASE_URL; browser sign-in: paste-back (works with the existing Desktop and public client registrations; Microsoft codes live about a minute) and the automatic callback (needs a public HTTPS hostname: Google needs a Web-application client with the authorized redirect https://<your-host>/api/oauth/callback/google; for Microsoft add https://<your-host>/api/oauth/callback/microsoft as a custom redirect under Mobile and desktop applications on the SAME app registration, not under Web or SPA); the Gmail consent screen must be In production. Update the Pages list and the No auth sentence, and Local dev with cd web then npm ci, npm run typecheck, npm test. Say the CLI bootstrap scripts remain as a fallback. .env.example: SIGNALSLATE_SECRET_KEY=, WEB_ORIGINS= and PUBLIC_BASE_URL= with comments."
+    },
+    {
+      "id": "T-031",
+      "title": "End-to-end backend test through the real app: seed, edit, store wins, no secret leaks, CSRF",
+      "role": "test",
+      "files": [
+        "tests/test_management_e2e.py"
+      ],
+      "depends_on": [
+        "T-022",
+        "T-012"
+      ],
+      "verify": [
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_management_e2e.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "test-only: the product is the end-to-end regression suite; there is no production symbol to grep. Never touch the network. Drive the REAL app object (lifespan, router wiring, security middleware) with a temp DB and env and TestClient. Scenarios: (1) fresh start with SIGNALSLATE_SECRET_KEY set and .env declaring a Slack workspace, a Zoom account and a Gmail account: GET /connections lists them with origin env and NO secret value anywhere in the response text; (2) POST a new slack connection with the required header: it is inactive; test it (stub the slack health call); activate through PUT /config; run one collector (stub dispatch) and read last_attempt and items through the API; (3) PATCH replaces only the token and the old token appears nowhere afterwards; (4) delete a seeded connection and restart the app on the same DB: it does NOT come back (tombstone), and an edited seeded connection keeps its edit when .env changes (STORE WINS); (5) sweep: collect EVERY response body of the whole scenario (including error responses, /status, /system and run rows) and assert none contains any secret value used in the scenario nor any ciphertext; (6) CSRF: the same mutating calls without X-Requested-With, or with a foreign Origin, are rejected and change nothing; (7) no key configured: the app starts, /system reports the store inactive, writes that include secrets return 503 secret_key_missing, and .env-only collection still works. If a step exposes a defect in source do NOT weaken the test: reply BLOCKED with the failing assertion."
+    }
+  ]
+}
