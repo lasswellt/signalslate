@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-21T22:27:08Z",
+  "updated": "2026-09-21T22:32:49Z",
   "tasks": [
     {
       "id": "T-001",
@@ -33,11 +33,53 @@
           "timeout": 60
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T22:32:49Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^dnspython==' requirements.txt",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:32:48Z"
+          },
+          {
+            "cmd": "grep -qE '^defusedxml==' requirements.txt",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:32:48Z"
+          },
+          {
+            "cmd": "grep -qE '^whoisit==' requirements.txt",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:32:48Z"
+          },
+          {
+            "cmd": "venv/bin/python -c 'import dns.resolver, defusedxml.ElementTree, whoisit'",
+            "exit": 0,
+            "duration_ms": 122,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:32:48Z"
+          },
+          {
+            "cmd": "venv/bin/pip check",
+            "exit": 0,
+            "duration_ms": 164,
+            "tail": "No broken requirements found.",
+            "recorded_at": "2026-09-21T22:32:49Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research §Compatibility / Config changes. Install into venv and pin exact current versions."
     },
