@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-21T23:35:41Z",
+  "updated": "2026-09-21T23:47:13Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1052,11 +1052,60 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:47:13Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def registrar_for' pipeline/domains/inventory.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:47:12Z"
+          },
+          {
+            "cmd": "grep -qE '^def sync_all' pipeline/domains/inventory.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:47:12Z"
+          },
+          {
+            "cmd": "grep -qE '^def import_csv' pipeline/domains/inventory.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:47:12Z"
+          },
+          {
+            "cmd": "grep -qE '^def refresh_snapshots' pipeline/domains/inventory.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:47:12Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/domains/inventory.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:47:12Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_domain_inventory.py -q",
+            "exit": 0,
+            "duration_ms": 649,
+            "tail": ".......................                                                  [100%]\n23 passed in 0.42s",
+            "recorded_at": "2026-09-21T23:47:13Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Decision Phase A/B. registrar_for(connection_id) builds adapter from connections.get/get_secret. sync_all(): per registrar connection list_domains -> upsert Domain (registrar fields win for their own source), set missing_since for vanished rows (never delete), one connection failing does not stop others; returns per-connection status. add_manual(name, ownership), remove, import_csv(text) accepts 'domain[,ownership]' rows, reports rejects. refresh_snapshots(): inspect each domain, store DomainSnapshot only when hash changed (plus always one per day max for history). Tests use a fake Registrar object (in-process, not mocking src/ modules under test) and the test DB."
     },
