@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T22:41:27Z",
+  "updated": "2026-09-21T22:55:44Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2509,11 +2509,46 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T22:55:44Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'Not signed in yet' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:55:40Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/connections.py pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:55:40Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_gmail_pending_connection.py -q",
+            "exit": 0,
+            "duration_ms": 758,
+            "tail": ".........                                                                [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n9 passed, 1 warning in 0.53s",
+            "recorded_at": "2026-09-21T22:55:41Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_connections.py tests/test_connection_materialize.py tests/test_env_overlay.py tests/test_api_connections.py tests/test_management_e2e.py -q",
+            "exit": 0,
+            "duration_ms": 3285,
+            "tail": "........................................................................ [ 26%]\n........................................................................ [ 53%]\n........................................................................ [ 79%]\n.......................................................                  [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n271 passed, 1 warning in 3.01s",
+            "recorded_at": "2026-09-21T22:55:44Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check-report finding 1 (P0, reject-critic REJECT reason). POST /api/connections {kind:gmail,label,client_id,client_secret} answers 503 store_inactive and rolls back: pipeline/connections.py materialize() emits GMAIL_<L>_REFRESH_TOKEN only when the refresh_token secret exists, and health._GMAIL_TOKEN_KEY anchors gmail_accounts() on that key, so a token-less Gmail row is missing from known_sources() and the create route's membership check fails. Result: a Gmail connection can never be created from the UI, so browser Gmail sign-in (which needs an existing connection) is unreachable. FIX: materialize() emits GMAIL_<L>_REFRESH_TOKEN with an EMPTY string when the secret is absent (still emitting the per-label CLIENT_ID and CLIENT_SECRET); health.gmail_accounts() already maps an empty value to None: confirm that _live_env, env_snapshot, the family-key test and _env keep empty-valued keys; do not change how a real env-only install behaves. health.check_gmail returns HealthResult(source,'error','Not signed in yet: use Sign in') for a None token WITHOUT any network call (also add this guard where gmail_token_response would otherwise raise a confusing error). A pending Gmail source must never be collected: it is created inactive and its health check errors; add a test with the source toggled active proving the run skips it (stub only the collector dispatch and assert it is not called for the id). secret_values() and redaction must ignore empty strings. Do NOT edit existing tests. Tests (REAL app: lifespan, TestClient as a context manager, temp DB and env, SIGNALSLATE_SECRET_KEY from pipeline.crypto.generate_key(); stub only the Google token endpoint and the scheduler start): (1) create gmail without a refresh token -> 201, inactive, listed by GET /connections with secrets_set == ['client_secret'] and no secret value anywhere in the responses; (2) POST /connections/{id}/test -> error result 'Not signed in yet' with no network call; (3) the full new-account path: create, POST /oauth/google/start mode paste_back (the connection's own client id in auth_url), POST /oauth/google/paste with the flow's nonce cookie and a synthetic loopback redirect URL carrying the state and a fake code, the stubbed token endpoint returning a refresh token -> connected, secrets_set now includes refresh_token, the id is in health.known_sources(), and test returns ok with a stubbed token refresh response carrying the gmail.readonly scope; (4) delete removes the id from known_sources(); (5) slack, zoom and m365 create still return 201; (6) with NO vault (env only) gmail_accounts() and known_sources() are unchanged for an env that declares a real refresh token."
     },

@@ -90,3 +90,5 @@ Final sweep: pytest 1597 passed, pyright 54 (baseline, none added), web typechec
 
 ## 2026-09-21T22:41:35Z check-fix tasks added
 Ruling: defer — check-report findings 9-24 (minors, duplicated router helpers, error-shape inconsistencies, a11y labels, small races) are NOT tasked; findings 1-8 became T-034..T-043 (check)
+## 2026-09-21T22:50:25Z build T-034 start (attempt 1)
+## 2026-09-21T22:55:44Z verify T-034 ok=true
