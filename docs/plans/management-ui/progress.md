@@ -43,3 +43,6 @@ Ruling: defer — FlowStore.consume requires the nonce on EVERY call (None is a 
 ## 2026-09-21T06:50:01Z build T-016 start (attempt 1)
 Ruling: defer — oauth_gmail.finish_callback gained an optional error= argument (a denied-consent callback carries no code); paste-back parses the URL BEFORE consuming the flow so a malformed paste can be retried, while a state mismatch, denial or rejected exchange after consumption ends the flow; all flow errors subclass FlowError with fixed messages and drop provider text. T-017 and T-021's notes were extended to mirror that shape. (T-016, round 1)
 ## 2026-09-21T06:54:15Z verify T-016 ok=true
+## 2026-09-21T06:54:15Z build T-017 start (attempt 1)
+Ruling: defer — oauth_m365 returns FinishResult(connection, account) while oauth_gmail returns a bare ConnectionView (T-021 normalizes); Microsoft error_description is never surfaced (fixed-message errors; only the digits-only AADSTS code is logged); login_hint is not supported on start(); two extra errors InvalidAlias and CacheWriteFailed. (T-017, round 1)
+## 2026-09-21T06:59:59Z verify T-017 ok=true
