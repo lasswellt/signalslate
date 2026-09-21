@@ -148,6 +148,21 @@ def items_for_run(run_id: int) -> list[CollectedItem]:
         return list(session.exec(select(CollectedItem).where(CollectedItem.run_id == run_id)))
 
 
+def items_for_source_since(source: str, since: datetime) -> list[CollectedItem]:
+    """
+    One source's items whose own timestamp is at or after `since`, oldest first.
+
+    Not scoped to a run: the triage dry-run wants "what did this inbox receive lately", and overlapping
+    collection windows already dedupe on (source, external_id) at insert. Read-only.
+    """
+    with get_session() as session:
+        rows = session.exec(
+            select(CollectedItem).where(CollectedItem.source == source).where(CollectedItem.occurred_at >= since)
+        ).all()
+    # Sorted here, not in SQL: keeps the query free of column-expression calls the type checker cannot see through.
+    return sorted(rows, key=lambda row: (row.occurred_at, row.id or 0))
+
+
 def item_counts_for_run(run_id: int) -> dict[str, int]:
     """{source: count} for one run — feeds the run summary string without loading every payload."""
     counts: dict[str, int] = {}
