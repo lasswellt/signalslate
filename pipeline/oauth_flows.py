@@ -22,6 +22,13 @@ Design decisions:
   the holder of the nonce, or by expiry.
 * A missing nonce is a mismatch: there is no unbound mode, so a caller that forgets the cookie fails
   closed.
+* The browser needs one authoritative answer to "did my sign-in finish?", and the pending record is
+  deleted the moment a flow is consumed, before the provider call that can still fail. So consume()
+  leaves a small outcome record behind (status "pending", the same nonce hash, the flow's own expiry)
+  and the router settles it to ok or error afterwards. The table is capped and dropped at the flow's
+  original expiry, so it never outlives the TTL, and a settled outcome is never overwritten (a replayed
+  callback cannot flip ok to error). status() answers only for the nonce holder; an unknown flow, a
+  missing cookie and a wrong nonce are indistinguishable (None).
 * Exceptions carry a fixed message and no arguments. An OAuth code, a state or a pasted URL never
   reaches an exception message, a log line or a traceback.
 """
@@ -29,7 +36,7 @@ import hashlib
 import hmac
 import secrets
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlsplit
@@ -41,6 +48,7 @@ PROVIDERS = ("google", "microsoft")
 
 DEFAULT_TTL_SECONDS = 900
 MAX_PENDING = 20
+MAX_OUTCOMES = 100
 
 # The URL a user pastes is a Google/Microsoft redirect to loopback: a few hundred bytes. 4 KB leaves
 # room for long error descriptions while bounding what an attacker can make us parse.
@@ -123,6 +131,16 @@ class PendingFlow:
     expires_at: datetime
 
 
+@dataclass(frozen=True)
+class _Outcome:
+    """What is left of a consumed flow: enough to prove the caller owns it and to say how it ended."""
+
+    nonce_hash: str = field(repr=False)
+    status: str
+    reason: Optional[str]
+    expires_at: datetime
+
+
 def _digest(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
@@ -145,6 +163,7 @@ class FlowStore:
         self._lock = threading.Lock()
         # Insertion order is age order, which is what "oldest evicted" needs.
         self._flows: dict[str, PendingFlow] = {}
+        self._outcomes: dict[str, _Outcome] = {}
 
     def __len__(self) -> int:
         with self._lock:
@@ -228,7 +247,72 @@ class FlowStore:
             if provider is not None and provider != flow.provider:
                 raise ProviderMismatch()
             del self._flows[flow.flow_id]
+            self._outcomes[flow.flow_id] = _Outcome(flow.nonce_hash, "pending", None, flow.expires_at)
+            while len(self._outcomes) > MAX_OUTCOMES:
+                del self._outcomes[next(iter(self._outcomes))]
             return flow
+
+    def flow_id_for_state(self, state: Optional[str]) -> Optional[str]:
+        """
+        Name the pending flow a callback's state belongs to, without consuming it or checking a nonce.
+
+        The callback route only learns the state, and consume() removes the record before the provider
+        call, so the router asks for the id first in order to settle the outcome afterwards. The id is
+        never sent to the caller unless the nonce holder asks for it.
+        """
+        with self._lock:
+            flow = self._find(state, None)
+            return flow.flow_id if flow is not None else None
+
+    def record_outcome(self, flow_id: str, status: str, reason: Optional[str] = None) -> None:
+        """
+        Settle a consumed flow as "ok" or "error"; a no-op unless the flow was consumed and is still pending.
+
+        First write wins: a replayed callback finds no pending flow and cannot turn an ok into an error.
+
+        :param reason: the router's fixed reason code; kept only with "error".
+        :raises ValueError: for a programming error (status is neither "ok" nor "error").
+        """
+        if status not in ("ok", "error"):
+            raise ValueError("invalid outcome status")
+        with self._lock:
+            current = self._outcomes.get(flow_id)
+            if current is None or current.status != "pending":
+                return
+            self._outcomes[flow_id] = replace(current, status=status, reason=reason if status == "error" else None)
+
+    def status(
+        self, flow_id: str, nonce: Optional[str], now: Optional[datetime] = None
+    ) -> Optional[tuple[str, Optional[str]]]:
+        """
+        Report how a sign-in stands, to the browser that started it and nobody else.
+
+        :returns: (status, reason) with status pending, ok, error or expired; reason only for error.
+            None for an unknown flow, a missing nonce and a wrong nonce alike, so a caller cannot tell
+            which flow ids exist. A finished flow's record is gone once its original expiry has passed.
+        """
+        moment = now if now is not None else utcnow()
+        with self._lock:
+            pending = self._find(None, flow_id)
+            outcome = None if pending is not None else self._find_outcome(flow_id)
+            expected = pending.nonce_hash if pending is not None else outcome.nonce_hash if outcome is not None else ""
+            # Hash and compare even when nothing matched so a miss does the same work as a hit.
+            owned = isinstance(nonce, str) and bool(nonce) and _same(_digest(nonce), expected)
+            if not owned:
+                return None
+            if pending is not None:
+                return ("expired", None) if pending.expires_at <= moment else ("pending", None)
+            if outcome is None or outcome.expires_at <= moment:
+                return None
+            return outcome.status, outcome.reason
+
+    def _find_outcome(self, flow_id: str) -> Optional[_Outcome]:
+        found = None
+        if isinstance(flow_id, str) and flow_id:
+            for known, outcome in self._outcomes.items():
+                if _same(known, flow_id):
+                    found = outcome
+        return found
 
     def _find(self, state: Optional[str], flow_id: Optional[str]) -> Optional[PendingFlow]:
         # Selector strings are attacker-supplied: compare in constant time and scan every record rather
@@ -252,6 +336,8 @@ class FlowStore:
         # into "unknown" and the user would lose the reason.
         for flow_id in [f.flow_id for f in self._flows.values() if f.expires_at <= moment and f.flow_id != keep]:
             del self._flows[flow_id]
+        for flow_id in [k for k, o in self._outcomes.items() if o.expires_at <= moment]:
+            del self._outcomes[flow_id]
 
 
 def parse_pasted_url(url: str, *, allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS) -> dict[str, Optional[str]]:

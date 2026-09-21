@@ -27,6 +27,12 @@ Design decisions:
   FlowError mapping covers both because Microsoft's errors subclass Gmail's. Every FlowError has a
   fixed class-constant message, so it is safe to return as is; anything else is reported by type
   name only.
+- The browser learns how a sign-in ended from GET /oauth/flows/{flow_id}, not from the connections
+  list: a Microsoft finish only writes the token cache and a Gmail re-sign-in already had its
+  refresh token, so no connection row changes. The same nonce cookie authorizes it, and an unknown
+  flow, a missing cookie and a wrong nonce get one identical 404. Finish attempts settle the outcome
+  in a finally, so a provider failure still ends as error; an attempt that did not consume the flow
+  (wrong nonce, wrong provider, unusable paste, unknown flow) records nothing.
 - The store is a module singleton (FLOWS). Handlers read it at call time so a test can swap it.
 - Sign-in calls block on the network, so handlers are plain `def` and run in the threadpool.
 """
@@ -63,6 +69,8 @@ FLOWS = FlowStore()
 
 COOKIE_PREFIX = "ss_oauth_"
 COOKIE_PATH = "/api/oauth"
+
+_NO_STORE = {"Cache-Control": "no-store"}
 
 # The connection kind each provider path signs in.
 _KIND_FOR_PROVIDER = {"google": "gmail", "microsoft": "m365"}
@@ -113,6 +121,12 @@ class PasteOut(BaseModel):
     status: str
     connection: ConnectionOut
     account: Optional[str] = None
+
+
+class FlowStatusOut(BaseModel):
+    # pending, ok, error or expired; reason is one of _REASONS and only present with error.
+    status: str
+    reason: Optional[str] = None
 
 
 def _coded(status_code: int, code: str, message: str) -> HTTPException:
@@ -255,10 +269,17 @@ def paste_sign_in(provider: str, body: PasteBody, request: Request, response: Re
     if provider not in _KIND_FOR_PROVIDER:
         raise _coded(404, "unknown_provider", "Unknown sign-in provider")
     cookie = COOKIE_PREFIX + body.flow_id
+    failure: Optional[Exception] = None
     try:
         result = _finish_paste(provider, body.flow_id, body.url, request.cookies.get(cookie))
     except _HANDLED as exc:
+        failure = exc
         raise _translate(exc) from None
+    except Exception as exc:
+        failure = exc
+        raise
+    finally:
+        _settle(body.flow_id, failure)
 
     if isinstance(result, oauth_m365.FinishResult):
         view, account = result.connection, result.account
@@ -292,6 +313,21 @@ def _reason_for(exc: Exception) -> str:
     if isinstance(exc, oauth_gmail.ProviderError):
         return "provider_error"
     return "failed"
+
+
+# Raised before the flow is consumed (or without proof of the nonce), so the flow is still pending
+# and the sign-in has not ended.
+_NOT_CONSUMED = (UnknownFlow, NonceMismatch, ProviderMismatch, InvalidPastedUrl)
+
+
+def _settle(flow_id: Optional[str], failure: Optional[Exception]) -> None:
+    """Record how a finish attempt ended; the store ignores a flow that is not consumed and pending."""
+    if flow_id is None or isinstance(failure, _NOT_CONSUMED):
+        return
+    if failure is None:
+        FLOWS.record_outcome(flow_id, "ok")
+    else:
+        FLOWS.record_outcome(flow_id, "error", _reason_for(failure))
 
 
 def _finish_redirect(reason: Optional[str], delete_cookie: Optional[str]) -> Response:
@@ -330,6 +366,8 @@ def oauth_callback(provider: str, request: Request) -> Response:
         return _finish_redirect("invalid_request", None)
     state, code, error = _param(request, "state"), _param(request, "code"), _param(request, "error")
     candidates = [(name, value) for name, value in request.cookies.items() if name.startswith(COOKIE_PREFIX)]
+    # consume() removes the record, so the id has to be read first to settle the outcome afterwards.
+    flow_id = FLOWS.flow_id_for_state(state)
 
     # The nonce is checked before anything else in consume(), so a candidate that is not this flow's
     # raises NonceMismatch with no effect and the next one is tried.
@@ -347,6 +385,24 @@ def oauth_callback(provider: str, request: Request) -> Response:
             return _finish_redirect(_reason_for(exc), None)
         except Exception as exc:  # noqa: BLE001 — anything else ends the flow; only the type is logged
             _log.warning("oauth callback for %s failed: %s", provider, type(exc).__name__)
+            _settle(flow_id, exc)
             return _finish_redirect(_reason_for(exc), name)
+        _settle(flow_id, None)
         return _finish_redirect(None, name)
     return _finish_redirect("invalid_request", None)
+
+
+@router.get("/oauth/flows/{flow_id}", response_model=FlowStatusOut, response_model_exclude_none=True)
+def flow_status(flow_id: str, request: Request, response: Response) -> FlowStatusOut:
+    """
+    Reports how a browser sign-in stands: pending, ok, error (with a fixed reason code) or expired.
+
+    Needs the ss_oauth_<flow_id> cookie set at start. An unknown flow, a missing cookie and a wrong
+    nonce answer the same 404, so this cannot be used to probe which flow ids exist. Never returns
+    connection data, tokens, the auth_url or provider text.
+    """
+    found = FLOWS.status(flow_id, request.cookies.get(COOKIE_PREFIX + flow_id))
+    if found is None:
+        raise HTTPException(404, {"code": "unknown_flow", "message": "Unknown sign-in flow"}, headers=_NO_STORE)
+    response.headers["Cache-Control"] = "no-store"
+    return FlowStatusOut(status=found[0], reason=found[1])
