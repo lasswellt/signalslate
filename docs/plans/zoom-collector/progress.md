@@ -14,3 +14,6 @@ Ruling: carry-forward — T-002 concern: oauth-mode zoom materializes no env key
 ## 2026-09-21T23:26:40Z build T-005 start (attempt 1)
 ## 2026-09-21T23:35:28Z verify T-005 ok=true
 Ruling: defer — Pyright reportOptionalMemberAccess on _zoom_cache.as_dict() in health.py (typing only, runtime-safe); leave for /blitz:check (T-005, round 1)
+## 2026-09-21T23:35:28Z build T-006 start (attempt 1)
+## 2026-09-21T23:46:50Z verify T-006 ok=true
+Ruling: defer — report endpoint 1-month window not clamped; window is SUMMARY_LOOKBACK (48h) unless a long outage widens it, and a report failure only makes the run partial (T-006, round 1)

@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "zoom-collector",
-  "updated": "2026-09-21T23:35:10Z",
+  "updated": "2026-09-21T23:46:27Z",
   "tasks": [
     {
       "id": "T-001",
@@ -419,11 +419,53 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:46:27Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'previous_meetings' pipeline/collectors/zoom.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:46:26Z"
+          },
+          {
+            "cmd": "grep -qE 'pastJoined' pipeline/collectors/zoom.py",
+            "exit": 0,
+            "duration_ms": 6,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:46:26Z"
+          },
+          {
+            "cmd": "grep -qE '/participants' pipeline/collectors/zoom.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:46:26Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/zoom.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:46:26Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q",
+            "exit": 0,
+            "duration_ms": 881,
+            "tail": "........................................................................ [ 36%]\n........................................................................ [ 73%]\n...................................................                      [100%]\n195 passed in 0.65s",
+            "recorded_at": "2026-09-21T23:46:27Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Q4 + Step 4. /users/me/meetings?type=previous_meetings (spec: scheduled only, no instant meetings); /report/users/{uid}/meetings?type=pastJoined only in S2S mode (report:read:user:admin; resolve uid via GET /users/me, reports may reject 'me'); summaries list catches instant meetings with a summary. Merge by meeting_uuid, one Item('meeting', uuid, occurred, payload) per meeting in window. Payload keys: topic, start_time, end_time, host_email, hosted (bool), participants[] (name/email, only for hosted meetings via GET /past_meetings/{uuid}/participants, double-encode UUID via encode_uuid), summary_content, summary_doc_url, summary_available. Keep existing behaviours: 404 summary -> summary_available False; partial status on per-meeting failures; SUMMARY_LOOKBACK. ZoomAuthError -> CollectionResult error with 'sign in again'. Mock only requests."
     },
