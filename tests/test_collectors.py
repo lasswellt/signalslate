@@ -17,11 +17,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from pipeline.collectors import Item, parse_iso, parse_slack_ts, to_graph_time  # noqa: E402
 from pipeline.collectors import gmail, graph, slack, zoom  # noqa: E402
+from pipeline import health  # noqa: E402
 
 SINCE = datetime(2026, 9, 12, 6, 0, 0)
 UNTIL = datetime(2026, 9, 13, 6, 0, 0)
@@ -1114,3 +1116,213 @@ def test_gmail_fetch_messages_empty_and_single_do_not_sleep(monkeypatch, gmail_s
 def test_gmail_get_pace_keeps_the_per_user_quota():
     """20 units per get against 6,000/min: the pace alone must stay under the ceiling of 300 gets/min."""
     assert 60 / gmail.GET_PACE_SECONDS * 20 < 6000
+
+
+# --- gmail collect_gmail orchestration ----------------------------------------------
+
+
+def epoch_ms(moment):
+    """internalDate as Gmail serves it: milliseconds since epoch, as a string."""
+    return str(gmail.to_epoch_seconds(moment) * 1000)
+
+
+INSIDE = SINCE + timedelta(hours=2)
+
+
+@pytest.fixture
+def gmail_token(monkeypatch):
+    """pipeline.health.gmail_token_response is a network POST to Google: the true external boundary."""
+    seen = []
+
+    def fake(label):
+        seen.append(label)
+        return {"access_token": "tok-" + label}
+
+    monkeypatch.setattr("pipeline.health.gmail_token_response", fake)
+    return seen
+
+
+def gmail_mailbox(monkeypatch, messages, listed=None, fail=None):
+    """
+    Route list + get over `messages` ({id: messages.get body}). `listed` overrides the id list
+    (to repeat ids); `fail` maps an id to a FakeResponse returned for its get.
+    """
+    fail = fail or {}
+    ids = listed if listed is not None else list(messages)
+
+    def handler(url, params):
+        if url.endswith("/messages"):
+            return FakeResponse({"messages": [{"id": i, "threadId": "t"} for i in ids]})
+        message_id = url.rsplit("/", 1)[1]
+        return fail.get(message_id) or FakeResponse(messages[message_id])
+
+    return route(monkeypatch, gmail, handler)
+
+
+def mail(message_id, when=INSIDE, subject="Hello", **extra):
+    extra.setdefault("internalDate", epoch_ms(when))
+    msg = gmail_msg([text_part("text/plain", "body")], [{"name": "Subject", "value": subject}], **extra)
+    msg["id"] = message_id
+    return msg
+
+
+def test_gmail_collect_ok_builds_mail_items(monkeypatch, gmail_token, gmail_sleeps):
+    gmail_mailbox(monkeypatch, {"a": mail("a", INSIDE, "First"), "b": mail("b", INSIDE + timedelta(minutes=5), "Second")})
+
+    result = gmail.collect_gmail("x", "refresh", SINCE, UNTIL)
+
+    assert result.status == "ok" and result.detail == "2 messages"
+    assert gmail_token == ["x"] and result.source == "gmail_x"
+    assert [(i.item_type, i.external_id, i.occurred_at) for i in result.items] == [
+        ("mail", "a", INSIDE),
+        ("mail", "b", INSIDE + timedelta(minutes=5)),
+    ]
+    assert result.items[0].payload["subject"] == "First"
+    assert result.items[0].payload["bodyText"] == "body"
+
+
+def test_gmail_collect_missing_refresh_token_is_error(monkeypatch, gmail_token):
+    calls = gmail_mailbox(monkeypatch, {})
+    for missing in (None, ""):
+        result = gmail.collect_gmail("x", missing, SINCE, UNTIL)
+        assert result.status == "error" and "token" in result.detail
+    assert gmail_token == [] and calls == []
+
+
+@pytest.mark.parametrize(
+    "exc, expected",
+    [
+        (lambda: health.GmailAuthError("invalid_grant — re-run auth/gmail_bootstrap.py x"), "re-run auth/gmail_bootstrap.py"),
+        (lambda: RuntimeError("Missing GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET in .env"), "GMAIL_CLIENT_ID"),
+        (lambda: requests.ConnectionError("dns down"), "dns down"),
+    ],
+)
+def test_gmail_collect_token_failures_are_errors_not_raises(monkeypatch, exc, expected):
+    def fail(label):
+        raise exc()
+
+    monkeypatch.setattr("pipeline.health.gmail_token_response", fail)
+    calls = gmail_mailbox(monkeypatch, {})
+
+    result = gmail.collect_gmail("x", "refresh", SINCE, UNTIL)
+
+    assert result.status == "error" and expected in result.detail
+    assert calls == []
+
+
+def test_gmail_collect_list_failure_is_error(monkeypatch, gmail_token, gmail_sleeps):
+    route(monkeypatch, gmail, lambda url, params: gmail_error(403, "insufficientPermissions"))
+    result = gmail.collect_gmail("x", "refresh", SINCE, UNTIL)
+    assert result.status == "error" and "HTTP 403" in result.detail and result.items == []
+
+
+def test_gmail_collect_empty_window_is_ok(monkeypatch, gmail_token):
+    route(monkeypatch, gmail, lambda url, params: FakeResponse({"resultSizeEstimate": 0}))
+    result = gmail.collect_gmail("x", "refresh", SINCE, UNTIL)
+    assert (result.status, result.detail, result.items) == ("ok", "0 messages", [])
+
+
+def test_gmail_collect_one_get_failing_past_retries_is_partial_and_keeps_items(monkeypatch, gmail_token, gmail_sleeps):
+    calls = gmail_mailbox(
+        monkeypatch,
+        {"a": mail("a"), "c": mail("c")},
+        listed=["a", "bad", "c"],
+        fail={"bad": gmail_error(500)},
+    )
+
+    result = gmail.collect_gmail("x", "refresh", SINCE, UNTIL)
+
+    assert result.status == "partial" and result.ok
+    assert [i.external_id for i in result.items] == ["a", "c"]
+    assert result.detail.startswith("2 messages (1 failed: bad: ") and "still failing" in result.detail
+    assert sum(c["url"].endswith("/bad") for c in calls) == gmail.MAX_ATTEMPTS
+    assert "\n" not in result.detail
+
+
+def test_gmail_collect_every_get_failing_is_error(monkeypatch, gmail_token, gmail_sleeps):
+    gmail_mailbox(monkeypatch, {}, listed=["a", "b"], fail={"a": gmail_error(404, "notFound"), "b": gmail_error(404, "notFound")})
+    result = gmail.collect_gmail("x", "refresh", SINCE, UNTIL)
+    assert result.status == "error" and not result.ok and result.items == []
+    assert "2 failed" in result.detail
+
+
+def test_gmail_collect_window_is_since_inclusive_until_exclusive(monkeypatch, gmail_token, gmail_sleeps):
+    gmail_mailbox(
+        monkeypatch,
+        {
+            "before": mail("before", SINCE - timedelta(seconds=1)),
+            "at_since": mail("at_since", SINCE),
+            "at_until": mail("at_until", UNTIL),
+            "after": mail("after", UNTIL + timedelta(hours=1)),
+        },
+    )
+    result = gmail.collect_gmail("x", "refresh", SINCE, UNTIL)
+    assert result.status == "ok" and result.detail == "1 messages"
+    assert [i.external_id for i in result.items] == ["at_since"]
+
+
+def test_gmail_collect_unparseable_internal_date_is_skipped_and_counted(monkeypatch, gmail_token, gmail_sleeps):
+    gmail_mailbox(monkeypatch, {"a": mail("a"), "junk": mail("junk", internalDate="not-a-number"), "gone": gmail_msg(id="gone")})
+
+    result = gmail.collect_gmail("x", "refresh", SINCE, UNTIL)
+
+    assert result.status == "ok"  # skipped is not failed
+    assert [i.external_id for i in result.items] == ["a"]
+    assert result.detail == "1 messages, 2 skipped (no usable internalDate)"
+
+
+def test_gmail_collect_repeated_ids_are_fetched_once(monkeypatch, gmail_token, gmail_sleeps):
+    calls = gmail_mailbox(monkeypatch, {"a": mail("a"), "b": mail("b")}, listed=["a", "b", "a", "b", "a"])
+
+    result = gmail.collect_gmail("x", "refresh", SINCE, UNTIL)
+
+    assert [i.external_id for i in result.items] == ["a", "b"]
+    assert sum(not c["url"].endswith("/messages") for c in calls) == 2
+
+
+def test_gmail_collect_sends_the_access_token_not_the_refresh_token(monkeypatch, gmail_token, gmail_sleeps):
+    seen = []
+
+    def fake_get(url, headers=None, params=None, timeout=None):
+        seen.append(headers["Authorization"])
+        return FakeResponse({})
+
+    monkeypatch.setattr(gmail.requests, "get", fake_get)
+    gmail.collect_gmail("x", "the-refresh-token", SINCE, UNTIL)
+    assert seen == ["Bearer tok-x"]
+
+
+def test_gmail_dispatch_routes_to_collect_gmail_with_label_and_env_token(monkeypatch, gmail_token, gmail_sleeps):
+    from pipeline.collectors import dispatch
+
+    monkeypatch.setenv("GMAIL_X_REFRESH_TOKEN", "refresh-from-env")
+    gmail_mailbox(monkeypatch, {"a": mail("a", INSIDE, "Routed")})
+
+    result = dispatch("gmail_x", SINCE, UNTIL)
+
+    assert result.source == "gmail_x" and result.status == "ok"
+    assert gmail_token == ["x"]
+    assert result.items[0].payload["subject"] == "Routed"
+
+
+def test_gmail_dispatch_without_a_configured_token_is_error(monkeypatch, gmail_token):
+    from pipeline.collectors import dispatch
+
+    monkeypatch.delenv("GMAIL_NOLABEL_REFRESH_TOKEN", raising=False)
+    result = dispatch("gmail_nolabel", SINCE, UNTIL)
+    assert result.status == "error" and "token" in result.detail.lower()
+    assert gmail_token == []
+
+
+def test_gmail_report_previews_the_subject_line(monkeypatch, gmail_token, gmail_sleeps, capsys):
+    from pipeline import collect
+    from pipeline.collectors import dispatch
+
+    monkeypatch.setenv("GMAIL_X_REFRESH_TOKEN", "refresh-from-env")
+    gmail_mailbox(monkeypatch, {"a": mail("a", INSIDE, "Quarterly numbers are in")})
+    # report() windows on the real clock; pin it to the fixture window so the item lands inside.
+    monkeypatch.setattr(collect, "dispatch", lambda s, a, b: dispatch(s, SINCE, UNTIL))
+
+    assert collect.report("gmail_x", hours=24, limit=5, raw=False) is True
+    out = capsys.readouterr().out
+    assert "Quarterly numbers are in" in out and "mail=1" in out

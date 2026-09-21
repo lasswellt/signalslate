@@ -29,6 +29,9 @@ from urllib.parse import quote
 
 import requests
 
+from pipeline import health
+from pipeline.collectors import CollectionResult, Item
+
 GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me"
 TIMEOUT = 15
 # Documented maximum for messages.list; anything smaller just costs more 5-unit calls.
@@ -385,3 +388,62 @@ def fetch_messages(token: str, message_ids: list[str]) -> tuple[list[dict], list
         except GmailError as exc:
             failures.append({"id": message_id, "error": str(exc)})
     return messages, failures
+
+
+def collect_gmail(label: str, refresh_token: Optional[str], since: datetime, until: datetime) -> CollectionResult:
+    """
+    Mail for [since, until) from one Gmail account. Never raises for an expected failure.
+
+    `refresh_token` is only checked for presence: the exchange itself reads .env through
+    health.gmail_token_response, so the health check and the collector cannot disagree about config.
+    """
+    source = f"gmail_{label}"
+    if not refresh_token:
+        return CollectionResult(source, "error", f"No token in .env for {label}")
+
+    # Looked up on the module, not imported by name, so there is one token path to stub or change.
+    try:
+        access_token = health.gmail_token_response(label)["access_token"]
+    except health.GmailAuthError as exc:
+        return CollectionResult(source, "error", str(exc))
+    except RuntimeError as exc:
+        return CollectionResult(source, "error", str(exc))
+    except requests.RequestException as exc:
+        return CollectionResult(source, "error", f"token refresh failed: {exc}")
+    except (KeyError, TypeError):
+        return CollectionResult(source, "error", "token response had no access_token")
+
+    try:
+        listed = list_message_ids(access_token, since, until)
+    except GmailError as exc:
+        return CollectionResult(source, "error", str(exc))
+
+    # Overlapping windows and undocumented list semantics can repeat an id; fetching it twice costs
+    # 20 units for nothing. dict.fromkeys keeps the list order.
+    ids = list(dict.fromkeys(m["id"] for m in listed if isinstance(m, dict) and isinstance(m.get("id"), str)))
+    messages, failures = fetch_messages(access_token, ids)
+
+    items: list[Item] = []
+    unplaceable = 0
+    for msg in messages:
+        occurred = parse_internal_date(msg.get("internalDate"))
+        message_id = msg.get("id")
+        if occurred is None or not isinstance(message_id, str):
+            unplaceable += 1  # cannot be windowed, so it cannot be kept; not a fetch failure
+            continue
+        # after:/before: boundary inclusivity is undocumented, so the window is enforced here.
+        if not since <= occurred < until:
+            continue
+        items.append(Item("mail", message_id, occurred, flatten_message(msg)))
+
+    detail = f"{len(items)} messages"
+    if unplaceable:
+        detail += f", {unplaceable} skipped (no usable internalDate)"
+
+    if failures:
+        summary = f"{len(failures)} failed: {failures[0]['id']}: {failures[0]['error']}"
+        # Every fetch failing means the token or the API is broken, not one bad message.
+        if len(failures) == len(ids):
+            return CollectionResult(source, "error", f"{detail} ({summary})")
+        return CollectionResult(source, "partial", f"{detail} ({summary})", items)
+    return CollectionResult(source, "ok", detail, items)

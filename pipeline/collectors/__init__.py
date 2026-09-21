@@ -83,10 +83,11 @@ def dispatch(source: str, since: datetime, until: datetime) -> "CollectionResult
 
     Imports are local: importing this package must not drag in msal and every collector module.
     """
+    from pipeline.collectors.gmail import collect_gmail
     from pipeline.collectors.graph import collect_m365
     from pipeline.collectors.slack import collect_slack
     from pipeline.collectors.zoom import collect_zoom
-    from pipeline.health import slack_workspaces
+    from pipeline.health import gmail_accounts, slack_workspaces
 
     if source == "zoom":
         return collect_zoom(since, until)
@@ -95,4 +96,7 @@ def dispatch(source: str, since: datetime, until: datetime) -> "CollectionResult
     if source.startswith("slack_"):
         label = source[len("slack_"):]
         return collect_slack(label, slack_workspaces().get(label), since, until)
+    if source.startswith("gmail_"):
+        label = source[len("gmail_"):]
+        return collect_gmail(label, gmail_accounts().get(label), since, until)
     return CollectionResult(source, "error", f"No collector for source id {source!r}")
