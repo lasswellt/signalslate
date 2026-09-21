@@ -19,15 +19,23 @@ Design decisions:
 - All writes go through one lock. Reads take no lock: SQLite already gives each session a
   consistent snapshot, and the version counter is only a cheap "did anything change" signal for
   the overlay cache.
+- The store is authoritative once it exists: seed_from_env copies .env declarations in only for ids
+  that have neither a live row nor a tombstone, and never overwrites a row (store wins), so an edit
+  made in the UI survives every restart and a deletion is not undone by a stale .env line.
+- The rest of the app still reads connections as env-style keys through pipeline.health. materialize
+  renders live rows in exactly the key families health parses, and FAMILY_KEY_PATTERNS names them
+  so the caller can drop the .env copies of those keys before overlaying the store's.
 - Secrets live in one encrypted JSON envelope per connection. A write that carries secrets and has
   no vault raises SecretKeyMissing before anything is touched, because storing plaintext or dropping
   the value silently are both worse than refusing.
 """
 import json
+import logging
 import re
 import threading
 from dataclasses import dataclass
 from datetime import datetime
+from types import MappingProxyType
 from typing import Any, Mapping, Optional
 
 from sqlalchemy.exc import IntegrityError
@@ -58,7 +66,16 @@ __all__ = [
     "exists",
     "set_secret",
     "current_version",
+    "get_secret",
+    "secret_values",
+    "seed_from_env",
+    "materialize",
+    "overlay_provider",
+    "is_family_key",
+    "FAMILY_KEY_PATTERNS",
 ]
+
+_log = logging.getLogger(__name__)
 
 
 # Deliberately shadows the builtin inside this module: callers import it by name from here. It
@@ -470,3 +487,237 @@ def _secrets_for(connection_id: str) -> dict[str, str]:
         if row is None:
             raise ConnectionNotFound("id", "no such connection")
         return _envelope(row)
+
+
+def get_secret(connection_id: str, name: str) -> Optional[str]:
+    """
+    One decrypted secret, or None when the connection or the name does not exist.
+
+    For the token-exchange and browser sign-in flows ONLY (they must present the stored client
+    secret to the provider). Callers must never log the value, put it in a response, an exception
+    message or a query string. Deliberately narrow: it hands out one named value, where
+    _secrets_for hands out the whole envelope.
+
+    Raises SecretKeyMissing when no vault is installed and the connection has secrets,
+    SecretDecryptError when the stored envelope cannot be opened; both carry generic messages.
+    """
+    with db.get_session() as session:
+        row = session.get(db.Connection, connection_id)
+        if row is None:
+            return None
+        return _envelope(row).get(name)
+
+
+def secret_values() -> list[str]:
+    """
+    Every non-empty decrypted secret in the store, to feed redact() so a credential that reaches a
+    log line or an error message is scrubbed by value as well as by shape.
+
+    A row that cannot be decrypted (no vault, wrong key) is skipped rather than raised: this runs
+    on error paths, and failing there would hide the error being reported.
+    """
+    found: list[str] = []
+    with db.get_session() as session:
+        for row in session.exec(select(db.Connection)).all():
+            try:
+                found.extend(_envelope(row).values())
+            except (SecretKeyMissing, SecretDecryptError):
+                continue
+    return found
+
+
+# Every env-style key a connection owns. is_family_key is what lets the overlay REPLACE these keys
+# from the store instead of merging: a stale SLACK_OLD_TOKEN left in .env after the user deleted
+# that connection in the UI must not resurrect it.
+FAMILY_KEY_PATTERNS: tuple["re.Pattern[str]", ...] = (
+    re.compile(r"M365_ORG\d+_.+"),
+    re.compile(r"M365_CLIENT_ID"),
+    re.compile(r"SLACK_[A-Z0-9]+_TOKEN"),
+    re.compile(r"ZOOM_(?:ACCOUNT_ID|CLIENT_ID|CLIENT_SECRET)"),
+    re.compile(r"GMAIL_(?:CLIENT_ID|CLIENT_SECRET)"),
+    re.compile(r"GMAIL_[A-Z0-9]+_(?:REFRESH_TOKEN|CLIENT_ID|CLIENT_SECRET)"),
+)
+
+_M365_ALIAS_KEY = re.compile(r"M365_ORG(\d+)_ALIAS")
+_SLACK_TOKEN_KEY = re.compile(r"SLACK_([A-Z0-9]+)_TOKEN")
+_GMAIL_TOKEN_KEY = re.compile(r"GMAIL_([A-Z0-9]+)_REFRESH_TOKEN")
+
+
+def is_family_key(name: str) -> bool:
+    """True when `name` is a key a connection owns; SLACK_SKIP_DMS, TZ, ANTHROPIC_API_KEY and the like are not."""
+    return any(pattern.fullmatch(name) for pattern in FAMILY_KEY_PATTERNS)
+
+
+def _declared(raw_env: Mapping[str, Optional[str]], key: str) -> str:
+    """The stripped value, "" when unset or blank. A blank line in .env.example is not a declaration."""
+    return (raw_env.get(key) or "").strip()
+
+
+def _has_tombstone(connection_id: str) -> bool:
+    with db.get_session() as session:
+        return session.get(db.Tombstone, connection_id) is not None
+
+
+def _seed_one(kind: str, fields: dict[str, str], declared_by: str) -> Optional[str]:
+    """Creates one env-origin connection unless the store already decided this id. Returns the id when seeded."""
+    spec = KINDS[kind]
+    label = fields.get(spec.label_field) if spec.label_field else kind
+    connection_id = f"{kind}_{label}" if spec.label_field else kind
+    if exists(connection_id) or _has_tombstone(connection_id):
+        return None
+    try:
+        return create(kind, fields, origin="env").id
+    except ConnectionError as exc:
+        # Field name and generic text only; the exception never carries a submitted value.
+        _log.warning("skipped .env connection declared by %s: %s", declared_by, exc)
+        return None
+
+
+def seed_from_env(raw_env: Mapping[str, Optional[str]]) -> list[str]:
+    """
+    Copies the connections the RAW .env declares into the store, once.
+
+    A connection is created (origin "env") only when its id has no live row and no tombstone, so
+    an existing row is never overwritten and a deleted one never comes back. A declaration that
+    cannot become a valid connection (an M365 org without a tenant id, a Gmail account without a
+    client secret) is skipped with a warning naming the env key, never raising. Without a vault
+    nothing is seeded, because Slack, Zoom and Gmail cannot be stored and a partial import would
+    be surprising.
+
+    raw_env: the unmerged .env mapping. Returns the ids created, in declaration order.
+    """
+    if _vault is None:
+        return []
+    seeded: list[str] = []
+
+    def add(kind: str, fields: dict[str, str], declared_by: str) -> None:
+        created = _seed_one(kind, fields, declared_by)
+        if created is not None:
+            seeded.append(created)
+
+    orgs = sorted(
+        (int(m.group(1)), key)
+        for key in raw_env
+        if (m := _M365_ALIAS_KEY.fullmatch(key)) and _declared(raw_env, key)
+    )
+    shared_m365_client = _declared(raw_env, "M365_CLIENT_ID")
+    for number, alias_key in orgs:
+        prefix = f"M365_ORG{number}"
+        tenant_id = _declared(raw_env, f"{prefix}_TENANT_ID")
+        client_id = _declared(raw_env, f"{prefix}_CLIENT_ID") or shared_m365_client
+        if not tenant_id or not client_id:
+            _log.warning("skipped .env connection declared by %s: tenant id or client id missing", alias_key)
+            continue
+        add("m365", {"alias": _declared(raw_env, alias_key), "tenant_id": tenant_id, "client_id": client_id}, alias_key)
+
+    zoom = {name: _declared(raw_env, f"ZOOM_{name.upper()}") for name in ("account_id", "client_id", "client_secret")}
+    if any(zoom.values()):
+        if all(zoom.values()):
+            add("zoom", zoom, "ZOOM_ACCOUNT_ID")
+        else:
+            _log.warning("skipped .env connection declared by ZOOM_ACCOUNT_ID: not all three Zoom values are set")
+
+    for key in sorted(raw_env):
+        match = _SLACK_TOKEN_KEY.fullmatch(key)
+        if match and _declared(raw_env, key):
+            add("slack", {"label": match.group(1).lower(), "token": _declared(raw_env, key)}, key)
+
+    shared_gmail_id = _declared(raw_env, "GMAIL_CLIENT_ID")
+    shared_gmail_secret = _declared(raw_env, "GMAIL_CLIENT_SECRET")
+    for key in sorted(raw_env):
+        match = _GMAIL_TOKEN_KEY.fullmatch(key)
+        if not match or not _declared(raw_env, key):
+            continue
+        upper = match.group(1)
+        client_id = _declared(raw_env, f"GMAIL_{upper}_CLIENT_ID") or shared_gmail_id
+        client_secret = _declared(raw_env, f"GMAIL_{upper}_CLIENT_SECRET") or shared_gmail_secret
+        if not client_id or not client_secret:
+            _log.warning("skipped .env connection declared by %s: client id or client secret missing", key)
+            continue
+        add(
+            "gmail",
+            {
+                "label": upper.lower(),
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": _declared(raw_env, key),
+            },
+            key,
+        )
+    return seeded
+
+
+def materialize() -> dict[str, str]:
+    """
+    Renders the live connections as the env-style keys pipeline.health already parses.
+
+    M365 orgs are numbered 1..N by creation order, so deleting one renumbers the later ones: the
+    number is only a key suffix, the alias is what identifies the org everywhere else. A row whose
+    secrets cannot be decrypted is left out (with a warning naming the id) instead of raising, so
+    one bad row cannot take the other connections down with it.
+    """
+    out: dict[str, str] = {}
+    org_number = 0
+    with db.get_session() as session:
+        rows = session.exec(
+            select(db.Connection).order_by(col(db.Connection.seq), col(db.Connection.created_at), col(db.Connection.id))
+        ).all()
+        for row in rows:
+            config = json.loads(row.config)
+            if row.kind == "m365":
+                org_number += 1
+                prefix = f"M365_ORG{org_number}"
+                out[f"{prefix}_ALIAS"] = config["alias"]
+                out[f"{prefix}_TENANT_ID"] = config["tenant_id"]
+                out[f"{prefix}_CLIENT_ID"] = config["client_id"]
+                continue
+            try:
+                secrets = _envelope(row)
+            except (SecretKeyMissing, SecretDecryptError):
+                _log.warning("connection %s left out of the overlay: its secrets cannot be decrypted", row.id)
+                continue
+            upper = row.label.upper()
+            if row.kind == "slack":
+                if "token" in secrets:
+                    out[f"SLACK_{upper}_TOKEN"] = secrets["token"]
+            elif row.kind == "gmail":
+                if "refresh_token" in secrets:
+                    out[f"GMAIL_{upper}_REFRESH_TOKEN"] = secrets["refresh_token"]
+                out[f"GMAIL_{upper}_CLIENT_ID"] = config["client_id"]
+                if "client_secret" in secrets:
+                    out[f"GMAIL_{upper}_CLIENT_SECRET"] = secrets["client_secret"]
+            elif row.kind == "zoom":
+                out["ZOOM_ACCOUNT_ID"] = config["account_id"]
+                out["ZOOM_CLIENT_ID"] = config["client_id"]
+                if "client_secret" in secrets:
+                    out["ZOOM_CLIENT_SECRET"] = secrets["client_secret"]
+    return out
+
+
+_overlay_lock = threading.Lock()
+# (version, vault it was built under, immutable overlay). The vault is part of the key because
+# installing a different key changes what decrypts without writing any row.
+_overlay_cache: Optional[tuple[int, Optional[Vault], Mapping[str, str]]] = None
+
+
+def overlay_provider() -> Optional[Mapping[str, str]]:
+    """
+    The materialized overlay, or None when no vault is installed so the caller keeps pure .env
+    behaviour. Cached and rebuilt only when a write bumped current_version() or the vault changed.
+
+    The version is read BEFORE building: a write that lands mid-build leaves the cached version
+    behind the counter, so the next call rebuilds instead of serving a stale overlay. The result is
+    a read-only mapping, safe to share between threads.
+    """
+    global _overlay_cache
+    vault = _vault
+    if vault is None:
+        return None
+    with _overlay_lock:
+        version = _version
+        cached = _overlay_cache
+        if cached is not None and cached[0] == version and cached[1] is vault:
+            return cached[2]
+        overlay: Mapping[str, str] = MappingProxyType(materialize())
+        _overlay_cache = (version, vault, overlay)
+        return overlay
