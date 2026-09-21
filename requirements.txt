@@ -1,5 +1,5 @@
 msal==1.38.0
-requests==2.32.3
+requests==2.34.2
 python-dotenv==1.0.1
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
@@ -9,3 +9,6 @@ pytest==8.3.3
 anthropic==1.7.0
 cryptography==50.0.1
 httpx==0.28.1
+dnspython==2.8.0
+defusedxml==0.7.1
+whoisit==4.0.5
