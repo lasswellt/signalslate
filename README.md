@@ -14,8 +14,9 @@ Self-hosted, LAN-only, runs anywhere Docker runs.
 | Gmail (any number of accounts) | Mail | OAuth Desktop client, one-time interactive sign-in per account |
 | reMarkable | Delivery target for the rendered PDF | One-time device pairing via `rmapi` |
 
-Sources are declared in `.env` and toggled per-run in the web UI. Adding a tenant, workspace or
-account is one more block of environment variables; nothing in the code is fixed to a count.
+Sources are declared in `.env` or added in the web UI's [Management UI](#management-ui), and
+toggled per-run there. Adding a tenant, workspace or account is one more block of environment
+variables or one more connection; nothing in the code is fixed to a count.
 
 ## Phases
 
@@ -234,7 +235,7 @@ pagination against stubbed responses. No network — which is exactly why the dr
 ## Web interface
 
 FastAPI backend + Nuxt 3/Quasar frontend in the same Docker stack. Dashboard, run history, manual
-trigger, and config editor.
+trigger, config editor, connection management and collector tools.
 
 ```
 cp .env.example .env   # set LAN_HOST to the Docker host's LAN address
@@ -247,6 +248,77 @@ docker compose up -d --build
 `data/` (SQLite DB + config.json) and `tokens/` are bind-mounted so they survive rebuilds — back
 both up.
 
+### Management UI
+
+The **Connections** page adds, edits, tests, enables and deletes Microsoft 365 tenants, Zoom, Slack
+workspaces and Gmail accounts, and signs Microsoft 365 and Gmail in from the browser. The
+**Collectors** page runs one source, dry-runs it, resets its watermark, clears its failures and
+browses the items it collected. Connection ids match the `.env` naming: `m365_<alias>`, `zoom`,
+`slack_<label>`, `gmail_<label>`. A new connection is created **inactive**: test it, then switch it
+on. Todoist, reMarkable and the Anthropic API key are not managed here; they stay in `.env`, as
+does everything else not listed above (`TZ`, `LAN_HOST`, and so on).
+
+**Security model.** There is no login on the interface or the API. Run it on a trusted network or
+behind a reverse proxy that authenticates, and never expose ports 3000 and 8000 to the internet.
+Secrets are write-only: the API reports which secrets are set, never their values, and nothing
+returns or logs a secret after it is saved. Changes are accepted only from the browser origins in
+`WEB_ORIGINS` and only with the `X-Requested-With: signalslate` header, which the web app sends, so
+another website cannot drive the API from your browser.
+
+**Encryption key.** Stored secrets are encrypted at rest with `SIGNALSLATE_SECRET_KEY`:
+
+```
+python -m pipeline.crypto genkey     # prints one key; put it in .env
+```
+
+- Losing the key loses every stored secret. Back it up separately from `data/`, which holds the
+  ciphertext.
+- To rotate, set a comma-separated list with the new primary key first and the old keys after it.
+  The primary key encrypts; the rest only decrypt.
+- With no key set, the app keeps using `.env` exactly as before. The Connections page shows a
+  banner and cannot add or edit connections. An unusable key is reported in the API's startup log
+  (naming the key's position, never its text) and also falls back to `.env`.
+
+**Store wins.** On the first start with a key, the connections `.env` declares are copied into the
+store once. After that the store is authoritative: editing `.env` for a connection that already
+exists has no effect, and a connection deleted in the UI stays deleted even if `.env` still lists
+it. Change existing connections in the UI. The CLI bootstrap scripts under `auth/` remain as a
+fallback for signing in without the UI.
+
+**Settings.**
+
+| Variable | Meaning |
+|---|---|
+| `SIGNALSLATE_SECRET_KEY` | Encryption key list, see above. |
+| `WEB_ORIGINS` | Comma-separated browser origins allowed to make changes, written as typed in the address bar. Blank means `http://localhost:3000` plus `http://<LAN_HOST>:3000`. The first entry is where the automatic sign-in callback returns your browser, so make it the address you browse to. |
+| `PUBLIC_BASE_URL` | Public `https://<your-host>` address, no path. Needed only for the automatic callback; ignored unless it starts with `https://`. |
+
+#### Signing in from the browser
+
+Each Microsoft 365 or Gmail connection has a **Sign in** button with two modes.
+
+**Paste-back** works with the registrations described in the sections above (Gmail Desktop client,
+Microsoft public client) and needs no public address. Open the link the dialog shows and approve
+access. Your browser then lands on a page that cannot be reached (`http://127.0.0.1:8765` for Gmail,
+`http://localhost` for Microsoft); that is expected. Copy the full address from the address bar and
+paste it into the dialog straight away, because Microsoft codes live about a minute.
+
+**Automatic callback** needs the app served on a public HTTPS hostname:
+
+- Set `PUBLIC_BASE_URL=https://<your-host>` and put `https://<your-host>` first in `WEB_ORIGINS`.
+- The reverse proxy must route both the web app and `/api` on that one hostname. The sign-in cookie
+  is scoped to `/api/oauth`, and the callback then redirects the browser back to the UI.
+- The callback URL registered with the provider must use the same host as `PUBLIC_BASE_URL`:
+  - Google: create an OAuth client of type **Web application** and add the authorized redirect URI
+    `https://<your-host>/api/oauth/callback/google`. A Desktop client cannot use the callback; keep
+    paste-back for it.
+  - Microsoft: on the **same** app registration, add
+    `https://<your-host>/api/oauth/callback/microsoft` as a custom redirect under **Mobile and
+    desktop applications**, not under Web or SPA. Whether the Entra portal accepts a custom https
+    redirect there has not been confirmed yet; if the portal rejects it, use paste-back.
+- The Gmail consent screen must be **In production** (see [Gmail](#gmail)); in Testing status
+  refresh tokens expire after 7 days.
+
 ### Local dev
 
 The container runs Python 3.12 (`python:3.12-slim`), so create the venv with a 3.12 interpreter to
@@ -254,15 +326,28 @@ match; newer interpreters may lack wheels for the pinned dependencies.
 
 ```
 uvicorn api.main:app --reload --port 8000      # terminal 1
-cd web && npm install && NUXT_PUBLIC_API_BASE=http://localhost:8000 npm run dev   # terminal 2
+cd web && npm ci && NUXT_PUBLIC_API_BASE=http://localhost:8000 npm run dev   # terminal 2
+```
+
+Frontend checks, from `web/`:
+
+```
+npm run typecheck
+npm test
 ```
 
 ### Pages
 
 - **Dashboard** (`/`) — last run status, per-source health, next scheduled run, "Run now".
+- **Connections** (`/connections`) — add, edit, test, enable, delete and sign in sources; see
+  [Management UI](#management-ui).
+- **Collectors** (`/collectors`) — run one source, dry run, reset watermark, clear failures, browse
+  collected items.
 - **History** (`/history`, `/history/[id]`) — every run, per-source detail, PDF download once the
   render phase exists.
 - **Config** (`/config`) — schedule (cron), active sources, tracker choice. Saving reschedules
   immediately.
 
-No auth on the interface — LAN-only by design. Revisit before exposing it anywhere else.
+No auth on the interface or the API — LAN-only by design. Put it behind your network or an
+authenticating reverse proxy before exposing it anywhere else; see the
+[security model](#management-ui).
