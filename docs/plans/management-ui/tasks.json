@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T07:30:48Z",
+  "updated": "2026-09-21T07:35:00Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1855,11 +1855,53 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T07:35:00Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'X-Requested-With' web/composables/useApi.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:34:56Z"
+          },
+          {
+            "cmd": "grep -qE 'fontIcons' web/nuxt.config.ts",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:34:56Z"
+          },
+          {
+            "cmd": "grep -qE 'Dialog' web/nuxt.config.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:34:56Z"
+          },
+          {
+            "cmd": "cd web && npm run typecheck",
+            "exit": 0,
+            "duration_ms": 2162,
+            "tail": "\n> typecheck\n> nuxt typecheck",
+            "recorded_at": "2026-09-21T07:34:58Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/useApi.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 2510,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/useApi.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n···························\n\n Test Files  1 passed (1)\n      Tests  27 passed (27)\n   Start at  03:34:59\n   Duration  1.38s (tests 79%, environment 14%, transform 4%, setup 2%, import 1%)",
+            "recorded_at": "2026-09-21T07:35:00Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research docs/_research/2026-09-21_management-ui.md sections 9 and 10, plan.md Contracts. (1) nuxt.config.ts: rename extras.icons to fontIcons (the pre-existing typecheck error; confirm material icons are still emitted: after npm run build grep the build output for material-icons), add Dialog to quasar.plugins (keep Notify), change nothing else; the process typing error is cleared by @types/node from the deps task. (2) useApi.ts: keep every existing export and behavior; add interfaces mirroring the API contract (ConnectionKind, ConnectionView, per-kind create and update payloads with optional secret string fields, SystemInfo, CollectorState, DryRunJob, DryRunResult, ItemRow, ItemDetail, OAuthStart) and methods getSystem, listConnections, createConnection, updateConnection, deleteConnection, testConnection, listCollectors, runCollector, startDryRun, getDryRun, resetCollector, clearFailures, listItems, getItem, oauthStart, oauthPaste. Every mutating call sends the header X-Requested-With: signalslate and a JSON body through ONE small wrapper; errors are normalized to ApiError {status, code?, message} where message is built from the response's detail and msg fields and NEVER contains the request body; add parseUtc(iso) for the Z-suffixed timestamps; extend RunSummary trigger with manual-source. The composable never stores or logs secrets. Tests (vitest, no network, stub  with vi.stubGlobal): mutating calls send the header and JSON content type, an error with a 422 array detail becomes a readable message without submitted values, bodies never appear in ApiError.message, parseUtc treats Z as UTC."
     },
