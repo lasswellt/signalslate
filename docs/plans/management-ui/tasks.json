@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T07:58:00Z",
+  "updated": "2026-09-21T08:00:16Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2279,11 +2279,53 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T08:00:16Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^SIGNALSLATE_SECRET_KEY=' .env.example",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T08:00:16Z"
+          },
+          {
+            "cmd": "grep -qE '^PUBLIC_BASE_URL=' .env.example",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T08:00:16Z"
+          },
+          {
+            "cmd": "grep -qE 'genkey' README.md",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T08:00:16Z"
+          },
+          {
+            "cmd": "grep -qE 'oauth/callback' README.md",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T08:00:16Z"
+          },
+          {
+            "cmd": "! grep -nE \"/home/[a-z]|(^|[^0-9])(10\\.[0-9]+\\.[0-9]+\\.[0-9]+|192\\.168\\.[0-9]+\\.[0-9]+)\" README.md .env.example",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T08:00:16Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "PUBLIC REPO: generic wording only. NEVER a real hostname, IP address, tenant, workspace label or personal detail: use <your-host> and <label>. README: a Management UI section under Web interface covering what it manages; the security model stated plainly (there is NO login, so run it behind your network or a reverse proxy; secrets are write-only; encryption at rest needs SIGNALSLATE_SECRET_KEY: generate with python -m pipeline.crypto genkey, losing it loses every stored secret, back it up separately from data/, rotate with a comma-separated list with the primary key first; without the key the app keeps using .env exactly as before); the store-wins rule (after the first seed the UI store is authoritative: editing .env for an existing id has no effect and deleting is permanent even if .env still lists it); WEB_ORIGINS and PUBLIC_BASE_URL; browser sign-in: paste-back (works with the existing Desktop and public client registrations; Microsoft codes live about a minute) and the automatic callback (needs a public HTTPS hostname: Google needs a Web-application client with the authorized redirect https://<your-host>/api/oauth/callback/google; for Microsoft add https://<your-host>/api/oauth/callback/microsoft as a custom redirect under Mobile and desktop applications on the SAME app registration, not under Web or SPA); the Gmail consent screen must be In production. Update the Pages list and the No auth sentence, and Local dev with cd web then npm ci, npm run typecheck, npm test. Say the CLI bootstrap scripts remain as a fallback. .env.example: SIGNALSLATE_SECRET_KEY=, WEB_ORIGINS= and PUBLIC_BASE_URL= with comments."
     },

@@ -76,3 +76,5 @@ Ruling: descope — T-032 was created with a malformed verify command (tasks.sh 
 ## 2026-09-21T07:52:00Z verify T-028 ok=true
 ## 2026-09-21T07:52:00Z build T-029 start (attempt 1)
 ## 2026-09-21T07:58:00Z verify T-029 ok=true
+## 2026-09-21T07:58:00Z build T-030 start (attempt 1)
+## 2026-09-21T08:00:16Z verify T-030 ok=true
