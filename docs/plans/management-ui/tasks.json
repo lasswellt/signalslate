@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T23:26:43Z",
+  "updated": "2026-09-21T23:33:20Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2918,11 +2918,53 @@
           "timeout": 600
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:33:20Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def install_host_guard' api/security.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:32:59Z"
+          },
+          {
+            "cmd": "grep -qE 'install_host_guard' api/main.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:32:59Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/security.py api/main.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:32:59Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_host_guard.py tests/test_api_security.py tests/test_api_startup.py tests/test_management_e2e.py -q",
+            "exit": 0,
+            "duration_ms": 1802,
+            "tail": "........................................................................ [ 43%]\n........................................................................ [ 87%]\n.....................                                                    [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n165 passed, 1 warning in 1.55s",
+            "recorded_at": "2026-09-21T23:33:01Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest -q",
+            "exit": 0,
+            "duration_ms": 18771,
+            "tail": "...................................................... [ 74%]\n........................................................................ [ 78%]\n........................................................................ [ 82%]\n........................................................................ [ 85%]\n........................................................................ [ 89%]\n........................................................................ [ 92%]\n........................................................................ [ 96%]\n........................................................................ [ 99%]\n..                                                                       [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions\n    warnings.warn(  # deprecated in 14.0 - 2024-11-09\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:16: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated\n    from websockets.server import WebSocketServerProtocol\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2018 passed, 3 warnings in 18.05s",
+            "recorded_at": "2026-09-21T23:33:20Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check-report finding 6. With no login, a DNS-rebinding page can make the browser send same-origin GETs to the API under the attacker's hostname and READ collected items, config and status; the Origin/header guard only blocks writes, and no Host validation exists. FIX: a pure-ASGI Host guard in api/security.py (install_host_guard(app, allowed_hosts)) answering 400 {detail:{code:'host_not_allowed',message:...}} for an unlisted Host (port ignored, case-insensitive, IPv6 literals handled), with an exemption for nothing else (not even /api/health). api/main.py builds the list from: hostnames of every WEB_ORIGINS entry, the PUBLIC_BASE_URL host, LAN_HOST, localhost, 127.0.0.1, ::1, the compose service name if docker-compose.yml declares one the web container uses to reach the API (READ docker-compose.yml and the web SSR calls in web/nuxt.config.ts to decide; if server-side calls use another hostname, include it and say so), plus a new optional comma-separated ALLOWED_HOSTS setting read from the raw env (document it in your reply; T-030's README/.env.example are not in scope, list what to add). CRITICAL: existing tests build api.main.app with Starlette's TestClient whose Host is testserver, and they must pass UNCHANGED: make tests/conftest.py additively provide testserver through the new setting for the whole suite (add ALLOWED_HOSTS to CONFIG_KEYS and set it in the existing autouse env fixture pattern; do not weaken any existing fixture) and prove it with the full suite. Tests: allowed and unlisted Host on GET and POST (including a Host with a port, mixed case and an IPv6 literal), the guard runs before any router (an unlisted Host cannot read /api/system or an item detail), WEB_ORIGINS / PUBLIC_BASE_URL / LAN_HOST / ALLOWED_HOSTS derive entries, unlisted origin evidence: a rebinding-style request (Host: evil.example:8000, no Origin) is refused; wildcard entries are dropped like the origin list; and the CORS/CSRF suite still passes."
     },
