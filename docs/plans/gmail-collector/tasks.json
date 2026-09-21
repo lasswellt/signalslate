@@ -1,0 +1,1423 @@
+{
+  "$schema": "blitz-tasks/1.0",
+  "plan": "gmail-collector",
+  "updated": "2026-09-21T04:41:07Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Restore dev environment and prove the existing suite is green",
+      "role": "infra",
+      "files": [
+        "requirements.txt"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "test -x venv/bin/python",
+          "timeout": 5
+        },
+        {
+          "cmd": "venv/bin/python -c 'import msal, requests, fastapi, sqlmodel, apscheduler, pytest'",
+          "timeout": 30
+        },
+        {
+          "cmd": "venv/bin/python -m pytest -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T03:54:54Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "test -x venv/bin/python",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:52Z"
+          },
+          {
+            "cmd": "venv/bin/python -c 'import msal, requests, fastapi, sqlmodel, apscheduler, pytest'",
+            "exit": 0,
+            "duration_ms": 410,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:52Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest -q",
+            "exit": 0,
+            "duration_ms": 2042,
+            "tail": "........................................................................ [ 14%]\n........................................................................ [ 28%]\n........................................................................ [ 43%]\n........................................................................ [ 57%]\n........................................................................ [ 72%]\n........................................................................ [ 86%]\n....................................................................     [100%]\n500 passed in 1.61s",
+            "recorded_at": "2026-09-21T03:54:54Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Host has no venv/ and no pytest (OS reinstall); Python is 3.14.x. Create venv/, pip install -r requirements.txt. If a pinned dep has no wheel for this interpreter, pick a supported one via mise, record the choice in README Local dev, and keep requirements.txt pins unchanged. If the baseline suite is red, STOP and report; do not start T-002 on a red baseline."
+    },
+    {
+      "id": "T-002",
+      "title": "Gmail auth plumbing in health.py: env keys, token refresh, check_gmail, known_sources",
+      "role": "backend",
+      "files": [
+        "pipeline/health.py",
+        "tests/conftest.py",
+        "tests/test_health.py"
+      ],
+      "depends_on": [
+        "T-001"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def check_gmail' pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'GMAIL_' tests/conftest.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'gmail_\\{' pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_health.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T03:54:55Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def check_gmail' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:54Z"
+          },
+          {
+            "cmd": "grep -qE 'GMAIL_' tests/conftest.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:54Z"
+          },
+          {
+            "cmd": "grep -qE 'gmail_\\{' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:54Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:54Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_health.py -q",
+            "exit": 0,
+            "duration_ms": 254,
+            "tail": "................................................                         [100%]\n48 passed in 0.10s",
+            "recorded_at": "2026-09-21T03:54:55Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research §1,§2,§6. GMAIL_SCOPE=gmail.readonly only. Regex ^GMAIL_([A-Z0-9]+)_REFRESH_TOKEN$ must not match GMAIL_CLIENT_ID/SECRET. gmail_accounts() mirrors slack_workspaces(): lowercased labels, sorted, empty value -> None. gmail_token_response(label) mirrors zoom_token_response(): plain POST https://oauth2.googleapis.com/token (client_id, client_secret, grant_type=refresh_token, refresh_token); refresh returns NO new refresh token so nothing is written back. invalid_grant raises GmailAuthError (hard, never retried). check_gmail: refresh -> assert granted scope (space-delimited 'scope' field) contains gmail.readonly -> GET gmail/v1/users/me/profile (1 quota unit). invalid_grant message must name the likely causes (consent screen still in Testing = 7-day expiry, Google password change, revoked access) and 'auth/gmail_bootstrap.py <label>'. known_sources order: m365..., zoom, slack..., gmail.... Add GMAIL_ to the _env() prefix filter AND to tests/conftest.py CONFIG_PREFIXES. Tests stub requests.post/get at the health module, following tests/test_health.py."
+    },
+    {
+      "id": "T-003",
+      "title": "runner._active() reuses known_sources() instead of a duplicated source list",
+      "role": "backend",
+      "files": [
+        "pipeline/runner.py",
+        "pipeline/db.py",
+        "tests/test_runner.py"
+      ],
+      "depends_on": [
+        "T-002"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'known_sources' pipeline/runner.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"declared = \\[f\\\"m365_\" pipeline/runner.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"import .*(m365_aliases|slack_workspaces)\" pipeline/runner.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_runner.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T03:54:55Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'known_sources' pipeline/runner.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:55Z"
+          },
+          {
+            "cmd": "! grep -nE \"declared = \\[f\\\"m365_\" pipeline/runner.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:55Z"
+          },
+          {
+            "cmd": "! grep -nE \"import .*(m365_aliases|slack_workspaces)\" pipeline/runner.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:55Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_runner.py -q",
+            "exit": 0,
+            "duration_ms": 647,
+            "tail": ".............................................                            [100%]\n45 passed in 0.44s",
+            "recorded_at": "2026-09-21T03:54:55Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research §7: runner.py:134-137 hand-copies the declared-source list, so a new source is silently never collected. Replace with known_sources(), drop the now-unused m365_aliases/slack_workspaces imports, update the source-id comments in db.py (SourceHealth, CollectedItem) to include gmail_<label>. Test: with a gmail account declared and toggled on, _active(config) contains gmail_<label>; toggled off, it does not."
+    },
+    {
+      "id": "T-004",
+      "title": "Gmail transport: epoch-window list, page drain, quota-aware backoff",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/gmail.py",
+        "tests/test_collectors.py"
+      ],
+      "depends_on": [
+        "T-002"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def list_message_ids' pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'after:' pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"gmail\\.googleapis\\.com/batch|users/me/history|/watch\" pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+          "timeout": 120
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T03:54:56Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def list_message_ids' pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:55Z"
+          },
+          {
+            "cmd": "grep -qE 'after:' pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:55Z"
+          },
+          {
+            "cmd": "! grep -nE \"gmail\\.googleapis\\.com/batch|users/me/history|/watch\" pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 6,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:55Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:56Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+            "exit": 0,
+            "duration_ms": 244,
+            "tail": "........................................................................ [ 78%]\n....................                                                     [100%]\n92 passed, 51 deselected in 0.09s",
+            "recorded_at": "2026-09-21T03:54:56Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research §4,§5. messages.list q='after:<epoch_s> before:<epoch_s>' (NEVER date strings: they are PST-midnight), maxResults=500, drain every nextPageToken, raise at MAX_PAGES like graph.py rather than truncate. Convert the naive-UTC window to epoch with an explicit UTC tz (naive .timestamp() reads LOCAL time; see test_slack_oldest_is_utc_not_local) and pin it with a test under a non-UTC TZ. _call(): retry with truncated exponential backoff min(2**n + jitter, 32) on 403 with reason rateLimitExceeded/userRateLimitExceeded, on 429, and on 500/502/503/504; bounded attempts; 401 and other 4xx raise GmailError. Sleep via a module-level indirection so tests do not wait. Use plain requests.get (module-level, monkeypatched like graph/slack tests), NOT a Session and NOT parallel calls (deviation from research sketch: keeps the existing route() test helper valid). NO /batch, NO history.list, NO watch. Add test_gmail_* tests to tests/test_collectors.py."
+    },
+    {
+      "id": "T-005",
+      "title": "Gmail message fetch and MIME flattening into a compact payload",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/gmail.py",
+        "tests/test_collectors.py",
+        "tests/fixtures/gmail_message_multipart.json"
+      ],
+      "depends_on": [
+        "T-004"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def flatten_message' pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'urlsafe_b64decode' pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -c 'import json; json.load(open(\"tests/fixtures/gmail_message_multipart.json\"))'",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+          "timeout": 120
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T03:54:56Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def flatten_message' pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:56Z"
+          },
+          {
+            "cmd": "grep -qE 'urlsafe_b64decode' pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:56Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:56Z"
+          },
+          {
+            "cmd": "venv/bin/python -c 'import json; json.load(open(\"tests/fixtures/gmail_message_multipart.json\"))'",
+            "exit": 0,
+            "duration_ms": 17,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:56Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+            "exit": 0,
+            "duration_ms": 240,
+            "tail": "........................................................................ [ 78%]\n....................                                                     [100%]\n92 passed, 51 deselected in 0.09s",
+            "recorded_at": "2026-09-21T03:54:56Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research §4, §7 payload shape. messages.get format=full (20 quota units), sequential and paced (300 gets = the full 6,000 units/min/user budget). Decode base64url with padding fix; walk payload.parts recursively; prefer text/plain, else text/html stripped via stdlib html.parser dropping script/style AND hidden content (display:none, hidden attr, aria-hidden) since hidden HTML is a documented injection vector; charset from the part Content-Type, fallback utf-8 errors=replace. flatten_message() returns top-level keys: subject, from, to, cc, date, messageId, inReplyTo, listUnsubscribe, threadId, labelIds, snippet, internalDate, bodyText (capped, BODY_CAP default 20000 chars, a guess to be re-tuned from the dry run), bodyTruncated, attachments[{filename,mimeType,size}] (metadata only; never call attachments.get). 'subject' MUST be top-level so pipeline.collect PREVIEW_FIELDS shows it. internalDate (ms epoch string) -> naive UTC; unparseable -> None. Fixture tests/fixtures/gmail_message_multipart.json is SYNTHETIC (public repo: no real mail, names, or addresses) and is reused by T-009/T-013."
+    },
+    {
+      "id": "T-006",
+      "title": "collect_gmail orchestration and dispatch() wiring",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/gmail.py",
+        "pipeline/collectors/__init__.py",
+        "tests/test_collectors.py"
+      ],
+      "depends_on": [
+        "T-005"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def collect_gmail' pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'gmail_' pipeline/collectors/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -c 'from datetime import datetime; from pipeline.collectors import dispatch; r = dispatch(\"gmail_nolabel\", datetime(2026,1,1), datetime(2026,1,2)); assert r.status == \"error\" and \"token\" in r.detail.lower(), r'",
+          "timeout": 30
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+          "timeout": 120
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T03:54:57Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def collect_gmail' pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:56Z"
+          },
+          {
+            "cmd": "grep -qE 'gmail_' pipeline/collectors/__init__.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:56Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:56Z"
+          },
+          {
+            "cmd": "venv/bin/python -c 'from datetime import datetime; from pipeline.collectors import dispatch; r = dispatch(\"gmail_nolabel\", datetime(2026,1,1), datetime(2026,1,2)); assert r.status == \"error\" and \"token\" in r.detail.lower(), r'",
+            "exit": 0,
+            "duration_ms": 93,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:56Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+            "exit": 0,
+            "duration_ms": 234,
+            "tail": "........................................................................ [ 78%]\n....................                                                     [100%]\n92 passed, 51 deselected in 0.09s",
+            "recorded_at": "2026-09-21T03:54:57Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "collect_gmail(label, refresh_token, since, until) -> CollectionResult, mirroring collect_slack. Missing token -> error (detail contains 'token'). GmailAuthError on refresh -> error with the re-auth hint. List failure -> error. Per-message get failures -> partial (first failure in detail) keeping the items already fetched; exhausted rate-limit retries -> partial, not error. Re-check window on internalDate client-side (since <= occurred < until) because after:/before: boundary semantics are undocumented; dedupe repeated ids. Item('mail', message id, occurred_at, payload). dispatch(): add 'gmail_' branch with a local import and gmail_accounts().get(label), like slack. Add a pipeline.collect.report() test proving the subject line previews for a gmail item."
+    },
+    {
+      "id": "T-007",
+      "title": "auth/gmail_bootstrap.py: loopback + PKCE sign-in that prints the refresh token",
+      "role": "backend",
+      "files": [
+        "auth/gmail_bootstrap.py",
+        "tests/test_gmail_bootstrap.py"
+      ],
+      "depends_on": [
+        "T-002"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def build_auth_url' auth/gmail_bootstrap.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'code_challenge_method' auth/gmail_bootstrap.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" auth/gmail_bootstrap.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python auth/gmail_bootstrap.py --help",
+          "timeout": 20
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_gmail_bootstrap.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T03:54:57Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def build_auth_url' auth/gmail_bootstrap.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:57Z"
+          },
+          {
+            "cmd": "grep -qE 'code_challenge_method' auth/gmail_bootstrap.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:57Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" auth/gmail_bootstrap.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:57Z"
+          },
+          {
+            "cmd": "venv/bin/python auth/gmail_bootstrap.py --help",
+            "exit": 0,
+            "duration_ms": 91,
+            "tail": "usage: gmail_bootstrap.py [-h] [--force] [--port PORT] [--no-browser] label\n\nInteractive (browser, loopback + PKCE) sign-in for one Gmail label\n\npositional arguments:\n  label         mailbox label, letters/digits only, e.g. personal; becomes\n                GMAIL_<LABEL>_REFRESH_TOKEN\n\noptions:\n  -h, --help    show this help message and exit\n  --force       mint a new token even if the configured one is healthy\n  --port PORT   loopback port to listen on (default: random free port)\n  --no-browser  print the URL instead of opening a browser",
+            "recorded_at": "2026-09-21T03:54:57Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_gmail_bootstrap.py -q",
+            "exit": 0,
+            "duration_ms": 601,
+            "tail": ".................                                                        [100%]\n17 passed in 0.45s",
+            "recorded_at": "2026-09-21T03:54:57Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research §1. Desktop OAuth client, auth-code + PKCE (S256), redirect http://127.0.0.1:<random port>, access_type=offline, prompt=consent, scope=GMAIL_SCOPE only. Stdlib http.server + secrets/hashlib + requests: NO google-auth-oauthlib dependency. Validate the state param; exchange the code (send client_secret); refuse to continue if the response has no refresh_token or the granted 'scope' lacks gmail.readonly; print the GMAIL_<LABEL>_REFRESH_TOKEN=... line for the user to paste into .env (never write it to a file). Short-circuit like m365_bootstrap.py: if a token is already configured and check_gmail is ok and not --force, exit 0. Support --port N and --no-browser (print the URL) so the loopback port can be SSH-forwarded from a headless box; that is an implementation note, not a documented Google recipe. Warn that every bootstrap run mints a token and Google keeps only 100 per client (oldest silently invalidated), so do not re-run casually. Unit-test the pure helpers (PKCE pair, URL builder, state check, scope assertion); the browser flow itself is a manual step."
+    },
+    {
+      "id": "T-008",
+      "title": "README Gmail setup section and .env.example entries",
+      "role": "infra",
+      "files": [
+        "README.md",
+        ".env.example"
+      ],
+      "depends_on": [
+        "T-006",
+        "T-007"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^GMAIL_CLIENT_ID=' .env.example",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^GMAIL_CLIENT_SECRET=' .env.example",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^GMAIL_PERSONAL_REFRESH_TOKEN=' .env.example",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'In production' README.md",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'gmail_bootstrap.py' README.md",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"/home/[a-z]|(^|[^0-9])(10\\.[0-9]+\\.[0-9]+\\.[0-9]+|192\\.168\\.[0-9]+\\.[0-9]+)\" README.md .env.example",
+          "timeout": 10
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T03:54:58Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^GMAIL_CLIENT_ID=' .env.example",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:57Z"
+          },
+          {
+            "cmd": "grep -qE '^GMAIL_CLIENT_SECRET=' .env.example",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:57Z"
+          },
+          {
+            "cmd": "grep -qE '^GMAIL_PERSONAL_REFRESH_TOKEN=' .env.example",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:57Z"
+          },
+          {
+            "cmd": "grep -qE 'In production' README.md",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:57Z"
+          },
+          {
+            "cmd": "grep -qE 'gmail_bootstrap.py' README.md",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:57Z"
+          },
+          {
+            "cmd": "! grep -nE \"/home/[a-z]|(^|[^0-9])(10\\.[0-9]+\\.[0-9]+\\.[0-9]+|192\\.168\\.[0-9]+\\.[0-9]+)\" README.md .env.example",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:58Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Public repo: generic wording only, no account names, addresses, or hosts. README: add Gmail to the Sources table and Phases text; a Setup > Gmail section covering create your OWN GCP project + Desktop client (never commit or share a client id), enable the Gmail API, consent screen External + add gmail.readonly, PUBLISH to In production (Testing = 7-day refresh tokens), accept the unverified-app click-through, run auth/gmail_bootstrap.py, paste the token line; a warning that a Google password change or revoked access kills the token; and the day-8 check. .env.example: GMAIL_CLIENT_ID=, GMAIL_CLIENT_SECRET=, GMAIL_PERSONAL_REFRESH_TOKEN= with comments. Add the Gmail dry-run line next to the existing ones."
+    },
+    {
+      "id": "T-009",
+      "title": "NormalizedItem schema and Gmail adapter (pure function)",
+      "role": "backend",
+      "files": [
+        "pipeline/normalize.py",
+        "tests/test_normalize.py"
+      ],
+      "depends_on": [
+        "T-005"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'class NormalizedItem' pipeline/normalize.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def normalize_gmail' pipeline/normalize.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/normalize.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -c 'from pipeline.normalize import NormalizedItem'",
+          "timeout": 30
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_normalize.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T03:54:58Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'class NormalizedItem' pipeline/normalize.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:58Z"
+          },
+          {
+            "cmd": "grep -qE 'def normalize_gmail' pipeline/normalize.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:58Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/normalize.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:58Z"
+          },
+          {
+            "cmd": "venv/bin/python -c 'from pipeline.normalize import NormalizedItem'",
+            "exit": 0,
+            "duration_ms": 89,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:58Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_normalize.py -q",
+            "exit": 0,
+            "duration_ms": 265,
+            "tail": "...................................                                      [100%]\n35 passed in 0.11s",
+            "recorded_at": "2026-09-21T03:54:58Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research §8 Q5: PROPOSAL, not sourced. Pydantic NormalizedItem: id (source:external_id), source, kind, occurred_at, title, body_text, body_truncated, participants[{name,address,role}], thread_key (gmail:<threadId>), labels, direction (inbound|outbound, from SENT label), is_unread, attachments (metadata), trust='untrusted_third_party', raw_ref, permalink=None (a Gmail URL format that works across accounts is unverified; deferred to the render phase). normalize_gmail() is a pure function over a CollectedItem-shaped input; add a dispatcher by source prefix that raises for sources without an adapter yet. Address parsing via email.utils.getaddresses. Include a deterministic strip_quoted_reply(text) and truncate(text, cap) helper. Tests feed the REAL output of flatten_message() from the T-005 fixture through the adapter, not a hand-built payload, so the two cannot drift."
+    },
+    {
+      "id": "T-010",
+      "title": "Triage schema, alias mapping, output validation, deterministic stub fallback",
+      "role": "backend",
+      "files": [
+        "pipeline/triage.py",
+        "tests/test_triage.py"
+      ],
+      "depends_on": [
+        "T-009"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'class TriageRecord' pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'extra=.forbid.' pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def (validate_batch|stub_record|assign_aliases)' pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_triage.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T03:54:59Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'class TriageRecord' pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:58Z"
+          },
+          {
+            "cmd": "grep -qE 'extra=.forbid.' pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:58Z"
+          },
+          {
+            "cmd": "grep -qE 'def (validate_batch|stub_record|assign_aliases)' pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:58Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:58Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_triage.py -q",
+            "exit": 0,
+            "duration_ms": 689,
+            "tail": "........................................................................ [ 80%]\n..................                                                       [100%]\n90 passed in 0.47s",
+            "recorded_at": "2026-09-21T03:54:59Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research §8 Q1,Q3,Q4: pure logic, no SDK import yet. TriageRecord/TriageBatch Pydantic models with model_config extra='forbid'; categories and importance are string ENUMS (structured outputs reject numeric min/max and string length constraints, so ranges and lengths are enforced in Python post-parse). assign_aliases() gives per-run short ids (m001...) mapped to real ids in a dict: the model never sees or echoes real ids. batches(items, size~20). validate_batch(): every returned alias must be in the input set (unknown -> dropped), every input alias must be present (missing -> returned for one retry). sanitize_text(): strips URLs and markup and caps length (the model never emits URLs; links come from our own id->permalink map later). stub_record(item): deterministic record from subject/sender so a failed call degrades to a partial digest, never a dead run."
+    },
+    {
+      "id": "T-011",
+      "title": "Add the anthropic SDK dependency and LLM settings (API key, model ids)",
+      "role": "infra",
+      "files": [
+        "requirements.txt",
+        "pipeline/health.py",
+        "tests/conftest.py",
+        ".env.example"
+      ],
+      "depends_on": [
+        "T-002",
+        "T-008"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^anthropic==' requirements.txt",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'ANTHROPIC_API_KEY' pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'ANTHROPIC_API_KEY' tests/conftest.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^ANTHROPIC_API_KEY=' .env.example",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -c 'import anthropic'",
+          "timeout": 30
+        },
+        {
+          "cmd": "venv/bin/python -m pytest -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T03:55:01Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^anthropic==' requirements.txt",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:59Z"
+          },
+          {
+            "cmd": "grep -qE 'ANTHROPIC_API_KEY' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:59Z"
+          },
+          {
+            "cmd": "grep -qE 'ANTHROPIC_API_KEY' tests/conftest.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:59Z"
+          },
+          {
+            "cmd": "grep -qE '^ANTHROPIC_API_KEY=' .env.example",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:59Z"
+          },
+          {
+            "cmd": "venv/bin/python -c 'import anthropic'",
+            "exit": 0,
+            "duration_ms": 405,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:54:59Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest -q",
+            "exit": 0,
+            "duration_ms": 2015,
+            "tail": "........................................................................ [ 14%]\n........................................................................ [ 28%]\n........................................................................ [ 43%]\n........................................................................ [ 57%]\n........................................................................ [ 72%]\n........................................................................ [ 86%]\n....................................................................     [100%]\n500 passed in 1.60s",
+            "recorded_at": "2026-09-21T03:55:01Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research §8. pip install anthropic in the venv, then pin the resolved version in requirements.txt as anthropic==<version> (record the version you actually installed; do not guess one). Add ANTHROPIC_API_KEY and SIGNALSLATE_MAP_MODEL to health._SINGLE_KEYS and tests/conftest.py CONFIG_KEYS so .env reaches the process the same way the other settings do (the SDK reads os.environ only, and locally .env is not loaded into it), plus a small llm_settings() accessor that returns the key and the model id. Default map model claude-haiku-4-5-20251001, overridable via env: Haiku 4.5 retirement is 'not sooner than 2026-10-15', so the id must be config. Do not add an SDK call here. scope+tests/test_health.py: the plan listed no test file for llm_settings(); added at build time (2026-09-21) so the new accessor is tested."
+    },
+    {
+      "id": "T-012",
+      "title": "Map call: request builder, triage_items(), retry-then-stub degradation",
+      "role": "backend",
+      "files": [
+        "pipeline/triage.py",
+        "tests/test_triage_client.py"
+      ],
+      "depends_on": [
+        "T-010",
+        "T-011"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def (build_request|triage_items)' pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"^\\s*[\\\"']?(temperature|top_p|top_k|tools)[\\\"']?\\s*[:=]\" pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_triage_client.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T03:55:02Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def (build_request|triage_items)' pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:55:01Z"
+          },
+          {
+            "cmd": "! grep -nE \"^\\s*[\\\"']?(temperature|top_p|top_k|tools)[\\\"']?\\s*[:=]\" pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:55:01Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:55:01Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_triage_client.py -q",
+            "exit": 0,
+            "duration_ms": 726,
+            "tail": "............................                                             [100%]\n28 passed in 0.45s",
+            "recorded_at": "2026-09-21T03:55:02Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research §8 Q1,Q4. build_request() returns the kwargs for client.messages.parse: system prompt with an <untrusted_content_policy> block, ONE user turn whose content is json.dumps of the batch (JSON escaping is the delimiter: a body containing </document> must not break out), the Pydantic model as the structured-output format, max_tokens set, and NO tools, NO network, NO temperature/top_p/top_k (400s on 4.7+ models; the SDK removes them). Find the correct structured-output kwarg name by inspecting the INSTALLED SDK (inspect.signature of anthropic.resources.messages.Messages.parse); do not guess it from prose docs. Contract test: every key build_request() emits must be a real parameter of that signature, so a stub client cannot hide a wrong kwarg. triage_items(items, client, model, batch_size) -> result with records, failures, stubbed ids: validate each batch, retry missing aliases once, then fall back to stub_record; APIError, refusal, or max_tokens stop -> stub the whole batch and record the failure; never raise. The API is a true external, so a fake client is acceptable for behavior tests. Unverified and to prototype later: whether Anthropic's recommended tool_result delivery composes with structured outputs."
+    },
+    {
+      "id": "T-013",
+      "title": "Prompt-injection regression tests over synthetic hostile email",
+      "role": "test",
+      "files": [
+        "tests/test_triage_injection.py",
+        "tests/fixtures/injection_emails.json"
+      ],
+      "depends_on": [
+        "T-012"
+      ],
+      "verify": [
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_triage_injection.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T03:55:03Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_triage_injection.py -q",
+            "exit": 0,
+            "duration_ms": 720,
+            "tail": "........................................................................ [ 91%]\n.......                                                                  [100%]\n79 passed in 0.47s",
+            "recorded_at": "2026-09-21T03:55:03Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "test-only: the product is the regression suite; there is no production symbol to grep. Synthetic fixtures only (public repo). Cases: body containing </document> and an instruction-override phrase (see the fixture); HTML with display:none / hidden instructions (must be absent from the built request, end to end: raw Gmail fixture -> flatten_message -> normalize -> build_request); a fake model reply whose one_line carries a URL and a canary string (URL must be stripped, alias to unknown id dropped); request has no tools key; system prompt contains the untrusted-content policy. Run injection-resistance assertions across several fake replies (pass^k style: all must hold), never assert exact LLM text (Sonnet-class output is not reproducible)."
+    },
+    {
+      "id": "T-014",
+      "title": "pipeline.triage_cli: dry-run the map call over collected Gmail items",
+      "role": "backend",
+      "files": [
+        "pipeline/triage_cli.py",
+        "pipeline/db.py",
+        "tests/test_triage_cli.py"
+      ],
+      "depends_on": [
+        "T-012",
+        "T-003"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '\\-\\-dry' pipeline/triage_cli.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def items_for_source_since' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage_cli.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pipeline.triage_cli --help",
+          "timeout": 30
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_triage_cli.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T03:55:05Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '\\-\\-dry' pipeline/triage_cli.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "grep: warning: stray \\ before -",
+            "recorded_at": "2026-09-21T03:55:03Z"
+          },
+          {
+            "cmd": "grep -qE 'def items_for_source_since' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:55:03Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage_cli.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:55:03Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pipeline.triage_cli --help",
+            "exit": 0,
+            "duration_ms": 708,
+            "tail": "usage: triage_cli.py [-h] [--hours HOURS] [--limit LIMIT]\n                     [--batch-size BATCH_SIZE] [--dry]\n                     source\n\nRun the triage map call over collected Gmail items. Writes nothing.\n\npositional arguments:\n  source                stored source id, e.g. gmail_personal\n\noptions:\n  -h, --help            show this help message and exit\n  --hours HOURS         lookback window (default 24)\n  --limit LIMIT         records to print (default 5)\n  --batch-size BATCH_SIZE\n                        items per call (default 20)\n  --dry                 print the first request only: no API key, no network",
+            "recorded_at": "2026-09-21T03:55:04Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_triage_cli.py -q",
+            "exit": 0,
+            "duration_ms": 913,
+            "tail": "...............                                                          [100%]\n15 passed in 0.61s",
+            "recorded_at": "2026-09-21T03:55:05Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Mirrors pipeline/collect.py: python -m pipeline.triage_cli <source> [--hours N] [--limit N] [--dry]. Reads CollectedItem rows for the source within the window (add a small db helper such as items_for_source_since(source, since); items_for_run exists but is per-run), normalizes them, and with --dry prints the batched request JSON WITHOUT calling the API and without any API key; without --dry it calls triage_items and prints each record with its source alias. Writes NOTHING to the database. This is how the map step is judged against real Gmail data; the live call is a manual step that spends API credit."
+    },
+    {
+      "id": "T-015",
+      "title": "Send participant roles to the triage model; drop the httpx2 import from tests",
+      "role": "backend",
+      "files": [
+        "pipeline/triage.py",
+        "tests/test_triage_client.py"
+      ],
+      "depends_on": [
+        "T-012"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def _participant_line' pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"^(import|from) httpx\" tests/test_triage_client.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_triage.py tests/test_triage_client.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T03:55:05Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def _participant_line' pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:55:05Z"
+          },
+          {
+            "cmd": "! grep -nE \"^(import|from) httpx\" tests/test_triage_client.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:55:05Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:55:05Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_triage.py tests/test_triage_client.py -q",
+            "exit": 0,
+            "duration_ms": 720,
+            "tail": "........................................................................ [ 61%]\n..............................................                           [100%]\n118 passed in 0.48s",
+            "recorded_at": "2026-09-21T03:55:05Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Found in T-012 review. build_request sent participants as bare 'Name <addr>' strings, so the model cannot tell the sender from recipients, which matters for judging action_needed (asked of the reader?). Add a helper _participant_line(participant) -> str that renders '<role>: Name <addr>' (role is from|to|cc; omit '<>' when there is no display name and no angle brackets when there is no name), used for each item's participants list; the field name and the rest of the request shape do not change. Update the tests that assert the participant format and add a case with all three roles and a nameless address. Also replace the direct 'import httpx2' in tests/test_triage_client.py with a small stand-in request object (anthropic.APIConnectionError only stores the request) so the test suite does not depend on the SDK's transitive HTTP library; the contract test against the real Messages.parse signature must remain."
+    },
+    {
+      "id": "T-016",
+      "title": "Harden sanitize_text: strip other URI schemes and protocol-relative links",
+      "role": "backend",
+      "files": [
+        "pipeline/triage.py",
+        "tests/test_triage.py"
+      ],
+      "depends_on": [
+        "T-015"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qiE 'javascript' pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_triage.py tests/test_triage_client.py tests/test_triage_injection.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T03:55:06Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qiE 'javascript' pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:55:06Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:55:06Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_triage.py tests/test_triage_client.py tests/test_triage_injection.py -q",
+            "exit": 0,
+            "duration_ms": 829,
+            "tail": "........................................................................ [ 36%]\n........................................................................ [ 73%]\n.....................................................                    [100%]\n197 passed in 0.57s",
+            "recorded_at": "2026-09-21T03:55:06Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Found in T-013 review. sanitize_text (pipeline/triage.py, _URL) strips only http(s):// and www. forms; a hostile or confused model reply can still carry ftp://, mailto:, javascript:, data:, file:, tel: URIs or protocol-relative //host/path into the digest, which is later rendered to PDF. Extend the URL removal to those schemes (case-insensitive, also when written with odd spacing is NOT required) and to //host/path forms, removing them the same way existing URLs are removed. Do NOT strip bare domains (evil.example.net, Acme.com): false positives on company names and file names outweigh the gain for a PDF digest; say so in a comment. Keep the existing behavior for markdown links (label kept, target dropped). Add tests to tests/test_triage.py for each new scheme (in plain text and as a markdown link target), for //host, for a bare domain being left alone, and for a sentence where removal leaves no double spaces. The existing 62 triage tests and the injection suite must keep passing unchanged."
+    },
+    {
+      "id": "T-017",
+      "title": "Isolate per-message failures in collect_gmail and harden charset decoding",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/gmail.py",
+        "tests/test_collectors.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qE 'UnicodeError' pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+          "timeout": 120
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T04:10:25Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'UnicodeError' pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T04:10:24Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T04:10:24Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+            "exit": 0,
+            "duration_ms": 252,
+            "tail": "........................................................................ [ 71%]\n.............................                                            [100%]\n101 passed, 51 deselected in 0.10s",
+            "recorded_at": "2026-09-21T04:10:25Z"
+          }
+        ]
+      },
+      "origin": "check",
+      "notes": "check finding P1 x2, both reproduced 2026-09-21. (1) _decode_part catches only LookupError around raw.decode(charset, errors='replace'), but a sender-controlled Content-Type charset of 'undefined' raises UnicodeError('undefined encoding') and 'idna' raises UnicodeError('Unsupported error handling replace'); catch (LookupError, UnicodeError) and fall back to utf-8 with errors='replace'. (2) collect_gmail calls flatten_message(msg) with no guard, so ONE message that makes it raise (bad charset, a 2000-deep MIME tree -> RecursionError) discards every already-fetched message and no CollectionResult is returned; the runner then counts a hard failure and after MAX_STUCK_RUNS=3 advances the watermark, losing the window. Wrap the per-message flatten in try/except Exception (RecursionError is an Exception), skip that message, count it as a FAILURE (not the 'unplaceable' bucket) with the message id and exception class in the failure list so the result is 'partial' with the first failure named and every other message kept. Tests: charset=undefined and charset=idna decode without raising; a batch of [good, bad, good] returns both good items with status partial; a 1500-deep nested multipart message (build it programmatically) does not escape; the failure detail names the exception class but never the body."
+    },
+    {
+      "id": "T-018",
+      "title": "Bound the cost of HTML-to-text extraction on hostile input",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/gmail.py",
+        "tests/test_collectors.py"
+      ],
+      "depends_on": [
+        "T-017"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'MAX_HTML_CHARS' pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+          "timeout": 120
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T04:38:02Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'MAX_HTML_CHARS' pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T04:38:02Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T04:38:02Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+            "exit": 0,
+            "duration_ms": 414,
+            "tail": "........................................................................ [ 65%]\n......................................                                   [100%]\n110 passed, 51 deselected in 0.25s",
+            "recorded_at": "2026-09-21T04:38:02Z"
+          }
+        ]
+      },
+      "origin": "check",
+      "notes": "check finding P2, reproduced 2026-09-21. _TextExtractor.handle_endtag scans the whole open-element stack for every end tag, so unmatched end tags over a deep stack are O(n^2): _html_to_text('<b>'*n + '</i>'*n) took 0.15s at n=2500, 0.56s at 5000, 2.16s at 10000 (30 KB), ~9s at 140 KB, minutes at ~1 MB; the HTML path is reached whenever text/plain is empty, which the sender controls, and nothing bounds the input before parsing (BODY_CAP only slices AFTER). Fix both: (a) truncate the HTML input to a documented MAX_HTML_CHARS (start at 500000, a guess to be re-tuned from the dry run) before parsing, and (b) make the unmatched-end-tag check O(1) (e.g. a collections.Counter of currently open tag names) instead of scanning the stack. Keep hidden-content semantics identical: every existing hidden-content and nesting test must pass unchanged. Tests: the 10000-pair unmatched case completes in well under a second (assert on a generous bound, e.g. < 1.0s, not on exact time), an input over MAX_HTML_CHARS is cut and still yields the visible text before the cut, and a deep but well-formed nest still strips hidden regions correctly."
+    },
+    {
+      "id": "T-019",
+      "title": "Give the OAuth loopback listener a real per-connection timeout",
+      "role": "backend",
+      "files": [
+        "auth/gmail_bootstrap.py",
+        "tests/test_gmail_bootstrap.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qE 'timeout' auth/gmail_bootstrap.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" auth/gmail_bootstrap.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_gmail_bootstrap.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T04:41:07Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'timeout' auth/gmail_bootstrap.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T04:41:04Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" auth/gmail_bootstrap.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T04:41:04Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_gmail_bootstrap.py -q",
+            "exit": 0,
+            "duration_ms": 2629,
+            "tail": "........................                                                 [100%]\n24 passed in 2.48s",
+            "recorded_at": "2026-09-21T04:41:07Z"
+          }
+        ]
+      },
+      "origin": "check",
+      "notes": "check finding P2, reproduced 2026-09-21: wait_for_code(0, 'S', 1) followed by an idle socket.create_connection to the bound port is still blocked 4s after its 1s deadline. HTTPServer is single-threaded and the handler has no socket timeout, so any local process (or a browser speculative preconnect accepted before the real callback) stalls the accept loop and the real callback waits behind it; the deadline is never enforced. Fix: set a short per-connection timeout on accepted sockets (StreamRequestHandler.timeout, a few seconds) AND enforce the overall deadline in the serve loop (server.timeout + a monotonic deadline check), so the function raises its existing timeout error at the deadline even with a stalled connection open. Also add the loopback-bind test the patterns lens noted is missing: assert the listener's bound address is 127.0.0.1 (server.server_address[0]), not merely reachable there. Tests: an idle connection does not prevent the real callback from being served or the timeout from firing within a bounded slack; a stalled connection followed by a valid callback still returns the code."
+    }
+  ]
+}

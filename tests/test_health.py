@@ -28,15 +28,17 @@ def env(monkeypatch, tmp_path):
 
 
 class FakeResponse:
-    def __init__(self, json_data, headers=None):
+    def __init__(self, json_data, headers=None, status_code=200):
         self._json = json_data
         self.headers = headers or {}
+        self.status_code = status_code
 
     def json(self):
         return self._json
 
     def raise_for_status(self):
-        pass
+        if self.status_code >= 400:
+            raise health.requests.HTTPError(f"{self.status_code} Server Error")
 
 
 def slack_scope_header(scopes) -> dict:
@@ -220,6 +222,167 @@ def test_check_zoom_missing_credentials(env):
     assert health.check_zoom().status == "error"
 
 
+# --- Gmail auth -------------------------------------------------------------------
+
+GMAIL_ENV = "GMAIL_CLIENT_ID=cid\nGMAIL_CLIENT_SECRET=csecret\nGMAIL_PERSONAL_REFRESH_TOKEN=rt-1\n"
+
+
+def gmail_stub(monkeypatch, token_resp, profile_resp=None):
+    """Stubs the token POST and profile GET; returns the recorded calls."""
+    calls = {"post": [], "get": []}
+
+    def post(url, **kwargs):
+        calls["post"].append((url, kwargs))
+        return token_resp
+
+    def get(url, **kwargs):
+        calls["get"].append((url, kwargs))
+        return profile_resp
+
+    monkeypatch.setattr(health.requests, "post", post)
+    monkeypatch.setattr(health.requests, "get", get)
+    return calls
+
+
+def test_gmail_accounts_lowercases_labels_and_sorts(env):
+    env("GMAIL_WORK_REFRESH_TOKEN=b\nGMAIL_PERSONAL_REFRESH_TOKEN=a\n")
+    assert list(health.gmail_accounts()) == ["personal", "work"]
+
+
+def test_gmail_accounts_keeps_empty_token_as_none(env):
+    env("GMAIL_WORK_REFRESH_TOKEN=\n")
+    assert health.gmail_accounts() == {"work": None}
+
+
+def test_gmail_accounts_ignores_shared_client_credentials(env):
+    env(GMAIL_ENV)
+    assert list(health.gmail_accounts()) == ["personal"]
+
+
+def test_known_sources_lists_gmail_after_slack(env):
+    env("SLACK_ACME_TOKEN=xoxp-1\nGMAIL_PERSONAL_REFRESH_TOKEN=rt\n")
+    assert health.known_sources() == ["zoom", "slack_acme", "gmail_personal"]
+
+
+def test_gmail_token_response_posts_refresh_grant_and_returns_raw_json(env, monkeypatch):
+    env(GMAIL_ENV)
+    body = {"access_token": "at", "expires_in": 3599, "scope": health.GMAIL_SCOPE}
+    calls = gmail_stub(monkeypatch, FakeResponse(body))
+    assert health.gmail_token_response("personal") == body
+    url, kwargs = calls["post"][0]
+    assert url == "https://oauth2.googleapis.com/token"
+    assert kwargs["data"] == {
+        "client_id": "cid",
+        "client_secret": "csecret",
+        "grant_type": "refresh_token",
+        "refresh_token": "rt-1",
+    }
+
+
+def test_gmail_token_response_missing_client_credentials(env):
+    env("GMAIL_PERSONAL_REFRESH_TOKEN=rt-1\n")
+    with pytest.raises(RuntimeError, match="GMAIL_CLIENT_ID"):
+        health.gmail_token_response("personal")
+
+
+def test_gmail_token_response_unknown_label(env):
+    env(GMAIL_ENV)
+    with pytest.raises(RuntimeError, match="GMAIL_OTHER_REFRESH_TOKEN"):
+        health.gmail_token_response("other")
+
+
+def test_gmail_token_response_invalid_grant_raises_gmail_auth_error(env, monkeypatch):
+    env(GMAIL_ENV)
+    gmail_stub(monkeypatch, FakeResponse({"error": "invalid_grant"}, status_code=400))
+    with pytest.raises(health.GmailAuthError):
+        health.gmail_token_response("personal")
+
+
+def test_gmail_token_response_other_400_is_not_an_auth_error(env, monkeypatch):
+    env(GMAIL_ENV)
+    gmail_stub(monkeypatch, FakeResponse({"error": "invalid_client"}, status_code=400))
+    with pytest.raises(health.requests.HTTPError):
+        health.gmail_token_response("personal")
+
+
+def test_check_gmail_ok_with_scope_and_live_profile(env, monkeypatch):
+    env(GMAIL_ENV)
+    calls = gmail_stub(
+        monkeypatch,
+        FakeResponse({"access_token": "at", "scope": f"openid {health.GMAIL_SCOPE}"}),
+        FakeResponse({"emailAddress": "me@example.com"}),
+    )
+    result = health.check_gmail("personal")
+    assert result.status == "ok"
+    assert result.source == "gmail_personal"
+    assert "me@example.com" in result.detail
+    url, kwargs = calls["get"][0]
+    assert url == "https://gmail.googleapis.com/gmail/v1/users/me/profile"
+    assert kwargs["headers"] == {"Authorization": "Bearer at"}
+
+
+def test_check_gmail_errors_on_missing_scope_without_probing(env, monkeypatch):
+    env(GMAIL_ENV)
+    calls = gmail_stub(
+        monkeypatch,
+        FakeResponse({"access_token": "at", "scope": "https://www.googleapis.com/auth/gmail.labels"}),
+    )
+    result = health.check_gmail("personal")
+    assert result.status == "error"
+    assert "missing scope" in result.detail
+    assert calls["get"] == []
+
+
+def test_check_gmail_invalid_grant_names_causes_and_bootstrap(env, monkeypatch):
+    env(GMAIL_ENV)
+    gmail_stub(monkeypatch, FakeResponse({"error": "invalid_grant"}, status_code=400))
+    result = health.check_gmail("personal")
+    assert result.status == "error"
+    assert "Testing" in result.detail
+    assert "password" in result.detail
+    assert "revoked" in result.detail
+    assert "auth/gmail_bootstrap.py personal" in result.detail
+
+
+def test_check_gmail_token_endpoint_5xx_is_transient_not_reauth(env, monkeypatch):
+    env(GMAIL_ENV)
+    gmail_stub(monkeypatch, FakeResponse({}, status_code=503))
+    result = health.check_gmail("personal")
+    assert result.status == "error"
+    assert "503" in result.detail
+    assert "gmail_bootstrap" not in result.detail
+
+
+def test_check_gmail_profile_failure_reported_with_http_detail(env, monkeypatch):
+    env(GMAIL_ENV)
+    gmail_stub(
+        monkeypatch,
+        FakeResponse({"access_token": "at", "scope": health.GMAIL_SCOPE}),
+        FakeResponse({}, status_code=500),
+    )
+    result = health.check_gmail("personal")
+    assert result.status == "error"
+    assert "500" in result.detail
+    assert "gmail_bootstrap" not in result.detail
+
+
+def test_check_gmail_network_failure(env, monkeypatch):
+    env(GMAIL_ENV)
+
+    def boom(*a, **k):
+        raise health.requests.ConnectionError("dns down")
+
+    monkeypatch.setattr(health.requests, "post", boom)
+    result = health.check_gmail("personal")
+    assert result.status == "error"
+    assert "dns down" in result.detail
+
+
+def test_check_gmail_missing_credentials(env):
+    env("GMAIL_PERSONAL_REFRESH_TOKEN=rt-1\n")
+    assert health.check_gmail("personal").status == "error"
+
+
 # --- active-source toggles --------------------------------------------------------
 
 
@@ -231,6 +394,13 @@ def test_check_all_configured_skips_inactive_sources(env, monkeypatch):
 
     results = health.check_all_configured({"m365_work": True, "zoom": False, "slack_acme": True})
     assert [r.source for r in results] == ["m365_work", "slack_acme"]
+
+
+def test_check_all_configured_runs_active_gmail_only(env, monkeypatch):
+    env("GMAIL_PERSONAL_REFRESH_TOKEN=a\nGMAIL_WORK_REFRESH_TOKEN=b\n")
+    monkeypatch.setattr(health, "check_gmail", lambda l: health.HealthResult(f"gmail_{l}", "ok", ""))
+    results = health.check_all_configured({"gmail_work": True, "gmail_personal": False})
+    assert [r.source for r in results] == ["gmail_work"]
 
 
 def test_check_all_configured_empty_when_nothing_active(env):
@@ -277,3 +447,43 @@ def test_env_flag_false_when_unset(env, monkeypatch):
     env("")
     monkeypatch.delenv("SLACK_SKIP_DMS", raising=False)
     assert health.env_flag("SLACK_SKIP_DMS") is False
+
+
+# --- LLM settings -----------------------------------------------------------------
+
+
+def test_llm_settings_defaults_when_unset(env):
+    env("")
+    assert health.llm_settings() == {"api_key": None, "map_model": health.DEFAULT_MAP_MODEL}
+    assert health.DEFAULT_MAP_MODEL == "claude-haiku-4-5-20251001"
+
+
+def test_llm_settings_read_from_dotenv(env):
+    env("ANTHROPIC_API_KEY=sk-test-dotenv\nSIGNALSLATE_MAP_MODEL=model-from-dotenv\n")
+    assert health.llm_settings() == {"api_key": "sk-test-dotenv", "map_model": "model-from-dotenv"}
+
+
+def test_llm_settings_environment_takes_precedence_over_dotenv(env, monkeypatch):
+    env("ANTHROPIC_API_KEY=sk-test-dotenv\nSIGNALSLATE_MAP_MODEL=model-from-dotenv\n")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-environ")
+    monkeypatch.setenv("SIGNALSLATE_MAP_MODEL", "model-from-environ")
+    assert health.llm_settings() == {"api_key": "sk-test-environ", "map_model": "model-from-environ"}
+
+
+def test_llm_settings_read_from_environment_without_dotenv_entry(env, monkeypatch):
+    env("")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-environ")
+    assert health.llm_settings() == {"api_key": "sk-test-environ", "map_model": health.DEFAULT_MAP_MODEL}
+
+
+def test_llm_settings_blank_values_count_as_unset(env, monkeypatch):
+    env("ANTHROPIC_API_KEY=\nSIGNALSLATE_MAP_MODEL=   \n")
+    assert health.llm_settings() == {"api_key": None, "map_model": health.DEFAULT_MAP_MODEL}
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "  ")
+    monkeypatch.setenv("SIGNALSLATE_MAP_MODEL", "")
+    assert health.llm_settings() == {"api_key": None, "map_model": health.DEFAULT_MAP_MODEL}
+
+
+def test_llm_keys_are_in_single_keys():
+    # Without this the container's environment value is never merged into _env().
+    assert {"ANTHROPIC_API_KEY", "SIGNALSLATE_MAP_MODEL"} <= health._SINGLE_KEYS

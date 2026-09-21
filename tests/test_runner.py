@@ -15,7 +15,7 @@ from sqlmodel import SQLModel, create_engine, select
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pipeline import db, runner  # noqa: E402
+from pipeline import db, health, runner  # noqa: E402
 from pipeline.clock import utcnow  # noqa: E402
 from pipeline.health import HealthResult  # noqa: E402
 
@@ -570,3 +570,14 @@ def test_raising_collector_also_counts_toward_the_streak(temp_db, no_config, mon
     run = runner.execute_run()
     assert db.get_cursor("zoom").last_success_at is not None
     assert "repeated hard failures" in (run.error or "")
+
+
+def test_active_includes_a_declared_gmail_account_only_when_toggled_on(monkeypatch, tmp_path):
+    """Real wiring: the account is declared through .env, not by stubbing known_sources."""
+    (tmp_path / ".env").write_text("GMAIL_WORK_REFRESH_TOKEN=fake-refresh-token\n")
+    monkeypatch.setattr(health, "ROOT", tmp_path)
+    monkeypatch.setattr(health, "TOKEN_DIR", tmp_path / "tokens")
+
+    assert "gmail_work" in runner._active({"active_sources": {"gmail_work": True}})
+    assert "gmail_work" not in runner._active({"active_sources": {"gmail_work": False}})
+    assert "gmail_work" not in runner._active({"active_sources": {}})
