@@ -228,6 +228,13 @@ class _TextExtractor(HTMLParser):
         if not hidden and tag in _BLOCK_TAGS:
             self._newline()
 
+    def handle_startendtag(self, tag: str, attrs: list) -> None:
+        # HTMLParser's default calls start then end, so `<div style="display:none"/>SECRET</div>` closed
+        # its own hidden region at once and leaked SECRET. Browsers ignore the "/" on non-void HTML
+        # elements and keep the element open until its end tag, so mirror that: the model must see what
+        # a human sees, including an unclosed hidden region hiding the rest of its parent.
+        self.handle_starttag(tag, attrs)
+
     def handle_endtag(self, tag: str) -> None:
         if tag in _VOID_TAGS:
             return

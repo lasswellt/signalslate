@@ -963,6 +963,64 @@ def test_gmail_html_script_style_head_title_are_dropped():
     assert html_body(html) == "body"
 
 
+def test_gmail_html_title_outside_head_is_still_dropped():
+    assert html_body("<title>T-leak</title><p>body</p>") == "body"
+
+
+def test_gmail_html_head_text_without_a_title_is_still_dropped():
+    assert html_body("<head>H-leak<meta charset=utf-8></head><p>body</p>") == "body"
+
+
+def test_gmail_html_self_closing_hidden_tags_hide_until_their_end_tag():
+    """Was 'SECRETvisible' etc.: the default handle_startendtag closed the region at once."""
+    assert html_body('<div style="display:none"/>SECRET</div>visible') == "visible"
+    assert html_body("<div hidden/>SECRET2 tail</div>") == ""
+    assert html_body('<span aria-hidden="true"/>S3') == ""
+    assert html_body("<script/>alert-S4</script>after") == "after"
+    # Same as a browser: an unclosed hidden self-closing tag hides the rest of its parent.
+    assert html_body('<p>a</p><div><b hidden/>S5</div>after') == "a\nafter"
+
+
+def test_gmail_html_properly_closed_hidden_tag_control_still_hides():
+    assert html_body('<div style="display:none">SECRET</div>visible') == "visible"
+
+
+def test_gmail_html_void_self_closing_tags_are_unaffected():
+    assert html_body("a<br/>b<img src='x' hidden/>c<hr/>d<input aria-hidden='true'/>e") == "a\nbcde"
+
+
+def test_gmail_html_self_closing_non_hidden_tags_leave_visible_text_unchanged():
+    xhtml = "<div><p>one</p><p/><p>two</p><table><tr><td>a</td><td/><td>b</td></tr></table><span/>tail</div>after"
+    assert html_body(xhtml) == html_body(xhtml.replace("<p/>", "").replace("<td/>", "").replace("<span/>", ""))
+    assert html_body(xhtml) == "one\ntwo\nab\ntail\nafter"
+
+
+def test_gmail_html_inline_svg_self_closing_children_do_not_swallow_following_text():
+    assert html_body('<p>before</p><svg><path d="x"/><circle r="1"/></svg><p>after</p>') == "before\nafter"
+
+
+def test_gmail_html_self_closing_tags_keep_counter_and_stack_consistent():
+    parser = gmail._TextExtractor()
+    parser.feed('<div><b/><p/><span hidden/>x<i/></div><div style="display:none"/>y</div><br/><p/>z')
+    assert +parser._open == Counter(tag for tag, _ in parser._stack)
+    parser.close()
+    assert all(count >= 0 for count in parser._open.values())
+
+
+def test_gmail_html_long_run_of_self_closing_tags_is_not_quadratic():
+    parser = gmail._TextExtractor()
+    started = time.perf_counter()
+    parser.feed("<b/>" * 50000 + "x</div>")
+    parser.close()
+    assert time.perf_counter() - started < 1.0
+    assert parser.text() == "x"
+    assert +parser._open == Counter(tag for tag, _ in parser._stack)
+    assert parser._open["b"] == 50000
+    started = time.perf_counter()
+    assert gmail._html_to_text("<div>" + "<b/>" * 50000 + "x</div>after") == "x\nafter"
+    assert time.perf_counter() - started < 1.0
+
+
 def test_gmail_html_block_tags_become_newlines_and_blank_runs_collapse():
     html = "<p>a</p><p></p><p></p><div>b</div>c<br>d<ul><li>x</li><li>y</li></ul><table><tr><td>t1</td></tr><tr><td>t2</td></tr></table>"
     assert html_body(html) == "a\nb\nc\nd\nx\ny\nt1\nt2"
