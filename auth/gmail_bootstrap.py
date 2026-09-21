@@ -25,9 +25,6 @@ Usage:
     python auth/gmail_bootstrap.py personal --port 8765 --no-browser
 """
 import argparse
-import base64
-import hashlib
-import hmac
 import re
 import secrets
 import sys
@@ -36,16 +33,28 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable, Optional, Type
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import parse_qs, urlsplit
 
-import requests
+import requests  # noqa: F401  (kept importable as gmail_bootstrap.requests: tests patch gb.requests.post)
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from pipeline.health import GMAIL_SCOPE, _env, check_gmail, gmail_accounts  # noqa: E402
+# The pure helpers live in pipeline/ so the API never imports this CLI; re-exported under the same names.
+from pipeline.oauth_google import (  # noqa: E402,F401
+    AUTH_ENDPOINT,
+    TOKEN_ENDPOINT,
+    BootstrapError,
+    GrantError,
+    StateMismatchError,
+    TokenExchangeError,
+    assert_granted,
+    build_auth_url,
+    check_state,
+    exchange_code,
+    make_pkce,
+)
 
-AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
-TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 LOOPBACK_HOST = "127.0.0.1"  # never 0.0.0.0: the auth code must not be reachable from the LAN
 DEFAULT_TIMEOUT = 300
 # Per accepted socket. Measured: on a single-threaded server an idle connection (a browser's speculative
@@ -55,71 +64,12 @@ CONNECTION_TIMEOUT = 5
 _LABEL = re.compile(r"[A-Za-z0-9]+")
 
 
-class BootstrapError(Exception):
-    """Base for every expected failure of the sign-in; main() turns these into a non-zero exit."""
-
-
-class StateMismatchError(BootstrapError):
-    """The redirect's state did not match ours: not our request, or a forged one."""
-
-
 class AuthorizationError(BootstrapError):
     """Google redirected back with error= (e.g. access_denied)."""
 
 
 class ListenerTimeoutError(BootstrapError):
     """No redirect arrived before the deadline."""
-
-
-class TokenExchangeError(BootstrapError):
-    """The token endpoint rejected the code or could not be reached."""
-
-
-class GrantError(BootstrapError):
-    """The exchange succeeded but the grant is unusable (no refresh token, or scope not granted)."""
-
-
-def make_pkce() -> tuple[str, str]:
-    """
-    Generate a PKCE pair.
-
-    :returns: (verifier, challenge); challenge = base64url(sha256(verifier)) without padding (S256).
-    """
-    # 64 random bytes -> 86 url-safe chars, inside RFC 7636's 43-128 range.
-    verifier = secrets.token_urlsafe(64)
-    digest = hashlib.sha256(verifier.encode("ascii")).digest()
-    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-    return verifier, challenge
-
-
-def build_auth_url(client_id: str, redirect_uri: str, challenge: str, state: str) -> str:
-    """
-    Build the Google consent URL.
-
-    access_type=offline + prompt=consent are both required: without them Google omits the refresh
-    token on any repeat sign-in of the same account/client.
-    """
-    params = {
-        "client_id": client_id,
-        "redirect_uri": redirect_uri,
-        "response_type": "code",
-        "scope": GMAIL_SCOPE,
-        "access_type": "offline",
-        "prompt": "consent",
-        "code_challenge": challenge,
-        "code_challenge_method": "S256",
-        "state": state,
-    }
-    return f"{AUTH_ENDPOINT}?{urlencode(params)}"
-
-
-def check_state(expected: str, received: Optional[str]) -> None:
-    """
-    :raises StateMismatchError: if received is missing or differs from expected.
-    """
-    # Constant-time compare; the value is short-lived but there is no reason to leak it byte by byte.
-    if not received or not hmac.compare_digest(expected.encode(), received.encode()):
-        raise StateMismatchError("state mismatch on the redirect; not continuing (possible forged callback)")
 
 
 class _ListenerServer(ThreadingHTTPServer):
@@ -255,75 +205,6 @@ def wait_for_code(
     if decided["error"] == "state":
         raise StateMismatchError(decided["detail"] or "state mismatch")
     raise AuthorizationError(f"Google returned error={decided['detail']}")
-
-
-_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
-_MAX_ERROR_TEXT = 200
-
-
-def _bounded_text(value: object) -> str:
-    """
-    Render an untrusted JSON value for an error message: str(), control characters removed (no
-    terminal escape or log-line injection), capped so a hostile body cannot flood the terminal.
-    """
-    if value is None:
-        return ""
-    return _CONTROL_CHARS.sub("", str(value))[:_MAX_ERROR_TEXT]
-
-
-def exchange_code(client_id: str, client_secret: str, code: str, verifier: str, redirect_uri: str) -> dict:
-    """
-    Exchange the auth code (plus PKCE verifier) for tokens.
-
-    Desktop clients still send client_secret; Google does not treat it as confidential there but
-    the token endpoint requires it.
-
-    :returns: the token endpoint's JSON body
-    :raises TokenExchangeError: network failure, non-200, or a body that is not a JSON object
-    """
-    try:
-        resp = requests.post(
-            TOKEN_ENDPOINT,
-            data={
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "code": code,
-                "code_verifier": verifier,
-                "grant_type": "authorization_code",
-                "redirect_uri": redirect_uri,
-            },
-            timeout=15,
-        )
-    except requests.RequestException as exc:
-        raise TokenExchangeError(f"token request failed: {exc}") from exc
-    try:
-        body = resp.json()
-    except ValueError:
-        body = None
-    if not isinstance(body, dict):
-        # Name the status only: an unexpected body is not ours to echo, it may carry secrets.
-        raise TokenExchangeError(f"token endpoint returned an unexpected body (HTTP {resp.status_code})")
-    if resp.status_code != 200:
-        error = _bounded_text(body.get("error")) or f"http_{resp.status_code}"
-        description = _bounded_text(body.get("error_description"))
-        raise TokenExchangeError(f"token exchange rejected: {error}" + (f": {description}" if description else ""))
-    return body
-
-
-def assert_granted(token_response: dict) -> str:
-    """
-    :returns: the refresh token
-    :raises GrantError: no refresh_token, or GMAIL_SCOPE missing from the space-delimited scope field
-    """
-    granted = set((token_response.get("scope") or "").split())
-    if GMAIL_SCOPE not in granted:
-        raise GrantError(f"granted scopes do not include {GMAIL_SCOPE}; tick the Gmail read-only box on the consent screen")
-    refresh_token = token_response.get("refresh_token")
-    if not refresh_token:
-        raise GrantError(
-            "no refresh_token in the response; revoke this app at https://myaccount.google.com/permissions and re-run"
-        )
-    return refresh_token
 
 
 def main(argv: Optional[list[str]] = None) -> int:
