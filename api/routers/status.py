@@ -62,6 +62,9 @@ def get_system():
     The key is reported as configured-or-not and the store as active-or-not separately: a key that
     is set but unparseable leaves the app running from .env alone, and that state must be visible.
     Nothing here echoes the key or the public URL, only whether each is usable.
+
+    unseeded_env lists the NAMES of .env keys whose declarations could not be imported into the
+    store and therefore still run from .env; their values are never part of any response.
     """
     callback_ready = health.public_base_url() is not None
     # Paste-back needs no public address; callback needs an https PUBLIC_BASE_URL to register.
@@ -71,5 +74,6 @@ def get_system():
         "store_active": connections.get_vault() is not None,
         "public_base_url_configured": callback_ready,
         "web_origins": health.web_origins(),
+        "unseeded_env": connections.unseeded_env_keys(),
         "oauth": {"google": {"modes": list(modes)}, "microsoft": {"modes": list(modes)}},
     }
