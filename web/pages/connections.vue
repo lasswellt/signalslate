@@ -1,6 +1,18 @@
 <template>
   <q-page padding class="q-gutter-md" style="max-width: 900px">
-    <div class="text-h5">Connections</div>
+    <div class="row items-center">
+      <div class="text-h5">Connections</div>
+      <q-space />
+      <q-btn
+        v-if="system?.secret_key_configured"
+        color="primary"
+        icon="add"
+        label="Add connection"
+        no-caps
+        data-testid="conn-add"
+        @click="openAdd"
+      />
+    </div>
 
     <q-banner v-if="system && !system.secret_key_configured" class="bg-warning text-black" data-testid="key-banner">
       Set SIGNALSLATE_SECRET_KEY in .env to manage connections here; env-only mode keeps working
@@ -13,7 +25,7 @@
     <q-banner v-else-if="loadError" class="bg-negative text-white" data-testid="load-error">
       {{ loadError }}
       <template #action>
-        <q-btn flat label="Retry" @click="load" />
+        <q-btn flat label="Retry" @click="load()" />
       </template>
     </q-banner>
 
@@ -79,9 +91,59 @@
             data-testid="conn-test"
             @click="onTest(conn)"
           />
+          <q-btn
+            v-if="system?.secret_key_configured"
+            flat
+            color="primary"
+            icon="edit"
+            label="Edit"
+            data-testid="conn-edit"
+            @click="openEdit(conn)"
+          />
+          <q-space />
+          <q-btn
+            flat
+            color="negative"
+            icon="delete"
+            label="Delete"
+            data-testid="conn-delete"
+            @click="askDelete(conn)"
+          />
         </q-card-actions>
       </q-card>
     </template>
+
+    <ConnectionDialog v-model="dialogOpen" :mode="dialogMode" :connection="dialogConnection" @saved="onSaved" />
+
+    <q-dialog :model-value="deleteTarget !== null" @update:model-value="(open: boolean) => { if (!open) deleteTarget = null }">
+      <q-card style="max-width: 480px" data-testid="delete-confirm">
+        <q-card-section>
+          <div class="text-h6">Delete {{ deleteTarget?.id }}?</div>
+        </q-card-section>
+        <q-card-section class="q-pt-none">
+          <p>
+            This removes {{ deleteTarget?.id }}'s stored credentials, its collection watermark and its active
+            toggle. Items already collected are kept.
+          </p>
+          <p class="q-mb-none">
+            A .env entry will NOT bring it back: deleting it here makes the connection stay deleted until you add
+            it again.
+          </p>
+          <div v-if="deleteError" class="q-mt-sm text-negative" data-testid="delete-error">{{ deleteError }}</div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat no-caps label="Cancel" :disable="deleting" data-testid="delete-cancel" @click="deleteTarget = null" />
+          <q-btn
+            color="negative"
+            no-caps
+            label="Delete"
+            :loading="deleting"
+            data-testid="delete-confirm-btn"
+            @click="confirmDelete"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -109,8 +171,9 @@ function errorText(error: unknown): string {
   return error instanceof ApiError ? error.message : 'Something went wrong'
 }
 
-async function load() {
-  loading.value = true
+// `silent` refreshes in place: after a save or delete the list must not collapse into the spinner.
+async function load(silent = false) {
+  if (!silent) loading.value = true
   loadError.value = null
   try {
     const [info, list] = await Promise.all([api.getSystem(), api.listConnections()])
@@ -188,5 +251,58 @@ async function onTest(conn: ConnectionView) {
   }
 }
 
-onMounted(load)
+const dialogOpen = ref(false)
+const dialogMode = ref<'create' | 'edit'>('create')
+const dialogConnection = ref<ConnectionView | null>(null)
+
+function openAdd() {
+  dialogMode.value = 'create'
+  dialogConnection.value = null
+  dialogOpen.value = true
+}
+
+function openEdit(conn: ConnectionView) {
+  dialogMode.value = 'edit'
+  dialogConnection.value = conn
+  dialogOpen.value = true
+}
+
+async function onSaved(saved: ConnectionView, mode: 'create' | 'edit') {
+  // Only the id goes into the toast: the dialog never hands over what was typed.
+  $q.notify(
+    mode === 'create'
+      ? { type: 'positive', message: 'Created inactive: press Test, then enable', caption: saved.id }
+      : { type: 'positive', message: `Saved ${saved.id}` },
+  )
+  await load(true)
+}
+
+const deleteTarget = ref<ConnectionView | null>(null)
+const deleting = ref(false)
+const deleteError = ref<string | null>(null)
+
+function askDelete(conn: ConnectionView) {
+  deleteError.value = null
+  deleteTarget.value = conn
+}
+
+async function confirmDelete() {
+  const target = deleteTarget.value
+  if (!target) return
+  deleting.value = true
+  deleteError.value = null
+  try {
+    await api.deleteConnection(target.id)
+    deleteTarget.value = null
+    $q.notify({ type: 'positive', message: `Deleted ${target.id}` })
+    await load(true)
+  } catch (error) {
+    deleteError.value = errorText(error)
+    $q.notify({ type: 'negative', message: `Could not delete ${target.id}: ${deleteError.value}` })
+  } finally {
+    deleting.value = false
+  }
+}
+
+onMounted(() => load())
 </script>
