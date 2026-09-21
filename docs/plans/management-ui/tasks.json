@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T07:40:58Z",
+  "updated": "2026-09-21T07:46:42Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2024,11 +2024,53 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T07:46:42Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'new-password' web/components/ConnectionDialog.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:46:30Z"
+          },
+          {
+            "cmd": "grep -qE 'persistent' web/components/ConnectionDialog.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:46:30Z"
+          },
+          {
+            "cmd": "cd web && npm run typecheck",
+            "exit": 0,
+            "duration_ms": 2386,
+            "tail": "\n> typecheck\n> nuxt typecheck",
+            "recorded_at": "2026-09-21T07:46:33Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/ConnectionDialog.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 2958,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/ConnectionDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·····················\n\n Test Files  1 passed (1)\n      Tests  21 passed (21)\n   Start at  03:46:34\n   Duration  1.84s (transform 46%, tests 34%, environment 10%, import 8%, setup 2%)",
+            "recorded_at": "2026-09-21T07:46:35Z"
+          },
+          {
+            "cmd": "cd web && npm run build",
+            "exit": 0,
+            "duration_ms": 6007,
+            "tail": "-mQeQJ.mjs (16.2 kB) (4.88 kB gzip)\n  ├─ .output/server/chunks/build/error-404-B1-mQeQJ.mjs.map (305 B) (207 B gzip)\n  ├─ .output/server/chunks/build/error-404-styles.Pd4Strki.mjs (3.83 kB) (1.22 kB gzip)\n  ├─ .output/server/chunks/build/error-404-styles.Pd4Strki.mjs.map (196 B) (155 B gzip)\n  ├─ .output/server/chunks/build/error-500-D5UJ6Lpm.mjs (4.72 kB) (1.94 kB gzip)\n  ├─ .output/server/chunks/build/error-500-D5UJ6Lpm.mjs.map (205 B) (175 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs (2.18 kB) (862 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs.map (196 B) (156 B gzip)\n  ├─ .output/server/chunks/build/history-C4ckkQH8.mjs (79.9 kB) (17.8 kB gzip)\n  ├─ .output/server/chunks/build/history-C4ckkQH8.mjs.map (1.73 kB) (505 B gzip)\n  ├─ .output/server/chunks/build/index-C8D9pF_r.mjs (40.9 kB) (3.71 kB gzip)\n  ├─ .output/server/chunks/build/index-C8D9pF_r.mjs.map (382 B) (260 B gzip)\n  ├─ .output/server/chunks/build/server.mjs (156 kB) (41.6 kB gzip)\n  ├─ .output/server/chunks/build/server.mjs.map (5.93 kB) (1.33 kB gzip)\n  ├─ .output/server/chunks/build/styles.mjs (497 B) (260 B gzip)\n  ├─ .output/server/chunks/build/styles.mjs.map (395 B) (203 B gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs (166 kB) (41 kB gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs.map (3.04 kB) (753 B gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs (14.2 kB) (4.57 kB gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs.map (845 B) (272 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs (94 B) (100 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs.map (88 B) (97 B gzip)\n  ├─ .output/server/index.mjs (353 B) (205 B gzip)\n  └─ .output/server/package.json (723 B) (321 B gzip)\nΣ Total size: 2.93 MB (684 kB gzip)\n[nitro] ✔ You can preview this build using node .output/server/index.mjs\n│\n└  ✨ Build complete!",
+            "recorded_at": "2026-09-21T07:46:42Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research docs/_research/2026-09-21_management-ui.md (write-only inputs, Quasar dialog and form docs). ConnectionDialog: a persistent QDialog (QCard plus a greedy QForm) with a kind selector (m365, zoom, slack, gmail) and the per-kind fields exactly as the API contract: m365 alias, tenant_id, client_id; zoom account_id, client_id, client_secret; slack label, token; gmail label, client_id, client_secret, redirect_mode. Secret inputs are type password with autocomplete new-password, NEVER prefilled and never shown; in edit mode show a Saved chip and a Replace control that reveals an EMPTY input; only fields the user touched are sent (PATCH semantics); secrets live in a component-local ref that is cleared in a finally block after every request and on close, and never enter a Notify message, route or store. Client validation mirrors the server (label ^[a-z0-9]+$, alias ^[A-Za-z0-9-]+$, required fields) and server 422 field errors are mapped onto fields by name. Env-seeded connections are editable with a note that the UI store is authoritative. Delete: a confirm dialog naming the id that states what is removed (credentials, watermark, toggle), what is kept (collected items) and that a .env entry will NOT bring it back. Created connections start inactive: after create show 'Created inactive: press Test, then enable'. connections.vue wires Add, Edit and Delete to the dialog and refreshes. Tests (mountSuspended): per-kind field sets; password attributes and an empty value in edit mode; only touched fields are sent; the secret is cleared after a successful and after a failed submit; 422 mapping; the delete confirm text; the secret string never appears in the DOM text or in Notify calls after save."
     },
