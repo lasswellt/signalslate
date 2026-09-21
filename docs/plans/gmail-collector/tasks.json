@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T05:02:04Z",
+  "updated": "2026-09-21T05:11:29Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1418,6 +1418,185 @@
       },
       "origin": "check",
       "notes": "check finding P2, reproduced 2026-09-21: wait_for_code(0, 'S', 1) followed by an idle socket.create_connection to the bound port is still blocked 4s after its 1s deadline. HTTPServer is single-threaded and the handler has no socket timeout, so any local process (or a browser speculative preconnect accepted before the real callback) stalls the accept loop and the real callback waits behind it; the deadline is never enforced. Fix: set a short per-connection timeout on accepted sockets (StreamRequestHandler.timeout, a few seconds) AND enforce the overall deadline in the serve loop (server.timeout + a monotonic deadline check), so the function raises its existing timeout error at the deadline even with a stalled connection open. Also add the loopback-bind test the patterns lens noted is missing: assert the listener's bound address is 127.0.0.1 (server.server_address[0]), not merely reachable there. Tests: an idle connection does not prevent the real callback from being served or the timeout from firing within a bounded slack; a stalled connection followed by a valid callback still returns the code."
+    },
+    {
+      "id": "T-020",
+      "title": "Charset hardening: accept only real text codecs and scrub surrogates from decoded bodies",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/gmail.py",
+        "tests/test_collectors.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qiE 'surrogate' pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "check",
+      "notes": "check finding 1 (P1), reproduced 2026-09-21 by the main thread. _decode_part honors any sender-chosen Content-Type charset that Python knows, including codecs that are not text charsets: unicode_escape, raw_unicode_escape and utf-7 all decode 'hi \\ud800 x' (or +2AA-) to a body containing a LONE SURROGATE (U+D800). The collector persists it fine (json.dumps escapes it) but the triage request builder later json.dumps(ensure_ascii=False) then the SDK encodes UTF-8 and raises UnicodeEncodeError. Fix in _decode_part: (a) allow only real text charsets: reject any codec that is not a text encoding (use codecs.lookup(name)._is_text_encoding, and/or an explicit denylist covering unicode_escape, raw_unicode_escape, utf-7, idna, punycode, rot13, base64 and the other bytes-to-bytes/str-to-str codecs) and fall back to utf-8 errors='replace' exactly as for an unknown charset; (b) after ANY decode, scrub lone surrogates (e.g. text.encode('utf-8','replace').decode('utf-8')) so no code path can leave one in bodyText. Also apply the scrub to the header values flatten_message copies (subject, from, to, cc, snippet, messageId, listUnsubscribe) because a JSON header could carry a lone surrogate escape. Keep charset=utf-8, iso-8859-1, windows-1252, shift_jis, gb18030 and utf-16 decoding correct. Tests: each of the three charsets with a surrogate-producing body yields a body with no surrogate; a real windows-1252 and a shift_jis body still decode to the right text; a header value containing a lone surrogate comes out clean; assert on the OUTPUT of flatten_message (no character in 0xD800-0xDFFF in any string field). The existing charset tests must keep passing unchanged."
+    },
+    {
+      "id": "T-021",
+      "title": "triage_items: degrade ANY failed call to stubs, never raise",
+      "role": "backend",
+      "files": [
+        "pipeline/triage.py",
+        "tests/test_triage_client.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qE 'except Exception' pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_triage.py tests/test_triage_client.py tests/test_triage_injection.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "check",
+      "notes": "check finding 1 (P1), second half. triage_items promises never to raise, but its per-call guard catches only (anthropic.APIError, pydantic.ValidationError) at pipeline/triage.py:402. The critic's held-out check showed ValueError, TypeError, KeyError, RuntimeError, RecursionError and UnicodeEncodeError all ESCAPE, so one unexpected failure (for example a lone surrogate reaching the SDK's UTF-8 encode) stops the whole map stage and every item in the window. Fix: catch Exception around the per-call work (the request build, the client call and the response handling), stub that whole batch, and record a failure line with the exception CLASS NAME only (never the message, which can echo email content). Keep a genuine programming error visible in tests by NOT swallowing BaseException (KeyboardInterrupt/SystemExit must still propagate). Update the docstring that currently says programming errors propagate: state the new contract precisely. The retry-then-stub logic for missing aliases must keep working unchanged. Tests (tests/test_triage_client.py, extend only): a client raising each of ValueError, TypeError, KeyError, RuntimeError, RecursionError and UnicodeEncodeError yields every input item as a stub with failures[] naming the class and no raise; KeyboardInterrupt still propagates; ALSO an end-to-end test with the REAL anthropic.Anthropic client (dummy key, max_retries=0) and an item whose body_text contains a lone surrogate: triage_items returns stubs and does not raise (this fails before the fix; the SDK encodes before any network call)."
+    },
+    {
+      "id": "T-022",
+      "title": "triage_cli: print surrogate-safe text and pin that --dry writes nothing",
+      "role": "backend",
+      "files": [
+        "pipeline/triage_cli.py",
+        "tests/test_triage_cli.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qiE 'backslashreplace|errors=.replace' pipeline/triage_cli.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage_cli.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_triage_cli.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "check",
+      "notes": "check findings 1 and 5. (a) pipeline/triage_cli.py print_dry/print_live print item text straight to stdout; a lone surrogate in a title or body raises UnicodeEncodeError and crashes the CLI. Route every printed string through one small helper that makes it safe for the stdout encoding (encode with errors='replace' / backslashreplace and decode back) so a hostile item can never crash the dry run. (b) the mutant that makes --dry write a database row survives: only the live path asserts 'writes nothing'. Add a dry-mode test that compares db row counts (CollectedItem, Run, SourceCursor, SourceHealth) before and after main([... '--dry']) and asserts they are unchanged. Tests: an item whose title and body contain a lone surrogate prints without raising in both --dry and live (fake client) modes, exit code unchanged; the dry-mode no-write test. Existing tests unchanged."
+    },
+    {
+      "id": "T-023",
+      "title": "Hidden-content: treat self-closing hidden tags as opening a hidden region; pin head and title separately",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/gmail.py",
+        "tests/test_collectors.py"
+      ],
+      "depends_on": [
+        "T-020"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def handle_startendtag' pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "check",
+      "notes": "check findings 2 and 7. _TextExtractor overrides handle_starttag and handle_endtag but not handle_startendtag, and HTMLParser's default handle_startendtag calls start then end, so a self-closing NON-void hidden tag closes its own region at once: <div style='display:none'/>SECRET</div>visible extracts SECRETvisible (also the hidden attribute, aria-hidden and <script/>). Browsers ignore the '/>' on non-void elements (HTML5) and keep hiding until the matching end tag, so this is a bypass of the module's stated guarantee that hidden content never reaches the model. Fix: add handle_startendtag that, for a tag in _VOID_TAGS behaves as today, and otherwise behaves exactly like handle_starttag (push onto the stack and counter). Keep the T-018 Counter and stack in sync. Keep _SKIP_TAGS behavior for genuinely self-closing forms such as <br/>. Also pin the surviving mutant from the mutation run: the only skip-tags test puts <title> inside <head>, so dropping either alone survives: add one test with <title> OUTSIDE <head> and one with <head> text and no <title>. Tests: the four leaking forms above now hide their text and the text after the matching end tag is visible; the properly closed control still hides; <br/> and <img/> unaffected; Counter/stack consistency after self-closing tags; the two head/title tests. Every existing hidden-content, nesting and performance test must pass unchanged (the 10000-pair timing test especially)."
+    },
+    {
+      "id": "T-024",
+      "title": "OAuth bootstrap: robust token-exchange errors; pin that the auth code is never logged",
+      "role": "backend",
+      "files": [
+        "auth/gmail_bootstrap.py",
+        "tests/test_gmail_bootstrap.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qE 'isinstance\\(.*dict' auth/gmail_bootstrap.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" auth/gmail_bootstrap.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_gmail_bootstrap.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "check",
+      "notes": "check findings 4 and 6. (a) exchange_code calls body.get(...) on a NON-200 response before checking that the JSON body is a dict: a JSON array or scalar body raises AttributeError, not the TokenExchangeError its docstring promises, and main() catches only BootstrapError so the user gets a raw traceback. Fix: parse defensively (non-dict or non-JSON body -> a TokenExchangeError that names the HTTP status only, never echoing the body, which could contain secrets). (b) Handler.log_message deliberately returns without printing because the default logs the request line, which carries ?code=; the mutant that prints it survives all tests. Add a test that serves a real callback with a recognizable code through wait_for_code under capsys and asserts the code string appears in neither stdout nor stderr. Tests: a 400 response with a JSON array body, a JSON string body, a non-JSON body and an empty body each raise TokenExchangeError (a BootstrapError subclass) with no code, secret or refresh token in the message; the log-suppression test. Existing 24 tests unchanged."
+    },
+    {
+      "id": "T-025",
+      "title": "Pin hostile sender names through stub_record and triage_items",
+      "role": "test",
+      "files": [
+        "tests/test_triage.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_triage.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "check",
+      "notes": "test-only: the product is the missing regression test; there is no production symbol to grep. check finding 3: the mutant 'person = sanitize_text(sender_label, PERSON_MAX)' -> 'person = sender_label' in stub_record (pipeline/triage.py:265) survives all 212 triage tests because no test feeds a hostile From display name. Add tests (tests/test_triage.py only; NEVER edit source) where the sender display name contains http(s) and www URLs, javascript:/mailto: URIs, a markdown link, an HTML tag, control characters and a 5000-char run: stub_record's record.people and one_line contain none of them and respect PERSON_MAX / ONE_LINE_MAX; the same through the whole triage_items path when the fake client fails (stub path) and when it succeeds with a hostile people entry in the model reply. Prove each new test kills the mutant: in a scratch copy of the repo (rsync to /tmp, do not touch the real tree) apply the mutation and show the new test fails; report that in your reply. If a test exposes a real defect, do not weaken it: reply BLOCKED with the failing assertion."
     }
   ]
 }
