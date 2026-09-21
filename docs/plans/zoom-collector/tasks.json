@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "zoom-collector",
-  "updated": "2026-09-21T23:13:55Z",
+  "updated": "2026-09-21T23:26:40Z",
   "tasks": [
     {
       "id": "T-001",
@@ -276,11 +276,39 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:26:40Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '\"zoom\": *\"zoom\"' api/routers/oauth.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:26:38Z"
+          },
+          {
+            "cmd": "grep -qE 'oauth_zoom' api/routers/oauth.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:26:38Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_oauth.py -q",
+            "exit": 0,
+            "duration_ms": 1956,
+            "tail": ".................................................................        [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate-zoom-collector/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n65 passed, 1 warning in 1.71s",
+            "recorded_at": "2026-09-21T23:26:40Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Codebase finding 3: _KIND_FOR_PROVIDER (oauth.py:68) and the google/else dispatch in _start/_finish_paste/_finish_callback (oauth.py:166-187) are binary; make them handle zoom explicitly. Callback URL is {PUBLIC_BASE_URL}/api/oauth/callback/zoom via oauth_flows.build_callback_url. Paste-back for zoom returns the handled FlowError code, never a 500. Keep CSRF and nonce-cookie behaviour identical to google."
     },
