@@ -21,7 +21,7 @@ from datetime import datetime
 from email.utils import getaddresses
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict  # pyright: ignore[reportMissingImports]
+from pydantic import BaseModel, ConfigDict
 
 # Research §8 Q3: ~1.5-2k chars is enough for triage once quotes and signatures are gone.
 NORMALIZED_BODY_CAP = 2000

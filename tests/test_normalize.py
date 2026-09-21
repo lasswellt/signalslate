@@ -9,8 +9,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-import pytest  # pyright: ignore[reportMissingImports]
-from pydantic import ValidationError  # pyright: ignore[reportMissingImports]
+import pytest
+from pydantic import ValidationError
 
 from pipeline.collectors.gmail import flatten_message, parse_internal_date
 from pipeline.normalize import (
