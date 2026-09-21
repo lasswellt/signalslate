@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T05:14:06Z",
+  "updated": "2026-09-21T05:16:15Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1501,11 +1501,39 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T05:16:15Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'except Exception' pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T05:16:14Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T05:16:14Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_triage.py tests/test_triage_client.py tests/test_triage_injection.py -q",
+            "exit": 0,
+            "duration_ms": 803,
+            "tail": "........................................................................ [ 33%]\n........................................................................ [ 66%]\n.......................................................................  [100%]\n215 passed in 0.58s",
+            "recorded_at": "2026-09-21T05:16:15Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check finding 1 (P1), second half. triage_items promises never to raise, but its per-call guard catches only (anthropic.APIError, pydantic.ValidationError) at pipeline/triage.py:402. The critic's held-out check showed ValueError, TypeError, KeyError, RuntimeError, RecursionError and UnicodeEncodeError all ESCAPE, so one unexpected failure (for example a lone surrogate reaching the SDK's UTF-8 encode) stops the whole map stage and every item in the window. Fix: catch Exception around the per-call work (the request build, the client call and the response handling), stub that whole batch, and record a failure line with the exception CLASS NAME only (never the message, which can echo email content). Keep a genuine programming error visible in tests by NOT swallowing BaseException (KeyboardInterrupt/SystemExit must still propagate). Update the docstring that currently says programming errors propagate: state the new contract precisely. The retry-then-stub logic for missing aliases must keep working unchanged. Tests (tests/test_triage_client.py, extend only): a client raising each of ValueError, TypeError, KeyError, RuntimeError, RecursionError and UnicodeEncodeError yields every input item as a stub with failures[] naming the class and no raise; KeyboardInterrupt still propagates; ALSO an end-to-end test with the REAL anthropic.Anthropic client (dummy key, max_retries=0) and an item whose body_text contains a lone surrogate: triage_items returns stubs and does not raise (this fails before the fix; the SDK encodes before any network call)."
     },
