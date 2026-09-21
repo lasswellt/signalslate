@@ -1344,6 +1344,82 @@ def test_gmail_flatten_non_text_charset_falls_back_to_utf8_instead_of_raising(ch
     assert gmail.flatten_message(gmail_msg([part]))["bodyText"] == "café"
 
 
+def _no_surrogates(value):
+    """True when no str anywhere in a flattened payload holds a code point in U+D800-U+DFFF."""
+    if isinstance(value, str):
+        return not any(0xD800 <= ord(ch) <= 0xDFFF for ch in value)
+    if isinstance(value, list):
+        return all(_no_surrogates(v) for v in value)
+    if isinstance(value, dict):
+        return all(_no_surrogates(v) for v in value.values())
+    return True
+
+
+def _raw_part(raw, charset):
+    """A text/plain leaf whose body is the given bytes, verbatim, under the given sender-chosen charset."""
+    return {
+        "mimeType": "text/plain",
+        "filename": "",
+        "body": {"data": base64.urlsafe_b64encode(raw).decode().rstrip("=")},
+        "headers": [{"name": "Content-Type", "value": f"text/plain; charset={charset}"}],
+    }
+
+
+@pytest.mark.parametrize(
+    "charset, raw",
+    [
+        ("unicode_escape", rb"hi \ud800 there"),
+        ("raw_unicode_escape", rb"hi \ud800 there"),
+        ("utf-7", b"hi +2AA- there"),
+    ],
+)
+def test_gmail_flatten_surrogate_producing_charset_yields_no_surrogate(charset, raw):
+    # Reproduced: each of these decodes ASCII to a lone U+D800 that later breaks the UTF-8 encode in triage.
+    out = gmail.flatten_message(gmail_msg([_raw_part(raw, charset)]))
+    assert _no_surrogates(out)
+    assert out["bodyText"].startswith("hi ") and out["bodyText"].endswith(" there")
+
+
+@pytest.mark.parametrize("charset", ["unicode_escape", "raw_unicode_escape", "utf-7", "punycode", "rot13", "base64"])
+def test_gmail_flatten_non_text_charsets_are_read_as_utf8(charset):
+    assert gmail.flatten_message(gmail_msg([_raw_part("café".encode("utf-8"), charset)]))["bodyText"] == "café"
+
+
+@pytest.mark.parametrize(
+    "charset, text",
+    [
+        ("windows-1252", "caf\u00e9 \u201cquoted\u201d \u20ac5"),
+        ("shift_jis", "\u3053\u3093\u306b\u3061\u306f"),
+        ("iso-8859-1", "caf\u00e9"),
+        ("gb18030", "\u4f60\u597d"),
+        ("utf-16", "caf\u00e9 \U0001F600"),
+    ],
+)
+def test_gmail_flatten_real_text_charsets_still_decode_correctly(charset, text):
+    assert gmail.flatten_message(gmail_msg([text_part("text/plain", text, charset)]))["bodyText"] == text
+
+
+def test_gmail_flatten_astral_characters_survive_the_scrub():
+    out = gmail.flatten_message(gmail_msg([text_part("text/plain", "party \U0001F600 time")], snippet="\U0001F600"))
+    assert out["bodyText"] == "party \U0001F600 time"
+    assert out["snippet"] == "\U0001F600"
+
+
+def test_gmail_flatten_lone_surrogate_in_api_json_strings_comes_out_clean():
+    # A JSON "\ud800" escape in any header, the snippet, a label or an attachment name reaches Python as a lone surrogate.
+    lone = "x\ud800y"
+    named = {"mimeType": "application/pdf", "filename": f"a{lone}.pdf", "body": {"size": 3}}
+    hdrs = [{"name": n, "value": lone} for n in ("Subject", "From", "To", "Cc", "Message-ID", "List-Unsubscribe", "Date", "In-Reply-To")]
+    msg = gmail_msg([text_part("text/plain", "ok"), named], headers=hdrs, snippet=lone, labelIds=[lone, "INBOX"], threadId=lone)
+    out = gmail.flatten_message(msg)
+    assert _no_surrogates(out)
+    for key in ("subject", "from", "to", "cc", "messageId", "listUnsubscribe", "snippet", "threadId"):
+        assert out[key] == "x?y"
+    assert out["labelIds"] == ["x?y", "INBOX"]
+    assert out["attachments"][0]["filename"] == "ax?y.pdf"
+    json.dumps(out, ensure_ascii=False).encode("utf-8")
+
+
 def deep_mime(depth):
     """A multipart/mixed chain `depth` levels deep with one text leaf at the bottom."""
     node = text_part("text/plain", "hidden body")
