@@ -48,6 +48,17 @@ def _positive_int(text: str) -> int:
     return value
 
 
+def _safe(text: str) -> str:
+    """
+    `text` reduced to what stdout can encode, with anything else shown as a backslash escape.
+
+    Item text is untrusted and a lone surrogate (e.g. from a payload stored before collection scrubbed
+    them) cannot be encoded even as UTF-8, so a bare print() would crash the CLI on one hostile item.
+    """
+    encoding = sys.stdout.encoding or "utf-8"
+    return text.encode(encoding, errors="backslashreplace").decode(encoding)
+
+
 def load_items(source: str, hours: int) -> tuple[list[NormalizedItem], int] | None:
     """
     Normalized items for `source` in the last `hours`, plus how many rows were skipped as unreadable.
@@ -87,7 +98,8 @@ def print_dry(items: list[NormalizedItem], batch_size: int) -> None:
     print(f"model:   {model}")
     print(f"items:   {len(items)} in {math.ceil(len(items) / batch_size)} batch(es) of up to {batch_size}")
     print(f"showing: batch 1 ({len(first)} items). No API key used, no network call made.\n")
-    print(json.dumps(printable, indent=2, ensure_ascii=False))
+    # ensure_ascii=False keeps normal non-ASCII text readable; _safe escapes only what stdout cannot show.
+    print(_safe(json.dumps(printable, indent=2, ensure_ascii=False)))
 
 
 def print_live(items: list[NormalizedItem], batch_size: int, limit: int) -> int:
@@ -103,18 +115,18 @@ def print_live(items: list[NormalizedItem], batch_size: int, limit: int) -> int:
 
     for triaged in result.items[:limit]:
         record = triaged.record
-        print(f"\n{triaged.item_id}{' (stub)' if triaged.stubbed else ''}")
-        print(f"  {record.category.value} / {record.importance.value}: {record.one_line}")
+        print(_safe(f"\n{triaged.item_id}{' (stub)' if triaged.stubbed else ''}"))
+        print(_safe(f"  {record.category.value} / {record.importance.value}: {record.one_line}"))
         if record.action_text:
-            print(f"  action: {record.action_text}" + (f" (due {record.due})" if record.due else ""))
+            print(_safe(f"  action: {record.action_text}" + (f" (due {record.due})" if record.due else "")))
         elif record.due:
-            print(f"  due: {record.due}")
+            print(_safe(f"  due: {record.due}"))
     if len(result.items) > limit:
         print(f"\n  ... {len(result.items) - limit} more (raise --limit to see them)")
 
     print(f"\nstubbed: {result.stubbed_count} of {len(result.items)}")
     for failure in result.failures:
-        print(f"failure: {failure}")
+        print(_safe(f"failure: {failure}"))
     return 1 if result.stubbed_count == len(result.items) else 0
 
 

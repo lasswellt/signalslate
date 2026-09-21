@@ -82,8 +82,9 @@ def no_key(monkeypatch):
 class FakeClient:
     """Answers every parse() with one record per alias it was sent, or with a scripted failure."""
 
-    def __init__(self, fail: bool = False) -> None:
+    def __init__(self, fail: bool = False, one_line: str | None = None) -> None:
         self.fail = fail
+        self.one_line = one_line
         self.calls: list[dict[str, Any]] = []
         self.messages = SimpleNamespace(parse=self._parse)
 
@@ -97,7 +98,7 @@ class FakeClient:
                 id=alias,
                 category=Category.ACTION,
                 importance=Importance.HIGH,
-                one_line=f"Summary for {alias}.",
+                one_line=self.one_line or f"Summary for {alias}.",
                 action_needed=True,
                 action_text="Reply to the sender",
                 due="2026-10-01",
@@ -106,6 +107,12 @@ class FakeClient:
             for alias in aliases
         ]
         return SimpleNamespace(parsed_output=TriageBatch(records=records), stop_reason="end_turn")
+
+
+def hostile_row(external_id: str, occurred_at) -> db.CollectedItem:
+    """A stored row whose title and body hold a lone surrogate: the ASCII-escaped JSON "\\ud800" loads back as one."""
+    payload = {**flat_payload(), "subject": "Hostile \ud800 subject", "bodyText": "Hostile \ud800 body"}
+    return make_row(SOURCE, external_id, occurred_at, json.dumps(payload))
 
 
 def use_client(monkeypatch, client: FakeClient) -> None:
@@ -166,6 +173,29 @@ def test_dry_shows_only_the_first_batch(seeded, no_key, capsys):
     assert "3 in 2 batch(es) of up to 2" in out
 
 
+def test_dry_prints_a_lone_surrogate_as_an_escape_instead_of_crashing(temp_db, no_key, capsys):
+    seed(temp_db, [hostile_row("hostile-1", utcnow() - timedelta(hours=1))])
+    assert triage_cli.main([SOURCE, "--dry"]) == 0
+    captured = capsys.readouterr()
+    assert "Hostile \\ud800 subject" in captured.out
+    assert "Hostile \\ud800 body" in captured.out
+    assert "Traceback" not in captured.out + captured.err
+    json.loads(captured.out[captured.out.index("{") :])
+
+
+def test_dry_writes_nothing(seeded, no_key):
+    # All four tables, and the seeded rows themselves: a dry run that stores a cursor, health or Run
+    # row, or rewrites an item, must fail here, not only the live path.
+    def snapshot():
+        with Session(seeded) as session:
+            return [(row.id, row.external_id, row.payload, row.occurred_at) for row in session.exec(select(db.CollectedItem))]
+
+    counts, rows = row_counts(seeded), snapshot()
+    assert triage_cli.main([SOURCE, "--dry", "--batch-size", "2"]) == 0
+    assert row_counts(seeded) == counts == {"Run": 0, "SourceHealth": 0, "CollectedItem": 3, "SourceCursor": 0}
+    assert snapshot() == rows
+
+
 # --- live ------------------------------------------------------------------------------------------
 
 
@@ -217,6 +247,16 @@ def test_live_run_writes_nothing(seeded, monkeypatch):
     use_client(monkeypatch, FakeClient())
     assert triage_cli.main([SOURCE]) == 0
     assert row_counts(seeded) == before == {"Run": 0, "SourceHealth": 0, "CollectedItem": 3, "SourceCursor": 0}
+
+
+def test_live_prints_a_lone_surrogate_from_the_model_and_the_item_without_crashing(temp_db, monkeypatch, capsys):
+    seed(temp_db, [hostile_row("hostile-1", utcnow() - timedelta(hours=1))])
+    use_client(monkeypatch, FakeClient(one_line="Model says \ud800 here"))
+    assert triage_cli.main([SOURCE]) == 0
+    captured = capsys.readouterr()
+    assert "Model says \\ud800 here" in captured.out
+    assert "stubbed: 0 of 1" in captured.out
+    assert "Traceback" not in captured.out + captured.err
 
 
 # --- refusals and empty cases ----------------------------------------------------------------------
