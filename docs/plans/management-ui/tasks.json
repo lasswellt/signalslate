@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T06:37:46Z",
+  "updated": "2026-09-21T06:40:23Z",
   "tasks": [
     {
       "id": "T-001",
@@ -892,11 +892,39 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T06:40:23Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'redact' pipeline/runner.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:40:22Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/runner.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:40:22Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_runner_redaction.py tests/test_runner.py tests/test_runner_only.py -q",
+            "exit": 0,
+            "duration_ms": 1205,
+            "tail": "......................................................................   [100%]\n70 passed in 1.00s",
+            "recorded_at": "2026-09-21T06:40:23Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research docs/_research/2026-09-21_management-ui.md section 2. Apply pipeline.redact.redact(text, connections.secret_values()) wherever the runner persists free text that can carry upstream error text: Run.error, Run.summary and SourceHealth.detail (the _summarize output, the failures list, the fatal message, and the 'source: ExceptionClass: message' line for raised exceptions). Import connections lazily inside the helper and tolerate its absence or failure: redaction must never raise or block a run (on any failure fall back to pattern-only redaction). Also cap each persisted text at 1000 characters after redaction. Existing runner tests unchanged. Tests: a collector detail containing a stored secret value, a Bearer token and a client_secret= query fragment leaves none of them in Run.error, Run.summary or SourceHealth.detail rows; a collector that RAISES with the secret in its message is redacted; when redact is monkeypatched to raise, the run still persists with pattern-only redaction; long details are capped."
     },
