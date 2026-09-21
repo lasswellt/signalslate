@@ -112,6 +112,7 @@ def _call(token: str, path: str, params: Optional[dict] = None) -> dict:
     headers = {"Authorization": f"Bearer {token}"}
     url = f"{GMAIL}{path}"
 
+    last_status: Optional[int] = None
     for attempt in range(MAX_ATTEMPTS):
         try:
             resp = requests.get(url, headers=headers, params=params, timeout=TIMEOUT)
@@ -126,10 +127,11 @@ def _call(token: str, path: str, params: Optional[dict] = None) -> dict:
 
         if not _retryable(resp):
             raise GmailError(f"{path}: HTTP {resp.status_code}: {resp.text[:200]}")
+        last_status = resp.status_code
         if attempt < MAX_ATTEMPTS - 1:
             _sleep(_backoff(attempt))
 
-    raise GmailError(f"{path}: still failing after {MAX_ATTEMPTS} attempts (last HTTP {resp.status_code})")
+    raise GmailError(f"{path}: still failing after {MAX_ATTEMPTS} attempts (last HTTP {last_status})")
 
 
 def list_message_ids(token: str, since: datetime, until: datetime) -> list[dict]:
