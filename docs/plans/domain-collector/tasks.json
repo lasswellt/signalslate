@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-21T22:32:49Z",
+  "updated": "2026-09-21T22:36:12Z",
   "tasks": [
     {
       "id": "T-001",
@@ -118,11 +118,60 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T22:36:12Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^class Domain\\(SQLModel, table=True\\)' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:36:11Z"
+          },
+          {
+            "cmd": "grep -qE '^class DomainSnapshot\\(SQLModel, table=True\\)' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:36:11Z"
+          },
+          {
+            "cmd": "grep -qE '^class DomainQuote\\(SQLModel, table=True\\)' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:36:11Z"
+          },
+          {
+            "cmd": "grep -qE '^class DomainPurchase\\(SQLModel, table=True\\)' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:36:11Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T22:36:11Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_domain_tables.py -q",
+            "exit": 0,
+            "duration_ms": 424,
+            "tail": ".....                                                                    [100%]\n5 passed in 0.24s",
+            "recorded_at": "2026-09-21T22:36:12Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Finding 1: portfolio is state, not CollectedItem. Domain: name (lower-case punycode, unique), ownership owned|watched, source (namecheap|godaddy|wordpress|manual), connection_id nullable, registrar fields (expires_at, auto_renew, locked, privacy) nullable, first_seen/last_seen, missing_since. DomainSnapshot: domain_id, taken_at, data JSON, data_hash. DomainQuote: uuid id, name, connection_id, price/renewal_price as str decimals, currency, premium, expires_at. DomainPurchase: quote_id UNIQUE, status pending|succeeded|failed|unknown, price, created_at, detail (redacted). New tables via create_all; nullable/defaulted columns only (db.py:83 comment). Tests: unique name, unique quote_id raises IntegrityError."
     },
