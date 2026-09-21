@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-21T23:00:14Z",
+  "updated": "2026-09-21T23:05:59Z",
   "tasks": [
     {
       "id": "T-001",
@@ -654,11 +654,53 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:05:59Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def lookup_records' pipeline/domains/dns.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:05:59Z"
+          },
+          {
+            "cmd": "grep -qE '^def mail_posture' pipeline/domains/dns.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:05:59Z"
+          },
+          {
+            "cmd": "grep -qE '_dmarc\\.' pipeline/domains/dns.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:05:59Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/domains/dns.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:05:59Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_domain_dns.py -q",
+            "exit": 0,
+            "duration_ms": 277,
+            "tail": ".....................                                                    [100%]\n21 passed in 0.10s",
+            "recorded_at": "2026-09-21T23:05:59Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Finding 5. dnspython sync resolver, nameservers from DOMAINS_RESOLVER when set; A AAAA CNAME MX NS TXT SOA CAA; NXDOMAIN/NoAnswer are data not errors. mail_posture: SPF present/count/lookup count <=10, DMARC p=, DKIM selectors (google, selector1, selector2, k1, default), _mta-sts TXT + policy fetch, BIMI; flag 'parked domain without v=spf1 -all / p=reject'. Bounded ThreadPoolExecutor. Tests inject a fake resolver (true external), no network."
     },

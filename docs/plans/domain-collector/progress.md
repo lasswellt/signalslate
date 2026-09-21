@@ -15,3 +15,6 @@ Ruling: fix — non-premium Namecheap quote had price 0 (would bypass price cap)
 ## 2026-09-21T22:55:31Z build T-006 start (attempt 1)
 Ruling: defer — T-007 waits for peer management-ui T-037 (pipeline/oauth_flows.py); running independent tasks first (T-006)
 ## 2026-09-21T23:00:14Z verify T-006 ok=true
+## 2026-09-21T23:00:14Z build T-009 start (attempt 1)
+Ruling: gate narrowed to plan-owned test files while peer management-ui has uncommitted edits (test_oauth_m365 fails from peer's oauth_m365.py/tokencache.py) (T-009)
+## 2026-09-21T23:05:59Z verify T-009 ok=true
