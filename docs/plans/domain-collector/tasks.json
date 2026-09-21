@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-21T23:32:06Z",
+  "updated": "2026-09-21T23:35:41Z",
   "tasks": [
     {
       "id": "T-001",
@@ -654,11 +654,46 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:35:41Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'rest/v1\\.1/all-domains' pipeline/domains/registrars/wordpress.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:35:40Z"
+          },
+          {
+            "cmd": "grep -qE 'raise Unsupported' pipeline/domains/registrars/wordpress.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:35:40Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/domains/registrars/wordpress.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:35:40Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_registrar_wordpress.py -q",
+            "exit": 0,
+            "duration_ms": 593,
+            "tail": ".......................                                                  [100%]\n23 passed in 0.37s",
+            "recorded_at": "2026-09-21T23:35:41Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Q3, Dissent. Undocumented endpoint: parse defensively (unknown shape -> RegistrarError with 'response shape changed', never KeyError); accept list under 'domains' key; map domain/expiry/auto_renew where present, else None. check()/purchase() raise Unsupported. 403 authorization_required -> AuthFailed('sign in again')."
     },
