@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T05:11:29Z",
+  "updated": "2026-09-21T05:14:06Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1442,11 +1442,39 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T05:14:06Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qiE 'surrogate' pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T05:14:06Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T05:14:06Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+            "exit": 0,
+            "duration_ms": 399,
+            "tail": "........................................................................ [ 57%]\n......................................................                   [100%]\n126 passed, 51 deselected in 0.25s",
+            "recorded_at": "2026-09-21T05:14:06Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check finding 1 (P1), reproduced 2026-09-21 by the main thread. _decode_part honors any sender-chosen Content-Type charset that Python knows, including codecs that are not text charsets: unicode_escape, raw_unicode_escape and utf-7 all decode 'hi \\ud800 x' (or +2AA-) to a body containing a LONE SURROGATE (U+D800). The collector persists it fine (json.dumps escapes it) but the triage request builder later json.dumps(ensure_ascii=False) then the SDK encodes UTF-8 and raises UnicodeEncodeError. Fix in _decode_part: (a) allow only real text charsets: reject any codec that is not a text encoding (use codecs.lookup(name)._is_text_encoding, and/or an explicit denylist covering unicode_escape, raw_unicode_escape, utf-7, idna, punycode, rot13, base64 and the other bytes-to-bytes/str-to-str codecs) and fall back to utf-8 errors='replace' exactly as for an unknown charset; (b) after ANY decode, scrub lone surrogates (e.g. text.encode('utf-8','replace').decode('utf-8')) so no code path can leave one in bodyText. Also apply the scrub to the header values flatten_message copies (subject, from, to, cc, snippet, messageId, listUnsubscribe) because a JSON header could carry a lone surrogate escape. Keep charset=utf-8, iso-8859-1, windows-1252, shift_jis, gb18030 and utf-16 decoding correct. Tests: each of the three charsets with a surrogate-producing body yields a body with no surrogate; a real windows-1252 and a shift_jis body still decode to the right text; a header value containing a lone surrogate comes out clean; assert on the OUTPUT of flatten_message (no character in 0xD800-0xDFFF in any string field). The existing charset tests must keep passing unchanged."
     },
