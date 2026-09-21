@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T22:55:44Z",
+  "updated": "2026-09-21T23:01:35Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2578,13 +2578,41 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:01:35Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'A-Za-z0-9_\\.-' pipeline/tokencache.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:01:34Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/tokencache.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:01:34Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_legacy_alias.py tests/test_tokencache.py tests/test_tokencache_wiring.py -q",
+            "exit": 0,
+            "duration_ms": 1492,
+            "tail": "........................................................................ [ 70%]\n..............................                                           [100%]\n102 passed in 1.28s",
+            "recorded_at": "2026-09-21T23:01:35Z"
+          }
+        ]
+      },
       "origin": "check",
-      "notes": "check-report finding 2. origin/main built the MSAL cache path from any alias, so aliases such as acme_corp or acme.com worked. tokencache.cache_path now raises ValueError for anything outside [A-Za-z0-9-]+ and health.check_m365 does not catch it, so check_all_configured raises and the WHOLE run fails for such an install even with no key configured. FIX: (1) widen the tokencache alias rule to a safe FILENAME class that still blocks traversal: ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$ (no separators, no leading dot, no empty); keep alias_lock/cache_path/locked/load/save semantics and per-alias lock identity; connection VALIDATION for new UI-created m365 aliases stays [A-Za-z0-9-]+ (do not touch pipeline/connections.py). (2) defense in depth: health.check_m365 and the Graph collector path must convert a ValueError from tokencache into a HealthResult error / a per-source failure, never an exception that aborts the run. Existing tests unchanged. Tests: with NO vault and an env declaring M365_ORG1_ALIAS=acme_corp and another acme.com, and a pre-existing cache file named <alias>_cache.bin in a temp TOKEN_DIR, check_m365 finds the cache (returns a normal HealthResult or the stubbed MSAL path) and check_all_configured does not raise; traversal aliases '../evil', 'a/b', '.hidden', '' and a 65-char alias are still refused by tokencache; the 0600 atomic write and corrupt-file tolerance tests still pass; a run with one bad alias and one good source completes with the good source collected."
+      "notes": "check-report finding 2. origin/main built the MSAL cache path from any alias, so aliases such as acme_corp or acme.com worked. tokencache.cache_path now raises ValueError for anything outside [A-Za-z0-9-]+ and health.check_m365 does not catch it, so check_all_configured raises and the WHOLE run fails for such an install even with no key configured. FIX: (1) widen the tokencache alias rule to a safe FILENAME class that still blocks traversal: ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$ (no separators, no leading dot, no empty); keep alias_lock/cache_path/locked/load/save semantics and per-alias lock identity; connection VALIDATION for new UI-created m365 aliases stays [A-Za-z0-9-]+ (do not touch pipeline/connections.py). (2) defense in depth: health.check_m365 and the Graph collector path must convert a ValueError from tokencache into a HealthResult error / a per-source failure, never an exception that aborts the run. Existing tests unchanged. Tests: with NO vault and an env declaring M365_ORG1_ALIAS=acme_corp and another acme.com, and a pre-existing cache file named <alias>_cache.bin in a temp TOKEN_DIR, check_m365 finds the cache (returns a normal HealthResult or the stubbed MSAL path) and check_all_configured does not raise; traversal aliases '../evil', 'a/b', '.hidden', '' and a 65-char alias are still refused by tokencache; the 0600 atomic write and corrupt-file tolerance tests still pass; a run with one bad alias and one good source completes with the good source collected. scope+tests/test_tokencache.py scope+pipeline/oauth_m365.py: existing tokencache tests asserted a.b and a_b are refused (the stricter rule that caused this regression); drop those two parametrizations only; keep browser sign-in strict via an explicit [A-Za-z0-9-]+ check in oauth_m365 so tests/test_oauth_m365.py stays unchanged."
     },
     {
       "id": "T-036",

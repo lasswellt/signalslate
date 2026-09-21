@@ -92,3 +92,7 @@ Final sweep: pytest 1597 passed, pyright 54 (baseline, none added), web typechec
 Ruling: defer — check-report findings 9-24 (minors, duplicated router helpers, error-shape inconsistencies, a11y labels, small races) are NOT tasked; findings 1-8 became T-034..T-043 (check)
 ## 2026-09-21T22:50:25Z build T-034 start (attempt 1)
 ## 2026-09-21T22:55:44Z verify T-034 ok=true
+Ruling: accept — T-034 emits the empty GMAIL_<L>_REFRESH_TOKEN via materialize(pending_gmail_token=True) from overlay_provider only, because an existing materialize test asserts the key is absent by default (T-034, round 1)
+## 2026-09-21T22:55:44Z build T-035 start (attempt 1)
+Ruling: accept — T-035 scope expanded to tests/test_tokencache.py (remove the a.b and a_b invalid-alias params: they encoded the stricter rule that broke legacy installs) and pipeline/oauth_m365.py (explicit strict alias check so UI sign-in stays [A-Za-z0-9-]+ and tests/test_oauth_m365.py is untouched) (T-035, round 1)
+## 2026-09-21T23:01:35Z verify T-035 ok=true
