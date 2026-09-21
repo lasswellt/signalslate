@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T07:35:00Z",
+  "updated": "2026-09-21T07:37:58Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2143,6 +2143,117 @@
       "last_verify": null,
       "origin": "plan",
       "notes": "test-only: the product is the end-to-end regression suite; there is no production symbol to grep. Never touch the network. Drive the REAL app object (lifespan, router wiring, security middleware) with a temp DB and env and TestClient. Scenarios: (1) fresh start with SIGNALSLATE_SECRET_KEY set and .env declaring a Slack workspace, a Zoom account and a Gmail account: GET /connections lists them with origin env and NO secret value anywhere in the response text; (2) POST a new slack connection with the required header: it is inactive; test it (stub the slack health call); activate through PUT /config; run one collector (stub dispatch) and read last_attempt and items through the API; (3) PATCH replaces only the token and the old token appears nowhere afterwards; (4) delete a seeded connection and restart the app on the same DB: it does NOT come back (tombstone), and an edited seeded connection keeps its edit when .env changes (STORE WINS); (5) sweep: collect EVERY response body of the whole scenario (including error responses, /status, /system and run rows) and assert none contains any secret value used in the scenario nor any ciphertext; (6) CSRF: the same mutating calls without X-Requested-With, or with a foreign Origin, are rejected and change nothing; (7) no key configured: the app starts, /system reports the store inactive, writes that include secrets return 503 secret_key_missing, and .env-only collection still works. If a step exposes a defect in source do NOT weaken the test: reply BLOCKED with the failing assertion."
+    },
+    {
+      "id": "T-032",
+      "title": "Cookie-carrying CORS for the sign-in flow: allow_credentials on the explicit origin list, credentials include on the two OAuth calls",
+      "role": "backend",
+      "files": [
+        "api/security.py",
+        "tests/test_api_security.py",
+        "web/composables/useApi.ts",
+        "web/tests/useApi.test.ts"
+      ],
+      "depends_on": [
+        "T-025",
+        "T-018"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'allow_credentials=True' api/security.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE \"credentials: 'include'\" web/composables/useApi.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": " -c 'pass' ",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "blocked",
+      "blocked_reason": "circuit-breaker",
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "superseded by T-033: verify[] was created with a malformed third command and tasks.sh cannot edit verify; never built"
+    },
+    {
+      "id": "T-033",
+      "title": "Cookie-carrying CORS for the sign-in flow: allow_credentials on the explicit origin list, credentials include on the two OAuth calls",
+      "role": "backend",
+      "files": [
+        "api/security.py",
+        "tests/test_api_security.py",
+        "web/composables/useApi.ts",
+        "web/tests/useApi.test.ts"
+      ],
+      "depends_on": [
+        "T-025",
+        "T-018"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'allow_credentials=True' api/security.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE \"credentials: 'include'\" web/composables/useApi.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_api_security.py -q",
+          "timeout": 120
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/useApi.test.ts --reporter=dot",
+          "timeout": 240
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T07:37:58Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'allow_credentials=True' api/security.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:37:55Z"
+          },
+          {
+            "cmd": "grep -qE \"credentials: 'include'\" web/composables/useApi.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:37:55Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_security.py -q",
+            "exit": 0,
+            "duration_ms": 657,
+            "tail": ".........................................................                [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n57 passed, 1 warning in 0.47s",
+            "recorded_at": "2026-09-21T07:37:56Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/useApi.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 2592,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/useApi.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n····························\n\n Test Files  1 passed (1)\n      Tests  28 passed (28)\n   Start at  03:37:57\n   Duration  1.46s (tests 80%, environment 13%, transform 4%, setup 2%, import 1%)",
+            "recorded_at": "2026-09-21T07:37:58Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Found by the T-025 review: the OAuth nonce cookie ss_oauth_<flow_id> is set by POST /oauth/{provider}/start and required by paste and callback. A cross-origin fetch (web on :3000, API on :8000, same site, different origin) neither stores nor sends it unless the request uses credentials:'include' AND the response carries Access-Control-Allow-Credentials: true, so paste sign-in would fail with nonce_mismatch. (1) api/security.py: CORSMiddleware allow_credentials=True. Safe only because allow_origins is the explicit normalized list (never '*'; wildcard entries are already dropped): keep that invariant and say so in the docstring. (2) tests/test_api_security.py: the existing assertion at about line 244 that access-control-allow-credentials is ABSENT encodes the old decision; replace it (do not weaken anything else) with: an allowed origin gets Access-Control-Allow-Credentials true together with an echoed exact origin (never *), an unlisted origin gets neither, a wildcard entry in allowed_origins is still dropped, and the guard/CSRF tests are unchanged and still pass. (3) web/composables/useApi.ts: the two calls oauthStart and oauthPaste (only those) pass credentials: 'include' through the single request wrapper (add an optional field to the wrapper's options; do not send credentials on other calls). (4) web/tests/useApi.test.ts: oauthStart and oauthPaste pass credentials include and no other method does. Existing tests otherwise pass unchanged. No secret handling changes."
     }
   ]
 }

@@ -65,3 +65,6 @@ Ruling: accept — T-021 callback deletes only the nonce-matched ss_oauth_* cook
 ## 2026-09-21T07:30:48Z verify T-024 ok=true
 ## 2026-09-21T07:30:52Z build T-025 start (attempt 1)
 ## 2026-09-21T07:35:00Z verify T-025 ok=true
+Ruling: descope — T-032 was created with a malformed verify command (tasks.sh cannot edit verify[]); replaced by T-033, same scope, never built (T-032)
+## 2026-09-21T07:35:56Z build T-033 start (attempt 1)
+## 2026-09-21T07:37:58Z verify T-033 ok=true
