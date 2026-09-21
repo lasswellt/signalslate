@@ -1,0 +1,565 @@
+{
+  "$schema": "blitz-tasks/1.0",
+  "plan": "gmail-collector",
+  "updated": "2026-09-21T02:26:58Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Restore dev environment and prove the existing suite is green",
+      "role": "infra",
+      "files": [
+        "requirements.txt"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "test -x venv/bin/python",
+          "timeout": 5
+        },
+        {
+          "cmd": "venv/bin/python -c 'import msal, requests, fastapi, sqlmodel, apscheduler, pytest'",
+          "timeout": 30
+        },
+        {
+          "cmd": "venv/bin/python -m pytest -q",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Host has no venv/ and no pytest (OS reinstall); Python is 3.14.x. Create venv/, pip install -r requirements.txt. If a pinned dep has no wheel for this interpreter, pick a supported one via mise, record the choice in README Local dev, and keep requirements.txt pins unchanged. If the baseline suite is red, STOP and report; do not start T-002 on a red baseline."
+    },
+    {
+      "id": "T-002",
+      "title": "Gmail auth plumbing in health.py: env keys, token refresh, check_gmail, known_sources",
+      "role": "backend",
+      "files": [
+        "pipeline/health.py",
+        "tests/conftest.py",
+        "tests/test_health.py"
+      ],
+      "depends_on": [
+        "T-001"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def check_gmail' pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'GMAIL_' tests/conftest.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'gmail_\\{' pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_health.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research §1,§2,§6. GMAIL_SCOPE=gmail.readonly only. Regex ^GMAIL_([A-Z0-9]+)_REFRESH_TOKEN$ must not match GMAIL_CLIENT_ID/SECRET. gmail_accounts() mirrors slack_workspaces(): lowercased labels, sorted, empty value -> None. gmail_token_response(label) mirrors zoom_token_response(): plain POST https://oauth2.googleapis.com/token (client_id, client_secret, grant_type=refresh_token, refresh_token); refresh returns NO new refresh token so nothing is written back. invalid_grant raises GmailAuthError (hard, never retried). check_gmail: refresh -> assert granted scope (space-delimited 'scope' field) contains gmail.readonly -> GET gmail/v1/users/me/profile (1 quota unit). invalid_grant message must name the likely causes (consent screen still in Testing = 7-day expiry, Google password change, revoked access) and 'auth/gmail_bootstrap.py <label>'. known_sources order: m365..., zoom, slack..., gmail.... Add GMAIL_ to the _env() prefix filter AND to tests/conftest.py CONFIG_PREFIXES. Tests stub requests.post/get at the health module, following tests/test_health.py."
+    },
+    {
+      "id": "T-003",
+      "title": "runner._active() reuses known_sources() instead of a duplicated source list",
+      "role": "backend",
+      "files": [
+        "pipeline/runner.py",
+        "pipeline/db.py",
+        "tests/test_runner.py"
+      ],
+      "depends_on": [
+        "T-002"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'known_sources' pipeline/runner.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"declared = \\[f\\\"m365_\" pipeline/runner.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"import .*(m365_aliases|slack_workspaces)\" pipeline/runner.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_runner.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research §7: runner.py:134-137 hand-copies the declared-source list, so a new source is silently never collected. Replace with known_sources(), drop the now-unused m365_aliases/slack_workspaces imports, update the source-id comments in db.py (SourceHealth, CollectedItem) to include gmail_<label>. Test: with a gmail account declared and toggled on, _active(config) contains gmail_<label>; toggled off, it does not."
+    },
+    {
+      "id": "T-004",
+      "title": "Gmail transport: epoch-window list, page drain, quota-aware backoff",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/gmail.py",
+        "tests/test_collectors.py"
+      ],
+      "depends_on": [
+        "T-002"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def list_message_ids' pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'after:' pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"gmail\\.googleapis\\.com/batch|users/me/history|/watch\" pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research §4,§5. messages.list q='after:<epoch_s> before:<epoch_s>' (NEVER date strings: they are PST-midnight), maxResults=500, drain every nextPageToken, raise at MAX_PAGES like graph.py rather than truncate. Convert the naive-UTC window to epoch with an explicit UTC tz (naive .timestamp() reads LOCAL time; see test_slack_oldest_is_utc_not_local) and pin it with a test under a non-UTC TZ. _call(): retry with truncated exponential backoff min(2**n + jitter, 32) on 403 with reason rateLimitExceeded/userRateLimitExceeded, on 429, and on 500/502/503/504; bounded attempts; 401 and other 4xx raise GmailError. Sleep via a module-level indirection so tests do not wait. Use plain requests.get (module-level, monkeypatched like graph/slack tests), NOT a Session and NOT parallel calls (deviation from research sketch: keeps the existing route() test helper valid). NO /batch, NO history.list, NO watch. Add test_gmail_* tests to tests/test_collectors.py."
+    },
+    {
+      "id": "T-005",
+      "title": "Gmail message fetch and MIME flattening into a compact payload",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/gmail.py",
+        "tests/test_collectors.py",
+        "tests/fixtures/gmail_message_multipart.json"
+      ],
+      "depends_on": [
+        "T-004"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def flatten_message' pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'urlsafe_b64decode' pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -c 'import json; json.load(open(\"tests/fixtures/gmail_message_multipart.json\"))'",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research §4, §7 payload shape. messages.get format=full (20 quota units), sequential and paced (300 gets = the full 6,000 units/min/user budget). Decode base64url with padding fix; walk payload.parts recursively; prefer text/plain, else text/html stripped via stdlib html.parser dropping script/style AND hidden content (display:none, hidden attr, aria-hidden) since hidden HTML is a documented injection vector; charset from the part Content-Type, fallback utf-8 errors=replace. flatten_message() returns top-level keys: subject, from, to, cc, date, messageId, inReplyTo, listUnsubscribe, threadId, labelIds, snippet, internalDate, bodyText (capped, BODY_CAP default 20000 chars, a guess to be re-tuned from the dry run), bodyTruncated, attachments[{filename,mimeType,size}] (metadata only; never call attachments.get). 'subject' MUST be top-level so pipeline.collect PREVIEW_FIELDS shows it. internalDate (ms epoch string) -> naive UTC; unparseable -> None. Fixture tests/fixtures/gmail_message_multipart.json is SYNTHETIC (public repo: no real mail, names, or addresses) and is reused by T-009/T-013."
+    },
+    {
+      "id": "T-006",
+      "title": "collect_gmail orchestration and dispatch() wiring",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/gmail.py",
+        "pipeline/collectors/__init__.py",
+        "tests/test_collectors.py"
+      ],
+      "depends_on": [
+        "T-005"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def collect_gmail' pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'gmail_' pipeline/collectors/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -c 'from datetime import datetime; from pipeline.collectors import dispatch; r = dispatch(\"gmail_nolabel\", datetime(2026,1,1), datetime(2026,1,2)); assert r.status == \"error\" and \"token\" in r.detail.lower(), r'",
+          "timeout": 30
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "collect_gmail(label, refresh_token, since, until) -> CollectionResult, mirroring collect_slack. Missing token -> error (detail contains 'token'). GmailAuthError on refresh -> error with the re-auth hint. List failure -> error. Per-message get failures -> partial (first failure in detail) keeping the items already fetched; exhausted rate-limit retries -> partial, not error. Re-check window on internalDate client-side (since <= occurred < until) because after:/before: boundary semantics are undocumented; dedupe repeated ids. Item('mail', message id, occurred_at, payload). dispatch(): add 'gmail_' branch with a local import and gmail_accounts().get(label), like slack. Add a pipeline.collect.report() test proving the subject line previews for a gmail item."
+    },
+    {
+      "id": "T-007",
+      "title": "auth/gmail_bootstrap.py: loopback + PKCE sign-in that prints the refresh token",
+      "role": "backend",
+      "files": [
+        "auth/gmail_bootstrap.py",
+        "tests/test_gmail_bootstrap.py"
+      ],
+      "depends_on": [
+        "T-002"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def build_auth_url' auth/gmail_bootstrap.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'code_challenge_method' auth/gmail_bootstrap.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" auth/gmail_bootstrap.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python auth/gmail_bootstrap.py --help",
+          "timeout": 20
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_gmail_bootstrap.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research §1. Desktop OAuth client, auth-code + PKCE (S256), redirect http://127.0.0.1:<random port>, access_type=offline, prompt=consent, scope=GMAIL_SCOPE only. Stdlib http.server + secrets/hashlib + requests: NO google-auth-oauthlib dependency. Validate the state param; exchange the code (send client_secret); refuse to continue if the response has no refresh_token or the granted 'scope' lacks gmail.readonly; print the GMAIL_<LABEL>_REFRESH_TOKEN=... line for the user to paste into .env (never write it to a file). Short-circuit like m365_bootstrap.py: if a token is already configured and check_gmail is ok and not --force, exit 0. Support --port N and --no-browser (print the URL) so the loopback port can be SSH-forwarded from a headless box; that is an implementation note, not a documented Google recipe. Warn that every bootstrap run mints a token and Google keeps only 100 per client (oldest silently invalidated), so do not re-run casually. Unit-test the pure helpers (PKCE pair, URL builder, state check, scope assertion); the browser flow itself is a manual step."
+    },
+    {
+      "id": "T-008",
+      "title": "README Gmail setup section and .env.example entries",
+      "role": "infra",
+      "files": [
+        "README.md",
+        ".env.example"
+      ],
+      "depends_on": [
+        "T-006",
+        "T-007"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^GMAIL_CLIENT_ID=' .env.example",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^GMAIL_CLIENT_SECRET=' .env.example",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^GMAIL_PERSONAL_REFRESH_TOKEN=' .env.example",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'In production' README.md",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'gmail_bootstrap.py' README.md",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"/home/[a-z]|(^|[^0-9])(10\\.[0-9]+\\.[0-9]+\\.[0-9]+|192\\.168\\.[0-9]+\\.[0-9]+)\" README.md .env.example",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Public repo: generic wording only, no account names, addresses, or hosts. README: add Gmail to the Sources table and Phases text; a Setup > Gmail section covering create your OWN GCP project + Desktop client (never commit or share a client id), enable the Gmail API, consent screen External + add gmail.readonly, PUBLISH to In production (Testing = 7-day refresh tokens), accept the unverified-app click-through, run auth/gmail_bootstrap.py, paste the token line; a warning that a Google password change or revoked access kills the token; and the day-8 check. .env.example: GMAIL_CLIENT_ID=, GMAIL_CLIENT_SECRET=, GMAIL_PERSONAL_REFRESH_TOKEN= with comments. Add the Gmail dry-run line next to the existing ones."
+    },
+    {
+      "id": "T-009",
+      "title": "NormalizedItem schema and Gmail adapter (pure function)",
+      "role": "backend",
+      "files": [
+        "pipeline/normalize.py",
+        "tests/test_normalize.py"
+      ],
+      "depends_on": [
+        "T-005"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'class NormalizedItem' pipeline/normalize.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def normalize_gmail' pipeline/normalize.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" pipeline/normalize.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -c 'from pipeline.normalize import NormalizedItem'",
+          "timeout": 30
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_normalize.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research §8 Q5: PROPOSAL, not sourced. Pydantic NormalizedItem: id (source:external_id), source, kind, occurred_at, title, body_text, body_truncated, participants[{name,address,role}], thread_key (gmail:<threadId>), labels, direction (inbound|outbound, from SENT label), is_unread, attachments (metadata), trust='untrusted_third_party', raw_ref, permalink=None (a Gmail URL format that works across accounts is unverified; deferred to the render phase). normalize_gmail() is a pure function over a CollectedItem-shaped input; add a dispatcher by source prefix that raises for sources without an adapter yet. Address parsing via email.utils.getaddresses. Include a deterministic strip_quoted_reply(text) and truncate(text, cap) helper. Tests feed the REAL output of flatten_message() from the T-005 fixture through the adapter, not a hand-built payload, so the two cannot drift."
+    },
+    {
+      "id": "T-010",
+      "title": "Triage schema, alias mapping, output validation, deterministic stub fallback",
+      "role": "backend",
+      "files": [
+        "pipeline/triage.py",
+        "tests/test_triage.py"
+      ],
+      "depends_on": [
+        "T-009"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'class TriageRecord' pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'extra=.forbid.' pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def (validate_batch|stub_record|assign_aliases)' pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_triage.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research §8 Q1,Q3,Q4: pure logic, no SDK import yet. TriageRecord/TriageBatch Pydantic models with model_config extra='forbid'; categories and importance are string ENUMS (structured outputs reject numeric min/max and string length constraints, so ranges and lengths are enforced in Python post-parse). assign_aliases() gives per-run short ids (m001...) mapped to real ids in a dict: the model never sees or echoes real ids. batches(items, size~20). validate_batch(): every returned alias must be in the input set (unknown -> dropped), every input alias must be present (missing -> returned for one retry). sanitize_text(): strips URLs and markup and caps length (the model never emits URLs; links come from our own id->permalink map later). stub_record(item): deterministic record from subject/sender so a failed call degrades to a partial digest, never a dead run."
+    },
+    {
+      "id": "T-011",
+      "title": "Add the anthropic SDK dependency and LLM settings (API key, model ids)",
+      "role": "infra",
+      "files": [
+        "requirements.txt",
+        "pipeline/health.py",
+        "tests/conftest.py",
+        ".env.example"
+      ],
+      "depends_on": [
+        "T-002",
+        "T-008"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^anthropic==' requirements.txt",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'ANTHROPIC_API_KEY' pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'ANTHROPIC_API_KEY' tests/conftest.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^ANTHROPIC_API_KEY=' .env.example",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -c 'import anthropic'",
+          "timeout": 30
+        },
+        {
+          "cmd": "venv/bin/python -m pytest -q",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research §8. pip install anthropic in the venv, then pin the resolved version in requirements.txt as anthropic==<version> (record the version you actually installed; do not guess one). Add ANTHROPIC_API_KEY and SIGNALSLATE_MAP_MODEL to health._SINGLE_KEYS and tests/conftest.py CONFIG_KEYS so .env reaches the process the same way the other settings do (the SDK reads os.environ only, and locally .env is not loaded into it), plus a small llm_settings() accessor that returns the key and the model id. Default map model claude-haiku-4-5-20251001, overridable via env: Haiku 4.5 retirement is 'not sooner than 2026-10-15', so the id must be config. Do not add an SDK call here."
+    },
+    {
+      "id": "T-012",
+      "title": "Map call: request builder, triage_items(), retry-then-stub degradation",
+      "role": "backend",
+      "files": [
+        "pipeline/triage.py",
+        "tests/test_triage_client.py"
+      ],
+      "depends_on": [
+        "T-010",
+        "T-011"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def (build_request|triage_items)' pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"^\\s*[\\\"']?(temperature|top_p|top_k|tools)[\\\"']?\\s*[:=]\" pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" pipeline/triage.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_triage_client.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research §8 Q1,Q4. build_request() returns the kwargs for client.messages.parse: system prompt with an <untrusted_content_policy> block, ONE user turn whose content is json.dumps of the batch (JSON escaping is the delimiter: a body containing </document> must not break out), the Pydantic model as the structured-output format, max_tokens set, and NO tools, NO network, NO temperature/top_p/top_k (400s on 4.7+ models; the SDK removes them). Find the correct structured-output kwarg name by inspecting the INSTALLED SDK (inspect.signature of anthropic.resources.messages.Messages.parse); do not guess it from prose docs. Contract test: every key build_request() emits must be a real parameter of that signature, so a stub client cannot hide a wrong kwarg. triage_items(items, client, model, batch_size) -> result with records, failures, stubbed ids: validate each batch, retry missing aliases once, then fall back to stub_record; APIError, refusal, or max_tokens stop -> stub the whole batch and record the failure; never raise. The API is a true external, so a fake client is acceptable for behavior tests. Unverified and to prototype later: whether Anthropic's recommended tool_result delivery composes with structured outputs."
+    },
+    {
+      "id": "T-013",
+      "title": "Prompt-injection regression tests over synthetic hostile email",
+      "role": "test",
+      "files": [
+        "tests/test_triage_injection.py",
+        "tests/fixtures/injection_emails.json"
+      ],
+      "depends_on": [
+        "T-012"
+      ],
+      "verify": [
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_triage_injection.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "test-only: the product is the regression suite; there is no production symbol to grep. Synthetic fixtures only (public repo). Cases: body containing </document> and 'ignore previous instructions'; HTML with display:none / hidden instructions (must be absent from the built request, end to end: raw Gmail fixture -> flatten_message -> normalize -> build_request); a fake model reply whose one_line carries a URL and a canary string (URL must be stripped, alias to unknown id dropped); request has no tools key; system prompt contains the untrusted-content policy. Run injection-resistance assertions across several fake replies (pass^k style: all must hold), never assert exact LLM text (Sonnet-class output is not reproducible)."
+    },
+    {
+      "id": "T-014",
+      "title": "pipeline.triage_cli: dry-run the map call over collected Gmail items",
+      "role": "backend",
+      "files": [
+        "pipeline/triage_cli.py",
+        "pipeline/db.py",
+        "tests/test_triage_cli.py"
+      ],
+      "depends_on": [
+        "T-012",
+        "T-003"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '\\-\\-dry' pipeline/triage_cli.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def items_for_source_since' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"TODO|NotImplementedError|PLACEHOLDER|FIXME\" pipeline/triage_cli.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pipeline.triage_cli --help",
+          "timeout": 30
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_triage_cli.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Mirrors pipeline/collect.py: python -m pipeline.triage_cli <source> [--hours N] [--limit N] [--dry]. Reads CollectedItem rows for the source within the window (add a small db helper such as items_for_source_since(source, since); items_for_run exists but is per-run), normalizes them, and with --dry prints the batched request JSON WITHOUT calling the API and without any API key; without --dry it calls triage_items and prints each record with its source alias. Writes NOTHING to the database. This is how the map step is judged against real Gmail data; the live call is a manual step that spends API credit."
+    }
+  ]
+}
