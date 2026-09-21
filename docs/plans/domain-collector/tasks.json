@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-21T23:05:59Z",
+  "updated": "2026-09-21T23:09:03Z",
   "tasks": [
     {
       "id": "T-001",
@@ -738,11 +738,53 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:09:03Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def lookup_rdap' pipeline/domains/rdap.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:09:03Z"
+          },
+          {
+            "cmd": "grep -qE 'import whoisit' pipeline/domains/rdap.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:09:03Z"
+          },
+          {
+            "cmd": "grep -qE 'clientTransferProhibited|client transfer prohibited' pipeline/domains/rdap.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:09:03Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/domains/rdap.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:09:03Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_domain_rdap.py -q",
+            "exit": 0,
+            "duration_ms": 237,
+            "tail": ".................                                                        [100%]\n17 passed in 0.09s",
+            "recorded_at": "2026-09-21T23:09:03Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Q4, Finding 5. Result: status ok|not_found|unsupported|error, registrar, created, expires, nameservers, epp statuses (normalized camelCase), locked = transfer-prohibited present. Bootstrap once per process (whoisit.bootstrap), TLD missing from bootstrap -> unsupported (e.g. .de). 404 -> not_found (availability signal, not authoritative). Tests stub whoisit calls."
     },

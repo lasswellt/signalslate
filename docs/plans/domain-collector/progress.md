@@ -18,3 +18,5 @@ Ruling: defer — T-007 waits for peer management-ui T-037 (pipeline/oauth_flows
 ## 2026-09-21T23:00:14Z build T-009 start (attempt 1)
 Ruling: gate narrowed to plan-owned test files while peer management-ui has uncommitted edits (test_oauth_m365 fails from peer's oauth_m365.py/tokencache.py) (T-009)
 ## 2026-09-21T23:05:59Z verify T-009 ok=true
+## 2026-09-21T23:06:00Z build T-010 start (attempt 1)
+## 2026-09-21T23:09:03Z verify T-010 ok=true
