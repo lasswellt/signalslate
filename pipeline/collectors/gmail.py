@@ -22,6 +22,7 @@ import binascii
 import random
 import re
 import time
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 from typing import Optional
@@ -51,6 +52,10 @@ RATE_REASONS = {"ratelimitexceeded", "userratelimitexceeded"}
 GET_PACE_SECONDS = 0.3
 # Characters of bodyText kept per message. A guess: re-tune from the dry run's real payload sizes.
 BODY_CAP = 20000
+# Characters of HTML parsed per message. BODY_CAP only slices the text AFTER parsing, so without this
+# the parser's cost was set by the sender. A guess: re-tune from the dry run's real HTML sizes (legitimate
+# newsletters are a few hundred KB at most, and only the first BODY_CAP characters of text are kept).
+MAX_HTML_CHARS = 500000
 
 # Indirections so tests neither wait nor depend on real randomness.
 _sleep = time.sleep
@@ -189,11 +194,17 @@ class _TextExtractor(HTMLParser):
     because real mail leaves <p>/<li> unclosed: an end tag pops back to its nearest matching open tag,
     so a stray unclosed child cannot leave a hidden region open (dropping the rest of the mail) or
     close it early (leaking the hidden text).
+
+    `_open` counts the tag names on the stack so an end tag with no open match is dropped in O(1). The
+    scan it replaces made `<b>` * n + `</i>` * n quadratic (2.2s at n=10000, 20s at n=30000): every
+    stray end tag walked the whole stack. A match still scans from the top, but popping stack[i:]
+    removes what was scanned, so that work is amortized.
     """
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self._stack: list[tuple[str, bool]] = []
+        self._open: Counter[str] = Counter()
         self._out: list[str] = []
 
     def _hidden(self) -> bool:
@@ -212,15 +223,20 @@ class _TextExtractor(HTMLParser):
             return
         hidden = self._hidden() or tag in _SKIP_TAGS or _is_hidden(attrs)
         self._stack.append((tag, hidden))
+        self._open[tag] += 1
         if not hidden and tag in _BLOCK_TAGS:
             self._newline()
 
     def handle_endtag(self, tag: str) -> None:
         if tag in _VOID_TAGS:
             return
+        if not self._open[tag]:
+            return
         for i in range(len(self._stack) - 1, -1, -1):
             if self._stack[i][0] == tag:
                 was_hidden = self._stack[i][1]
+                for popped, _ in self._stack[i:]:
+                    self._open[popped] -= 1
                 del self._stack[i:]
                 if not was_hidden and tag in _BLOCK_TAGS:
                     self._newline()
@@ -245,11 +261,22 @@ def _tidy(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
 
-def _html_to_text(html: str) -> str:
+def _html_to_text_capped(html: str) -> tuple[str, bool]:
+    """
+    HTML -> (visible text, whether the input was cut at MAX_HTML_CHARS).
+
+    A cut can land inside a tag or a hidden region. Neither leaks: the parser drops a tag left
+    unfinished at end of input, and an unclosed hidden element keeps hiding to the end.
+    """
+    cut = len(html) > MAX_HTML_CHARS
     parser = _TextExtractor()
-    parser.feed(html)
+    parser.feed(html[:MAX_HTML_CHARS])
     parser.close()
-    return _tidy(parser.text())
+    return _tidy(parser.text()), cut
+
+
+def _html_to_text(html: str) -> str:
+    return _html_to_text_capped(html)[0]
 
 
 def _headers(raw: object) -> dict[str, str]:
@@ -333,8 +360,9 @@ def flatten_message(msg: dict) -> dict:
 
     # text/plain wins when it has any content; an HTML-only or whitespace-only-plain mail falls back.
     text = _tidy("\n".join(plain))
+    html_cut = False
     if not text:
-        text = _html_to_text("\n".join(html))
+        text, html_cut = _html_to_text_capped("\n".join(html))
 
     return {
         "subject": headers.get("subject"),
@@ -350,7 +378,7 @@ def flatten_message(msg: dict) -> dict:
         "snippet": msg.get("snippet") or "",
         "internalDate": msg.get("internalDate"),
         "bodyText": text[:BODY_CAP],
-        "bodyTruncated": len(text) > BODY_CAP,
+        "bodyTruncated": html_cut or len(text) > BODY_CAP,
         "attachments": attachments,
     }
 
