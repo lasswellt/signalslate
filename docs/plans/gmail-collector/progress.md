@@ -22,3 +22,6 @@ Ruling: defer — a state-mismatched loopback callback aborts the bootstrap run 
 ## 2026-09-21T02:54:33Z verify T-007 ok=true
 ## 2026-09-21T02:54:33Z build T-008 start (attempt 1)
 ## 2026-09-21T02:55:38Z verify T-008 ok=true
+## 2026-09-21T02:56:02Z build T-009 start (attempt 1)
+Ruling: defer — dev added '# pyright: ignore[reportMissingImports]' to pydantic/pytest imports in pipeline/normalize.py and two test files because the post-edit pyright hook does not resolve venv/. That is a tooling gap, not a code defect; the clean fix is a pyrightconfig.json (venvPath/venv) and removing the ignores. Not done here (out of scope of every task). NormalizedItem.attachments are Attachment models (use .model_dump() for dicts); PayloadError added. (T-009, round 1)
+## 2026-09-21T02:59:19Z verify T-009 ok=true

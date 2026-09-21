@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T02:55:38Z",
+  "updated": "2026-09-21T02:59:19Z",
   "tasks": [
     {
       "id": "T-001",
@@ -680,11 +680,53 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T02:59:19Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'class NormalizedItem' pipeline/normalize.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:59:18Z"
+          },
+          {
+            "cmd": "grep -qE 'def normalize_gmail' pipeline/normalize.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:59:18Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/normalize.py",
+            "exit": 0,
+            "duration_ms": 6,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:59:18Z"
+          },
+          {
+            "cmd": "venv/bin/python -c 'from pipeline.normalize import NormalizedItem'",
+            "exit": 0,
+            "duration_ms": 87,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:59:19Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_normalize.py -q",
+            "exit": 0,
+            "duration_ms": 247,
+            "tail": "...................................                                      [100%]\n35 passed in 0.10s",
+            "recorded_at": "2026-09-21T02:59:19Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research §8 Q5: PROPOSAL, not sourced. Pydantic NormalizedItem: id (source:external_id), source, kind, occurred_at, title, body_text, body_truncated, participants[{name,address,role}], thread_key (gmail:<threadId>), labels, direction (inbound|outbound, from SENT label), is_unread, attachments (metadata), trust='untrusted_third_party', raw_ref, permalink=None (a Gmail URL format that works across accounts is unverified; deferred to the render phase). normalize_gmail() is a pure function over a CollectedItem-shaped input; add a dispatcher by source prefix that raises for sources without an adapter yet. Address parsing via email.utils.getaddresses. Include a deterministic strip_quoted_reply(text) and truncate(text, cap) helper. Tests feed the REAL output of flatten_message() from the T-005 fixture through the adapter, not a hand-built payload, so the two cannot drift."
     },
