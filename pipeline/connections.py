@@ -28,7 +28,13 @@ Design decisions:
 - Secrets live in one encrypted JSON envelope per connection. A write that carries secrets and has
   no vault raises SecretKeyMissing before anything is touched, because storing plaintext or dropping
   the value silently are both worse than refusing.
+- namecheap, godaddy and wordpress are UI-only: they are never seeded from .env and materialize()
+  emits nothing for them, because their adapters read credentials through get_secret() directly
+  instead of an env-style overlay key. registrant_contact is a secret (it is PII, not a token) held
+  as one JSON envelope entry, so it is validated as a JSON object with its required keys and stored
+  as a normalized JSON string, the same shape every other secret already has.
 """
+import ipaddress
 import json
 import logging
 import re
@@ -138,16 +144,60 @@ KINDS: dict[str, _Kind] = {
         ("client_secret",),
         optional_config=("redirect_mode",),
     ),
+    "namecheap": _Kind(
+        "label",
+        ("label", "api_user", "username", "client_ip", "sandbox"),
+        ("api_key", "registrant_contact"),
+        ("api_key",),
+        optional_config=("sandbox",),
+    ),
+    "godaddy": _Kind(
+        "label",
+        ("label", "environment"),
+        ("api_key", "api_secret", "registrant_contact"),
+        ("api_key", "api_secret"),
+        optional_config=("environment",),
+    ),
+    "wordpress": _Kind(
+        "label",
+        ("label", "client_id", "redirect_mode"),
+        # access_token is optional at creation: sign-in is what stores it, same as gmail's refresh_token.
+        ("client_secret", "access_token"),
+        ("client_secret",),
+        optional_config=("redirect_mode",),
+    ),
 }
 
 _REDIRECT_MODES = ("paste_back", "callback")
 _DEFAULT_REDIRECT_MODE = "paste_back"
+_SANDBOX_VALUES = ("true", "false")
+_ENVIRONMENTS = ("production", "ote")
+_DEFAULT_ENVIRONMENT = "production"
+# Fields whose value is filled in automatically when the caller omits them.
+_CONFIG_DEFAULTS: dict[str, str] = {
+    "redirect_mode": _DEFAULT_REDIRECT_MODE,
+    "environment": _DEFAULT_ENVIRONMENT,
+}
+_REGISTRANT_CONTACT_KEYS = (
+    "first_name",
+    "last_name",
+    "address1",
+    "city",
+    "state_province",
+    "postal_code",
+    "country",
+    "phone",
+    "email",
+)
 
 # The alias becomes a token cache file name, so it must not contain a path character or a dot.
 _LABEL_RULES: dict[str, tuple["re.Pattern[str]", int]] = {
     "m365": (re.compile(r"[A-Za-z0-9-]+"), 40),
     "slack": (re.compile(r"[a-z0-9]+"), 32),
     "gmail": (re.compile(r"[a-z0-9]+"), 32),
+    "namecheap": (re.compile(r"[a-z0-9]+"), 32),
+    "godaddy": (re.compile(r"[a-z0-9]+"), 32),
+    "wordpress": (re.compile(r"[a-z0-9]+"), 32),
 }
 # Tenant ids, client ids and account ids come from provider consoles: GUIDs, dotted Google client
 # ids, short tokens and (for a tenant) domain names.
@@ -231,12 +281,52 @@ def _validate_config_value(kind: str, name: str, value: object) -> str:
         if value not in _REDIRECT_MODES:
             raise InvalidField(name, f"must be one of {', '.join(_REDIRECT_MODES)}")
         return value
+    if name == "sandbox":
+        if value not in _SANDBOX_VALUES:
+            raise InvalidField(name, f"must be one of {', '.join(_SANDBOX_VALUES)}")
+        return value
+    if name == "environment":
+        if value not in _ENVIRONMENTS:
+            raise InvalidField(name, f"must be one of {', '.join(_ENVIRONMENTS)}")
+        return value
+    if name == "client_ip":
+        try:
+            # Namecheap's API allowlist is IPv4 only (Namecheap FAQ); reject IPv6 and anything else.
+            ipaddress.IPv4Address(value)
+        except ValueError:
+            raise InvalidField(name, "must be a valid IPv4 address") from None
+        return value
     if not value or len(value) > _IDENTIFIER_MAX or not _IDENTIFIER.fullmatch(value):
         raise InvalidField(name, f"must be 1 to {_IDENTIFIER_MAX} characters of letters, digits and . _ ~ @ : -")
     return value
 
 
+def _validate_registrant_contact(value: object) -> str:
+    """JSON object (or JSON string) with the ICANN registrant fields; stored as a normalized JSON string."""
+    parsed = value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except ValueError:
+            raise InvalidField("registrant_contact", "must be a JSON object") from None
+    if not isinstance(parsed, dict):
+        raise InvalidField("registrant_contact", "must be a JSON object")
+    for key in _REGISTRANT_CONTACT_KEYS:
+        item = parsed.get(key)
+        if not isinstance(item, str) or not item.strip():
+            raise InvalidField("registrant_contact", f"must have a non-empty {key}")
+    for item in parsed.values():
+        if not isinstance(item, str) or _CONTROL_CHARS.search(item):
+            raise InvalidField("registrant_contact", "values must be strings with no control characters")
+    text = json.dumps(parsed, sort_keys=True)
+    if len(text) > _SECRET_MAX:
+        raise InvalidField("registrant_contact", f"must be at most {_SECRET_MAX} characters")
+    return text
+
+
 def _validate_secret_value(name: str, value: object) -> str:
+    if name == "registrant_contact":
+        return _validate_registrant_contact(value)
     if not isinstance(value, str) or not value.strip():
         raise InvalidField(name, "must be a non-empty string")
     if len(value) > _SECRET_MAX or _CONTROL_CHARS.search(value):
@@ -327,10 +417,11 @@ def create(kind: str, fields: Mapping[str, Any], origin: str = "ui") -> Connecti
 
     config = _validate_config(kind, spec, config_in)
     secrets = _validate_secrets(spec, secrets_in)
-    if "redirect_mode" in spec.optional_config:
-        config.setdefault("redirect_mode", _DEFAULT_REDIRECT_MODE)
+    for name in spec.optional_config:
+        if name in _CONFIG_DEFAULTS:
+            config.setdefault(name, _CONFIG_DEFAULTS[name])
     for name in spec.config:
-        if name not in config:
+        if name not in config and name not in spec.optional_config:
             raise MissingField(name, "required")
     for name in spec.required_secrets:
         if name not in secrets:
