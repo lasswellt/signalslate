@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-21T23:12:21Z",
+  "updated": "2026-09-21T23:23:17Z",
   "tasks": [
     {
       "id": "T-001",
@@ -891,11 +891,46 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:23:17Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def inspect' pipeline/domains/snapshot.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:23:17Z"
+          },
+          {
+            "cmd": "grep -qE '^def diff' pipeline/domains/snapshot.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:23:17Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/domains/snapshot.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:23:17Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_domain_snapshot.py -q",
+            "exit": 0,
+            "duration_ms": 518,
+            "tail": "............................                                             [100%]\n28 passed in 0.31s",
+            "recorded_at": "2026-09-21T23:23:17Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Finding 5 snapshot fields. Each part records ok|error|unsupported without failing the whole. data_hash over normalized (sorted) fields. diff(prev, cur, domain) -> list[Change(kind, summary)] for: ns_changed, mx_changed, a_changed, lock_removed, expiry_soon (<=30 and <=7 days when auto_renew is not True), auto_renew_off, mail_posture_regressed, redemption (watched domains). Pure functions for diff; inspect takes injectable lookups for tests."
     },
