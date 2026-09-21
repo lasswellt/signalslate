@@ -12,3 +12,6 @@ Ruling: defer — redact(): a bare 1-3 digit 'code' value is intentionally kept 
 ## 2026-09-21T06:11:46Z verify T-004 ok=true
 ## 2026-09-21T06:11:46Z build T-005 start (attempt 1)
 ## 2026-09-21T06:13:29Z verify T-005 ok=true
+## 2026-09-21T06:13:30Z build T-006 start (attempt 1)
+Ruling: defer — connections.secrets_set is derived by decrypting the envelope, so with no vault or a wrong key a view reports [] (the list page stays readable) and update-with-secrets on an undecryptable row raises SecretDecryptError (recovery: delete and recreate). T-007's notes were extended at build time with a narrow public get_secret(id, name) accessor because T-016 needs the Gmail client_secret and _secrets_for must stay private. (T-006, round 1)
+## 2026-09-21T06:18:57Z verify T-006 ok=true

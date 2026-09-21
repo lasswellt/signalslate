@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T06:13:29Z",
+  "updated": "2026-09-21T06:18:57Z",
   "tasks": [
     {
       "id": "T-001",
@@ -417,11 +417,53 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T06:18:57Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'class ConnectionView' pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:18:56Z"
+          },
+          {
+            "cmd": "grep -qE 'def create' pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:18:56Z"
+          },
+          {
+            "cmd": "! grep -nE '^(import|from) pipeline\\.config_store' pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:18:56Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:18:56Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_connections.py -q",
+            "exit": 0,
+            "duration_ms": 1026,
+            "tail": "........................................................................ [ 60%]\n................................................                         [100%]\n120 passed in 0.83s",
+            "recorded_at": "2026-09-21T06:18:57Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Contracts are in plan.md (Contracts section) and research docs/_research/2026-09-21_management-ui.md Decisions. The module must NOT import pipeline.config_store and must not import pipeline.health at module level. KINDS spec: m365 {config: alias(label), tenant_id, client_id; secrets: none}; zoom {config: account_id, client_id; secrets: client_secret; singleton with label zoom}; slack {config: label; secrets: token}; gmail {config: label, client_id, redirect_mode (paste_back|callback, default paste_back); secrets: client_secret, refresh_token (optional at create: sign-in sets it)}. Validation (raise ConnectionError subclasses that carry a FIELD NAME and a message that NEVER contains a submitted value): slack and gmail labels ^[a-z0-9]+$ max 32; m365 alias ^[A-Za-z0-9-]+$ max 40 (it becomes a token file name, so no path characters); id is derived (m365_<alias>, zoom, slack_<label>, gmail_<label>); ids and identifiers non-empty with a sane charset and length; secret values non-empty strings; unknown kinds and unknown fields rejected. Vault: set_vault(vault) and get_vault() module state (loaded elsewhere); a write that includes secrets and has no vault raises SecretKeyMissing (from pipeline.crypto). API: create(kind, fields) -> ConnectionView; update(id, config=None, secrets=None) replaces only the secret names provided and leaves others untouched; delete(id) writes a Tombstone, removes the row and returns bool; get(id); list_connections(); exists(id); set_secret(id, name, value) (used by sign-in). ConnectionView is a plain dataclass with id, kind, label, origin, config, secrets_set (sorted NAMES of secrets that have a value), created_at, updated_at and NEVER a secret value or ciphertext. Creating an id that has a live row raises DuplicateConnection; creating a tombstoned id clears its tombstone. Every write bumps a module-level version counter exposed by current_version(). A module-private _secrets_for(id) -> dict returns decrypted secrets for the materialize task only. Tests (temp_db plus a Vault from crypto.generate_key()): each kind's create, update and delete; the validation matrix including traversal aliases (../x, a/b, a b), uppercase labels rejected for slack and gmail, zoom singleton; the write-only property (json.dumps of every view contains no secret value and no ciphertext); update replaces only named secrets; delete tombstones; no vault plus secrets raises SecretKeyMissing; error messages never contain a submitted secret."
     },
@@ -464,7 +506,7 @@
       "attempts": 0,
       "last_verify": null,
       "origin": "plan",
-      "notes": "Research docs/_research/2026-09-21_management-ui.md section 1 (corrections 1-4, 6). Continue in pipeline/connections.py. (1) seed_from_env(raw_env: Mapping[str,str]) -> list[str]: for every connection the RAW env declares (M365: each M365_ORG<n>_ALIAS with its TENANT_ID and a client id of M365_ORG<n>_CLIENT_ID else the shared M365_CLIENT_ID; zoom when ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET are all present; SLACK_<LABEL>_TOKEN; GMAIL_<LABEL>_REFRESH_TOKEN with client id and secret from GMAIL_<LABEL>_CLIENT_ID and GMAIL_<LABEL>_CLIENT_SECRET else the shared GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET), create it with origin env ONLY IF its id has no live row AND no tombstone; return the seeded ids; idempotent; a malformed declaration (for example a missing tenant id) is skipped and reported, never raises; with no vault it seeds nothing and returns []. Existing rows are never overwritten from .env (STORE WINS). (2) materialize() -> dict[str,str]: the env-style overlay for live rows using EXACTLY the key families health.py already parses: slack -> SLACK_<LABEL upper>_TOKEN; gmail -> GMAIL_<LABEL>_REFRESH_TOKEN (only when set) plus per-label GMAIL_<LABEL>_CLIENT_ID and GMAIL_<LABEL>_CLIENT_SECRET; m365 -> M365_ORG<n>_ALIAS, _TENANT_ID and _CLIENT_ID with n numbered 1..N by row seq then created_at; zoom -> ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET. (3) is_family_key(name) -> bool and FAMILY_KEY_PATTERNS: compiled regexes for every connection-owned key family (M365_ORG<n>_*, M365_CLIENT_ID, SLACK_<L>_TOKEN, ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_<L>_REFRESH_TOKEN, GMAIL_<L>_CLIENT_ID, GMAIL_<L>_CLIENT_SECRET) but NOT SLACK_SKIP_DMS, TZ, ANTHROPIC_API_KEY, SIGNALSLATE_MAP_MODEL or any other non-connection key. (4) secret_values() -> list[str]: every decrypted non-empty secret in the store, for redact(). (5) overlay_provider() -> Optional[dict]: returns a cached immutable dict rebuilt only when current_version() changed (thread-safe swap under a lock) and returns None when no vault is configured, so the caller keeps pure .env behavior. Prove round trip: with health._env monkeypatched to return the materialized dict, the EXISTING health functions m365_aliases, m365_tenant_config, slack_workspaces and gmail_accounts must return the seeded values unchanged. Tests: seed matrix (each kind, shared vs per-org client id, tombstoned id not re-seeded, idempotent second call, malformed skipped, no vault seeds nothing, existing row not overwritten); materialize per kind including M365 numbering stability across delete and re-add; family-key classification including the NOT-family keys above; cache invalidation on a write; the health round trip; secret_values excludes empties."
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 1 (corrections 1-4, 6). Continue in pipeline/connections.py. (1) seed_from_env(raw_env: Mapping[str,str]) -> list[str]: for every connection the RAW env declares (M365: each M365_ORG<n>_ALIAS with its TENANT_ID and a client id of M365_ORG<n>_CLIENT_ID else the shared M365_CLIENT_ID; zoom when ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET are all present; SLACK_<LABEL>_TOKEN; GMAIL_<LABEL>_REFRESH_TOKEN with client id and secret from GMAIL_<LABEL>_CLIENT_ID and GMAIL_<LABEL>_CLIENT_SECRET else the shared GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET), create it with origin env ONLY IF its id has no live row AND no tombstone; return the seeded ids; idempotent; a malformed declaration (for example a missing tenant id) is skipped and reported, never raises; with no vault it seeds nothing and returns []. Existing rows are never overwritten from .env (STORE WINS). (2) materialize() -> dict[str,str]: the env-style overlay for live rows using EXACTLY the key families health.py already parses: slack -> SLACK_<LABEL upper>_TOKEN; gmail -> GMAIL_<LABEL>_REFRESH_TOKEN (only when set) plus per-label GMAIL_<LABEL>_CLIENT_ID and GMAIL_<LABEL>_CLIENT_SECRET; m365 -> M365_ORG<n>_ALIAS, _TENANT_ID and _CLIENT_ID with n numbered 1..N by row seq then created_at; zoom -> ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET. (3) is_family_key(name) -> bool and FAMILY_KEY_PATTERNS: compiled regexes for every connection-owned key family (M365_ORG<n>_*, M365_CLIENT_ID, SLACK_<L>_TOKEN, ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_<L>_REFRESH_TOKEN, GMAIL_<L>_CLIENT_ID, GMAIL_<L>_CLIENT_SECRET) but NOT SLACK_SKIP_DMS, TZ, ANTHROPIC_API_KEY, SIGNALSLATE_MAP_MODEL or any other non-connection key. (4) secret_values() -> list[str]: every decrypted non-empty secret in the store, for redact(). (5) overlay_provider() -> Optional[dict]: returns a cached immutable dict rebuilt only when current_version() changed (thread-safe swap under a lock) and returns None when no vault is configured, so the caller keeps pure .env behavior. Prove round trip: with health._env monkeypatched to return the materialized dict, the EXISTING health functions m365_aliases, m365_tenant_config, slack_workspaces and gmail_accounts must return the seeded values unchanged. Tests: seed matrix (each kind, shared vs per-org client id, tombstoned id not re-seeded, idempotent second call, malformed skipped, no vault seeds nothing, existing row not overwritten); materialize per kind including M365 numbering stability across delete and re-add; family-key classification including the NOT-family keys above; cache invalidation on a write; the health round trip; secret_values excludes empties. ADDED at build time (from T-006 review): also add a narrow PUBLIC accessor get_secret(connection_id, name) -> Optional[str] returning one decrypted secret (None when absent), documented as for the token-exchange and sign-in flows only: callers must never log or return the value. T-016 needs the Gmail client_secret and T-017 reads nothing secret; do not widen _secrets_for. Test that it returns the stored value, None for a missing name or id, and raises SecretDecryptError-safe generic errors without echoing ciphertext."
     },
     {
       "id": "T-008",
