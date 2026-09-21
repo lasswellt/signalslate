@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T06:04:50Z",
+  "updated": "2026-09-21T06:10:21Z",
   "tasks": [
     {
       "id": "T-001",
@@ -191,11 +191,39 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T06:10:21Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def redact' pipeline/redact.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:10:20Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/redact.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:10:20Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_redact.py -q",
+            "exit": 0,
+            "duration_ms": 607,
+            "tail": "........................................................................ [ 69%]\n................................                                         [100%]\n104 passed in 0.47s",
+            "recorded_at": "2026-09-21T06:10:21Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research docs/_research/2026-09-21_management-ui.md section 2 (leak surface): HealthResult.detail, CollectionResult.detail, Run.error and Run.summary carry str(exc) and upstream error bodies into the DB and /api/status. Implement redact(text: object, secrets: Iterable[str] = (), *, max_len: Optional[int] = None) -> str. Never raises: non-str input is converted with str(). Replaces every supplied secret value of length >= 6 (longest first; also its URL-encoded and JSON-escaped forms) and every known token shape with the literal [redacted]: Slack tokens xox[abprs]-..., Authorization values (Bearer and Basic), key=value or JSON pairs for refresh_token, access_token, client_secret, code, code_verifier, password, Google ya29. access tokens, 1// refresh tokens and GOCSPX- client secrets, Anthropic sk-ant- keys, and JWT-shaped strings (eyJ....). Truncates to max_len AFTER redaction when given. Patterns compiled once and linear-time safe: no nested quantifiers; a test feeds 200000-character adversarial inputs and asserts completion well under a second. Idempotent (redacting twice equals once). Must not mangle ordinary text: ISO dates, email addresses, UUIDs, short words. Tests: each pattern; supplied secret in plain, URL-encoded and JSON-escaped form; short secrets (under 6) ignored; overlapping secrets; non-str input; the adversarial timing; idempotence; the not-mangled set."
     },

@@ -5,3 +5,6 @@ Ruling: defer — the earlier design summary said the encryption key comes from 
 ## 2026-09-21T06:02:52Z verify T-001 ok=true
 ## 2026-09-21T06:02:52Z build T-002 start (attempt 1)
 ## 2026-09-21T06:04:51Z verify T-002 ok=true
+## 2026-09-21T06:04:51Z build T-003 start (attempt 1)
+Ruling: defer — redact(): a bare 1-3 digit 'code' value is intentionally kept (HTTP status in upstream bodies); unquoted key=value pair values stop at whitespace/quote/&/,/;/}/] so a secret containing those relies on the supplied-secret match; it fails closed to the marker on an internal error. (T-003, round 1)
+## 2026-09-21T06:10:21Z verify T-003 ok=true
