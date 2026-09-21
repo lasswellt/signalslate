@@ -56,3 +56,6 @@ Ruling: defer — connections router: create is a discriminated union with a cal
 ## 2026-09-21T07:16:05Z verify T-020 ok=true
 ## 2026-09-21T07:16:10Z build T-021 start (attempt 1)
 ## 2026-09-21T07:23:40Z verify T-021 ok=true
+Ruling: accept — T-021 callback deletes only the nonce-matched ss_oauth_* cookie (blanket delete would let any link strand another browser's pending sign-in); forged state emits no delete, cookies expire via Max-Age (T-021, round 1)
+## 2026-09-21T07:23:51Z build T-022 start (attempt 1)
+## 2026-09-21T07:27:24Z verify T-022 ok=true

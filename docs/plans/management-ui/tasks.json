@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T07:23:40Z",
+  "updated": "2026-09-21T07:27:24Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1627,11 +1627,53 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T07:27:24Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'seed_from_env' api/main.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:27:24Z"
+          },
+          {
+            "cmd": "grep -qE '/system' api/routers/status.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:27:24Z"
+          },
+          {
+            "cmd": "grep -qE 'oauth' api/main.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:27:24Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/main.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:27:24Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_startup.py -q",
+            "exit": 0,
+            "duration_ms": 741,
+            "tail": "..............                                                           [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n14 passed, 1 warning in 0.55s",
+            "recorded_at": "2026-09-21T07:27:24Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research docs/_research/2026-09-21_management-ui.md Decisions. (1) Register the connections, collectors and oauth routers in api/main.py under /api. (2) In the lifespan after init_db(): build the Vault from health.secret_key_setting() with crypto.Vault.from_env_value (on SecretKeyInvalid print ONE non-secret line and continue WITHOUT a vault), connections.set_vault(vault), and only when a vault exists: connections.seed_from_env(health._raw_env()) then health.set_env_overlay_provider(connections.overlay_provider, connections.is_family_key). Without a vault everything behaves exactly as today. Print one startup line with counts only (seeded N, store M), never values. (3) status.py: add GET /system -> {secret_key_configured, store_active, public_base_url_configured, web_origins, oauth: {google: {modes}, microsoft: {modes}}} where callback is listed only when public_base_url is https; pass /status source_health and last_run text through redact() and datetimes through iso_z; extend the web-facing trigger comment for manual-source. Tests (build the app with the REAL lifespan against a temp DB and env, TestClient as a context manager, scheduler start monkeypatched): no key -> store inactive, /system says so, .env-only behavior unchanged; with a key -> seeded connections appear via GET /connections with origin env and the overlay makes them appear in known_sources; a second startup does NOT re-seed a tombstoned id nor overwrite an edited one (STORE WINS); an invalid key -> the app still starts env-only; /status text is redacted."
     },
