@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T06:11:46Z",
+  "updated": "2026-09-21T06:13:29Z",
   "tasks": [
     {
       "id": "T-001",
@@ -339,11 +339,46 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T06:13:29Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def list_items' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:13:29Z"
+          },
+          {
+            "cmd": "grep -qE 'def record_attempt' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:13:29Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:13:29Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_db_collector_helpers.py tests/test_connection_tables.py -q",
+            "exit": 0,
+            "duration_ms": 647,
+            "tail": ".............................                                            [100%]\n29 passed in 0.46s",
+            "recorded_at": "2026-09-21T06:13:29Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Codebase finding Q4 (missing pieces). Add to pipeline/db.py, all using get_session and naive UTC: list_items(source, item_type=None, before_id=None, limit=50) -> list[CollectedItem] with keyset paging newest first (ORDER BY id DESC, WHERE id < before_id) and limit clamped to 1..200; count_items(source, item_type=None) -> int; reset_cursor(source, to: Optional[datetime]) -> None (None deletes the SourceCursor row; a datetime sets last_success_at and zeroes consecutive_failures exactly like set_cursor); clear_failures(source) -> None (zero consecutive_failures only, keep the watermark); record_attempt(source, status, detail, item_count, at=None) -> None which upserts last_attempt_at, last_status, last_detail (truncate to 500 chars) and last_item_count on the SourceCursor row WITHOUT touching last_success_at or consecutive_failures (create the row when absent with those two left at their defaults). Existing helpers unchanged. Tests with the temp_db pattern: paging boundaries and before_id exclusivity, limit clamp, empty source, count with and without item_type, reset delete vs set, clear_failures keeps the watermark, record_attempt creates the row when absent and never disturbs existing fields, detail truncation."
     },

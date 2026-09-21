@@ -10,3 +10,5 @@ Ruling: defer — redact(): a bare 1-3 digit 'code' value is intentionally kept 
 ## 2026-09-21T06:10:21Z verify T-003 ok=true
 ## 2026-09-21T06:10:21Z build T-004 start (attempt 1)
 ## 2026-09-21T06:11:46Z verify T-004 ok=true
+## 2026-09-21T06:11:46Z build T-005 start (attempt 1)
+## 2026-09-21T06:13:29Z verify T-005 ok=true
