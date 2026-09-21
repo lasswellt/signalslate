@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T02:49:16Z",
+  "updated": "2026-09-21T02:51:47Z",
   "tasks": [
     {
       "id": "T-001",
@@ -419,11 +419,53 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T02:51:47Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def collect_gmail' pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:51:47Z"
+          },
+          {
+            "cmd": "grep -qE 'gmail_' pipeline/collectors/__init__.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:51:47Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:51:47Z"
+          },
+          {
+            "cmd": "venv/bin/python -c 'from datetime import datetime; from pipeline.collectors import dispatch; r = dispatch(\"gmail_nolabel\", datetime(2026,1,1), datetime(2026,1,2)); assert r.status == \"error\" and \"token\" in r.detail.lower(), r'",
+            "exit": 0,
+            "duration_ms": 92,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:51:47Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+            "exit": 0,
+            "duration_ms": 241,
+            "tail": "........................................................................ [ 78%]\n....................                                                     [100%]\n92 passed, 51 deselected in 0.09s",
+            "recorded_at": "2026-09-21T02:51:47Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "collect_gmail(label, refresh_token, since, until) -> CollectionResult, mirroring collect_slack. Missing token -> error (detail contains 'token'). GmailAuthError on refresh -> error with the re-auth hint. List failure -> error. Per-message get failures -> partial (first failure in detail) keeping the items already fetched; exhausted rate-limit retries -> partial, not error. Re-check window on internalDate client-side (since <= occurred < until) because after:/before: boundary semantics are undocumented; dedupe repeated ids. Item('mail', message id, occurred_at, payload). dispatch(): add 'gmail_' branch with a local import and gmail_accounts().get(label), like slack. Add a pipeline.collect.report() test proving the subject line previews for a gmail item."
     },

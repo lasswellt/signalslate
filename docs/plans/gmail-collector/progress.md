@@ -15,3 +15,5 @@ Ruling: defer — dev added a gmail branch to check_all_configured() that the ta
 Ruling: defer — hidden-content stripping covers display:none, visibility:hidden, hidden attr and aria-hidden only; white-on-white text, font-size:0, opacity:0 and off-screen positioning still reach bodyText. Injection defense must not rely on it alone (T-012 JSON encoding + T-013 tests). (T-005, round 1)
 Ruling: defer — flatten_message passes snippet through HTML-entity-escaped; T-009's adapter must html.unescape it. fetch_messages takes id strings, list_message_ids returns {id, threadId} dicts; T-006 maps them. BODY_CAP=20000 remains a guess for the dry run. Body parts carrying only an attachmentId yield empty bodyText (attachments.get is never called). (T-005, round 1)
 ## 2026-09-21T02:49:16Z verify T-005 ok=true
+## 2026-09-21T02:49:25Z build T-006 start (attempt 1)
+## 2026-09-21T02:51:47Z verify T-006 ok=true
