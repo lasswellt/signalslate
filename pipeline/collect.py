@@ -17,6 +17,7 @@ production any number of times.
 import argparse
 import json
 import sys
+import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -27,6 +28,10 @@ from pipeline.clock import utcnow  # noqa: E402
 from pipeline.collectors import dispatch  # noqa: E402
 from pipeline.health import known_sources  # noqa: E402
 
+# hours mirrors collectors.MAX_BACKFILL (7 days); the payload cap is the CLI's long-standing --raw cut.
+MAX_HOURS = 168
+MAX_LIMIT = 50
+RAW_PAYLOAD_CHARS = 4000
 PREVIEW_FIELDS = ("subject", "text", "title", "displayName", "topic", "summary_content")
 
 
@@ -42,40 +47,125 @@ def preview(payload: dict) -> str:
     return "(no preview field)"
 
 
-def report(source: str, hours: int, limit: int, raw: bool) -> bool:
+def _execute(source: str, hours: int, limit: int, raw: bool) -> tuple[dict, str]:
+    """
+    The collector call and its shaping, with no argument checks. Returns the dry_run() dict plus the
+    crash message ("" unless the collector crashed).
+
+    The message is a separate return value, not a dict key: it may quote a response body, so it may
+    only reach the CLI operator's terminal, never dry_run()'s caller (the API). The CLI's crash line
+    has always carried it, so report() keeps printing it.
+    """
+    started = time.perf_counter()
     until = utcnow()
     since = until - timedelta(hours=hours)
-
-    print(f"\n=== {source} ===")
-    print(f"window: {since:%Y-%m-%d %H:%M} .. {until:%Y-%m-%d %H:%M} UTC ({hours}h)")
+    data: dict = {
+        "source": source,
+        "status": "crashed",
+        "detail": "",
+        "window": {"since": since, "until": until, "hours": hours},
+        "count": 0,
+        "by_type": {},
+        "items": [],
+        "duration_ms": 0,
+    }
+    crash_message = ""
 
     try:
         result = dispatch(source, since, until)
     except Exception as exc:  # noqa: BLE001 — a dry run reports crashes, it doesn't propagate them
-        print(f"status: CRASHED — {type(exc).__name__}: {exc}")
+        data["detail"] = type(exc).__name__
+        crash_message = str(exc)
+    else:
+        by_type: dict[str, int] = {}
+        for item in result.items:
+            by_type[item.item_type] = by_type.get(item.item_type, 0) + 1
+        items = []
+        for item in result.items[:limit]:
+            entry = {
+                "item_type": item.item_type,
+                "occurred_at": item.occurred_at,
+                "external_id": item.external_id,
+                "preview": preview(item.payload),
+            }
+            if raw:
+                entry["payload"] = json.dumps(item.payload, indent=2, default=str)[:RAW_PAYLOAD_CHARS]
+            items.append(entry)
+        data.update(
+            status=result.status,
+            detail=result.detail,
+            count=len(result.items),
+            by_type=by_type,
+            items=items,
+        )
+
+    data["duration_ms"] = int((time.perf_counter() - started) * 1000)
+    return data, crash_message
+
+
+def dry_run(source: str, hours: int = 24, limit: int = 5, *, raw: bool = False) -> dict:
+    """
+    Run one collector over a recent window and return what it found, writing nothing.
+
+    Datetimes in the result are naive UTC, like everywhere else in the pipeline; whoever serialises
+    the dict is responsible for the Z. A collector crash comes back as status "crashed" with the
+    exception CLASS NAME as detail and nothing else, because an exception message can quote a
+    response body that carries a credential and this dict is meant to reach the API.
+
+    Args:
+        source: A source id from known_sources().
+        hours: Lookback window, clamped to 1..168 (the MAX_BACKFILL ceiling).
+        limit: How many items to include, clamped to 0..50; count and by_type cover all of them.
+        raw: Also include each listed item's payload as JSON, truncated to RAW_PAYLOAD_CHARS.
+
+    Returns:
+        {source, status, detail, window: {since, until, hours}, count, by_type, items, duration_ms}
+        where status is ok | partial | error | crashed.
+
+    Raises:
+        ValueError: source is not declared.
+    """
+    if source not in known_sources():
+        raise ValueError(f"unknown source: {source}")
+    data, _ = _execute(source, min(max(hours, 1), MAX_HOURS), min(max(limit, 0), MAX_LIMIT), raw)
+    return data
+
+
+def report(source: str, hours: int, limit: int, raw: bool) -> bool:
+    """
+    Print a dry run for the CLI; True unless the source errored or crashed.
+
+    Goes through _execute, not dry_run: main() has already checked the source against .env, and the
+    CLI has never clamped --hours or --limit, so its output must not change for them either.
+    """
+    data, crash_message = _execute(source, hours, limit, raw)
+    window = data["window"]
+
+    print(f"\n=== {source} ===")
+    print(f"window: {window['since']:%Y-%m-%d %H:%M} .. {window['until']:%Y-%m-%d %H:%M} UTC ({hours}h)")
+
+    if data["status"] == "crashed":
+        print(f"status: CRASHED — {data['detail']}: {crash_message}")
         return False
 
-    print(f"status: {result.status.upper()}")
-    print(f"detail: {result.detail}")
-    print(f"items:  {len(result.items)}")
+    print(f"status: {data['status'].upper()}")
+    print(f"detail: {data['detail']}")
+    print(f"items:  {data['count']}")
 
-    by_type: dict[str, int] = {}
-    for item in result.items:
-        by_type[item.item_type] = by_type.get(item.item_type, 0) + 1
-    if by_type:
-        print("        " + ", ".join(f"{k}={v}" for k, v in sorted(by_type.items())))
+    if data["by_type"]:
+        print("        " + ", ".join(f"{k}={v}" for k, v in sorted(data["by_type"].items())))
 
-    for item in result.items[:limit]:
-        print(f"\n  [{item.item_type}] {item.occurred_at:%Y-%m-%d %H:%M} id={item.external_id}")
+    for item in data["items"]:
+        print(f"\n  [{item['item_type']}] {item['occurred_at']:%Y-%m-%d %H:%M} id={item['external_id']}")
         if raw:
-            print(json.dumps(item.payload, indent=2, default=str)[:4000])
+            print(item["payload"])
         else:
-            print(f"  {preview(item.payload)}")
+            print(f"  {item['preview']}")
 
-    if len(result.items) > limit:
-        print(f"\n  ... {len(result.items) - limit} more (raise --limit to see them)")
+    if data["count"] > limit:
+        print(f"\n  ... {data['count'] - limit} more (raise --limit to see them)")
 
-    return result.status != "error"
+    return data["status"] != "error"
 
 
 def main() -> int:
