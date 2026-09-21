@@ -85,3 +85,8 @@ Ruling: descope — T-032 was created with a malformed verify command (tasks.sh 
 Ruling: defer — last_verify tails in tasks.json carry the local checkout path (Linux username, identical to the public GitHub handle); the tasks-guard hook blocks scrubbing tasks.json and the branch history is unpushed, so this is accepted as low risk, not rewritten (final sweep)
 Ruling: defer — T-032 stays blocked (superseded by T-033, malformed verify entry); ignore it in the report (final sweep)
 Final sweep: pytest 1597 passed, pyright 54 (baseline, none added), web typecheck clean, web vitest 128 passed, npm run build ok
+
+## 2026-09-21T22:26:40Z check FAIL check-report.md
+
+## 2026-09-21T22:41:35Z check-fix tasks added
+Ruling: defer — check-report findings 9-24 (minors, duplicated router helpers, error-shape inconsistencies, a11y labels, small races) are NOT tasked; findings 1-8 became T-034..T-043 (check)
