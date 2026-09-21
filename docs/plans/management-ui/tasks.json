@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T23:06:39Z",
+  "updated": "2026-09-21T23:12:56Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2713,11 +2713,39 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:12:56Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'oauth/flows' api/routers/oauth.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:12:52Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/oauth.py pipeline/oauth_flows.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:12:53Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_oauth_flow_status.py tests/test_api_oauth.py tests/test_oauth_flows.py -q",
+            "exit": 0,
+            "duration_ms": 3032,
+            "tail": "........................................................................ [ 37%]\n........................................................................ [ 74%]\n..................................................                       [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n194 passed, 1 warning in 2.74s",
+            "recorded_at": "2026-09-21T23:12:56Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check-report finding 4. The callback-mode dialog polls listConnections for a health row that sign-in never writes (Microsoft finish only writes the MSAL cache file; a Gmail re-sign-in already has refresh_token), so it runs to expiry and shows expired even though the token was stored. Give the browser one authoritative signal. Add GET /api/oauth/flows/{flow_id} (safe method) returning {status: pending|ok|error|expired, reason: optional fixed code from the existing fixed reason-code set}. It requires the ss_oauth_<flow_id> nonce cookie and compares it with the flow's nonce hash in constant time; an unknown flow, a wrong or missing cookie -> the same generic 404 (no oracle for flow ids). It never returns connection data, tokens, the auth_url or any provider text. pipeline/oauth_flows.py: FlowStore remembers a bounded outcome per flow id (dict capped at 100 entries, dropped at the flow's original expiry, never longer than the TTL) written when a flow is consumed and finished by the router: the callback route records ok, or error with the same reason code it redirects with; paste flows record too. The router must obtain the flow id BEFORE consuming (add a store lookup by state if needed) and record the outcome in a finally so a provider failure still ends as error. Unauthenticated callback semantics stay exactly as they are (fixed redirect, no echo, cookie handling per the T-021 ruling). Do NOT edit pipeline/oauth_gmail.py or oauth_m365.py. Existing tests unchanged. Tests (router-level app plus the real FlowStore, stub only the provider modules' network calls): pending right after start; ok after a successful callback and after a successful paste; error with the fixed reason after a provider error=access_denied callback; expired after TTL (fake clock); wrong cookie and unknown flow -> identical 404 bodies; outcome table stays bounded (150 flows -> <=100 entries); the response never contains the code, state, nonce, verifier or any secret (assert on every body and header); a replayed callback does not flip an ok outcome to error."
     },
