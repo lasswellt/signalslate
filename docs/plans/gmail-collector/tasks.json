@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T03:04:57Z",
+  "updated": "2026-09-21T03:08:46Z",
   "tasks": [
     {
       "id": "T-001",
@@ -940,11 +940,46 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T03:08:46Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def (build_request|triage_items)' pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:08:45Z"
+          },
+          {
+            "cmd": "! grep -nE \"^\\s*[\\\"']?(temperature|top_p|top_k|tools)[\\\"']?\\s*[:=]\" pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 6,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:08:45Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 6,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:08:45Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_triage_client.py -q",
+            "exit": 0,
+            "duration_ms": 614,
+            "tail": ".........................                                                [100%]\n25 passed in 0.41s",
+            "recorded_at": "2026-09-21T03:08:46Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research §8 Q1,Q4. build_request() returns the kwargs for client.messages.parse: system prompt with an <untrusted_content_policy> block, ONE user turn whose content is json.dumps of the batch (JSON escaping is the delimiter: a body containing </document> must not break out), the Pydantic model as the structured-output format, max_tokens set, and NO tools, NO network, NO temperature/top_p/top_k (400s on 4.7+ models; the SDK removes them). Find the correct structured-output kwarg name by inspecting the INSTALLED SDK (inspect.signature of anthropic.resources.messages.Messages.parse); do not guess it from prose docs. Contract test: every key build_request() emits must be a real parameter of that signature, so a stub client cannot hide a wrong kwarg. triage_items(items, client, model, batch_size) -> result with records, failures, stubbed ids: validate each batch, retry missing aliases once, then fall back to stub_record; APIError, refusal, or max_tokens stop -> stub the whole batch and record the failure; never raise. The API is a true external, so a fake client is acceptable for behavior tests. Unverified and to prototype later: whether Anthropic's recommended tool_result delivery composes with structured outputs."
     },

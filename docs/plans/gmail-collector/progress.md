@@ -31,3 +31,6 @@ Ruling: defer — sanitize_record's due check is stricter than fromisoformat on 
 ## 2026-09-21T03:02:47Z build T-011 start (attempt 1)
 Ruling: defer — anthropic==1.7.0 pinned (venv/bin/pip check clean; no existing pin changed). Its transitive deps are unpinned by design (flat direct-pin style): httpx2/httpcore2 (2.13.0, repo pydantic/httpx2), truststore, jiter, sniffio, docstring-parser. Provenance was checked against anthropic's own declared Requires-Dist metadata (it requires httpx2<3,>=2.0.0), not against PyPI publisher records; re-check when the Docker image is first built. The post-edit pyright hook's baseline (76 -> 79) is stale; project-wide count is 79 before and after. (T-011, round 1)
 ## 2026-09-21T03:04:57Z verify T-011 ok=true
+## 2026-09-21T03:05:21Z build T-012 start (attempt 1)
+Ruling: split — build_request sends participants as bare 'Name <addr>' strings (my spec), so the model cannot tell sender from recipients, which weakens action_needed. Fix is a new task T-015 (role prefix per participant) rather than widening T-012; it also drops tests' direct import of httpx2, a transitive dependency of the pinned SDK. Runs after T-013/T-014, which do not depend on the participant format. (T-012, round 1)
+## 2026-09-21T03:08:46Z verify T-012 ok=true
