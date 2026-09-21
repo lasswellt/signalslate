@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T07:52:00Z",
+  "updated": "2026-09-21T07:58:00Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2194,11 +2194,53 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T07:58:00Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'collectors' web/app.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:57:47Z"
+          },
+          {
+            "cmd": "grep -qE 'startDryRun' web/pages/collectors.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:57:47Z"
+          },
+          {
+            "cmd": "cd web && npm run typecheck",
+            "exit": 0,
+            "duration_ms": 2657,
+            "tail": "\n> typecheck\n> nuxt typecheck",
+            "recorded_at": "2026-09-21T07:57:49Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/collectors.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3742,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/collectors.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n····························\n\n Test Files  1 passed (1)\n      Tests  28 passed (28)\n   Start at  03:57:50\n   Duration  2.63s (tests 58%, transform 28%, environment 7%, import 6%, setup 1%)",
+            "recorded_at": "2026-09-21T07:57:53Z"
+          },
+          {
+            "cmd": "cd web && npm run build",
+            "exit": 0,
+            "duration_ms": 6628,
+            "tail": "yles.Pd4Strki.mjs (3.83 kB) (1.22 kB gzip)\n  ├─ .output/server/chunks/build/error-404-styles.Pd4Strki.mjs.map (196 B) (155 B gzip)\n  ├─ .output/server/chunks/build/error-500-D5UJ6Lpm.mjs (4.72 kB) (1.94 kB gzip)\n  ├─ .output/server/chunks/build/error-500-D5UJ6Lpm.mjs.map (205 B) (175 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs (2.18 kB) (862 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs.map (196 B) (156 B gzip)\n  ├─ .output/server/chunks/build/history-C4ckkQH8.mjs (79.9 kB) (17.8 kB gzip)\n  ├─ .output/server/chunks/build/history-C4ckkQH8.mjs.map (1.73 kB) (505 B gzip)\n  ├─ .output/server/chunks/build/index-4Z0oUgl6.mjs (40.7 kB) (3.56 kB gzip)\n  ├─ .output/server/chunks/build/index-4Z0oUgl6.mjs.map (18.3 kB) (2.69 kB gzip)\n  ├─ .output/server/chunks/build/interval-CwAGk-1A.mjs (376 B) (274 B gzip)\n  ├─ .output/server/chunks/build/interval-CwAGk-1A.mjs.map (167 B) (152 B gzip)\n  ├─ .output/server/chunks/build/server.mjs (157 kB) (41.7 kB gzip)\n  ├─ .output/server/chunks/build/server.mjs.map (5.93 kB) (1.33 kB gzip)\n  ├─ .output/server/chunks/build/styles.mjs (497 B) (260 B gzip)\n  ├─ .output/server/chunks/build/styles.mjs.map (395 B) (203 B gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs (167 kB) (41.2 kB gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs.map (3.04 kB) (753 B gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs (14.2 kB) (4.57 kB gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs.map (845 B) (272 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs (94 B) (100 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs.map (88 B) (97 B gzip)\n  ├─ .output/server/index.mjs (353 B) (205 B gzip)\n  └─ .output/server/package.json (723 B) (321 B gzip)\nΣ Total size: 3.25 MB (716 kB gzip)\n[nitro] ✔ You can preview this build using node .output/server/index.mjs\n│\n└  ✨ Build complete!",
+            "recorded_at": "2026-09-21T07:58:00Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research docs/_research/2026-09-21_management-ui.md section 3. Add the Collectors tab in web/app.vue (order: Dashboard, Connections, Collectors, History, Config). Per collector row: source id, an enabled toggle (same read-modify-write as connections), the watermark (relative and absolute via parseUtc), the failure streak with a warning chip when streak >= stuck_threshold minus 1 explaining that after the threshold the watermark advances and missing data is not retried, the last attempt status and detail, the item count, and actions: Run now (runCollector; a 409 shows 'A run is already in progress'; poll listCollectors until last_attempt.at changes); Dry run (a dialog with hours and limit -> startDryRun -> poll getDryRun -> counts by type and preview lines, plus a Show raw toggle only when the API returned raw); Reset watermark (a dialog: 1..7 days back or no watermark, displaying the API's note about the runner window semantics); Clear failures; and Items (a dialog or drawer with keyset paging via next_before_id, an item_type filter and a detail view rendering the payload as pretty-printed TEXT in a pre element, NEVER v-html, with a notice that items contain private message content). Loading, empty and error states. Tests: rows and the streak warning; run 409; the dry-run polling lifecycle; reset dialog values sent; items paging appends; a payload containing HTML is rendered as text, not interpreted; toggle round trip."
     },
