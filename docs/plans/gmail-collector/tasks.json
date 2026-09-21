@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T02:42:05Z",
+  "updated": "2026-09-21T02:44:11Z",
   "tasks": [
     {
       "id": "T-001",
@@ -251,11 +251,53 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T02:44:10Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def list_message_ids' pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:44:10Z"
+          },
+          {
+            "cmd": "grep -qE 'after:' pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:44:10Z"
+          },
+          {
+            "cmd": "! grep -nE \"gmail\\.googleapis\\.com/batch|users/me/history|/watch\" pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 6,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:44:10Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T02:44:10Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+            "exit": 0,
+            "duration_ms": 205,
+            "tail": "..........................                                               [100%]\n26 passed, 51 deselected in 0.06s",
+            "recorded_at": "2026-09-21T02:44:10Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research §4,§5. messages.list q='after:<epoch_s> before:<epoch_s>' (NEVER date strings: they are PST-midnight), maxResults=500, drain every nextPageToken, raise at MAX_PAGES like graph.py rather than truncate. Convert the naive-UTC window to epoch with an explicit UTC tz (naive .timestamp() reads LOCAL time; see test_slack_oldest_is_utc_not_local) and pin it with a test under a non-UTC TZ. _call(): retry with truncated exponential backoff min(2**n + jitter, 32) on 403 with reason rateLimitExceeded/userRateLimitExceeded, on 429, and on 500/502/503/504; bounded attempts; 401 and other 4xx raise GmailError. Sleep via a module-level indirection so tests do not wait. Use plain requests.get (module-level, monkeypatched like graph/slack tests), NOT a Session and NOT parallel calls (deviation from research sketch: keeps the existing route() test helper valid). NO /batch, NO history.list, NO watch. Add test_gmail_* tests to tests/test_collectors.py."
     },
