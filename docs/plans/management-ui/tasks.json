@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T07:03:23Z",
+  "updated": "2026-09-21T07:09:22Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1399,11 +1399,46 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T07:09:22Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'router = APIRouter' api/routers/connections.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:09:21Z"
+          },
+          {
+            "cmd": "grep -qE 'def iso_z' api/serialize.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:09:21Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/connections.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T07:09:21Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_connections.py -q",
+            "exit": 0,
+            "duration_ms": 1143,
+            "tail": "...................................................                      [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n51 passed, 1 warning in 0.94s",
+            "recorded_at": "2026-09-21T07:09:22Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Contracts in plan.md. api/serialize.py: iso_z(dt) -> Optional[str] (naive UTC -> YYYY-MM-DDTHH:MM:SSZ; the web parses naive ISO as LOCAL time today). Router (the /api prefix is added in main by a later task): GET /connections -> list of {id, kind, label, origin, config, secrets_set, active, health} where health is the latest SourceHealth for that id or null (via pipeline.db.latest_source_health), every text passed through redact(); POST /connections -> request models per kind with SecretStr secret fields, creates via pipeline.connections and then sets the connection INACTIVE with config_store.set_source_active(id, False) until it is tested; 201 with the view; 409 duplicate; 422 validation (field names only, no values); 503 with the stable error code secret_key_missing when the write includes secrets and no key is configured; PATCH /connections/{id} replaces config and or ONLY the secrets provided (an empty string means leave as is, never clear); DELETE /connections/{id} -> 204: connections.delete plus config_store.forget_source plus db.reset_cursor(id, None) (collected items are kept); env-seeded connections are deletable too (the tombstone prevents re-seeding); POST /connections/{id}/test -> {status: ok or error, detail} running the matching pipeline.health check_* function inside health.env_snapshot() with the detail redacted, 404 for an unknown id, and on ok it does NOT auto-activate (the UI toggles through PUT /config). Never return a secret, ciphertext or raw exception text; use explicit response_model classes. Tests (router-only app with install_security, temp_db, an in-memory Vault): the write-only property across list, create, patch and test responses (a json string search for every submitted secret AND its ciphertext), inactive-on-create, duplicate, PATCH partial secrets, delete tombstones and cannot be re-seeded, delete removes the toggle and the cursor, health null vs present, redaction of a health detail carrying a stored secret, 503 secret_key_missing, 422 does not echo secrets, test endpoint 404, the test endpoint maps check results (stub the check functions). ADDED at build time (from T-011 review): config_store.set_source_active silently ignores an id that known_sources() does not contain (same as _merge). After creating a connection, verify its id is in pipeline.health.known_sources() BEFORE calling set_source_active(id, False); if it is not (for example the overlay is not registered), roll back the create and return 503 with the stable error code store_inactive rather than leaving an active-by-default connection. Also note runner.execute_run(only=id) runs a source even when it is toggled off."
     },
