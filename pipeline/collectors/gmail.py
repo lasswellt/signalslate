@@ -122,7 +122,9 @@ def _call(token: str, path: str, params: Optional[dict] = None) -> dict:
         if resp.status_code < 400:
             try:
                 return resp.json()
-            except ValueError as exc:
+            # RecursionError is not a ValueError: a pathologically deep body would otherwise escape
+            # fetch_messages, which only catches GmailError, and discard the whole batch.
+            except (ValueError, RecursionError) as exc:
                 raise GmailError(f"{path}: non-JSON response") from exc
 
         if not _retryable(resp):
@@ -279,7 +281,9 @@ def _decode_part(part: dict) -> Optional[str]:
     match = _CHARSET.search(_headers(part.get("headers")).get("content-type", ""))
     try:
         return raw.decode(match.group(1) if match else "utf-8", errors="replace")
-    except LookupError:  # a charset name Python does not know
+    except (LookupError, UnicodeError):
+        # The charset is sender-controlled. LookupError: a name Python does not know. UnicodeError: a
+        # name it knows that is not a text codec ("undefined", "idna" reject errors="replace").
         return raw.decode("utf-8", errors="replace")
 
 
@@ -436,7 +440,14 @@ def collect_gmail(label: str, refresh_token: Optional[str], since: datetime, unt
         # after:/before: boundary inclusivity is undocumented, so the window is enforced here.
         if not since <= occurred < until:
             continue
-        items.append(Item("mail", message_id, occurred, flatten_message(msg)))
+        try:
+            payload = flatten_message(msg)
+        except Exception as exc:  # noqa: BLE001 - mail is untrusted; one hostile message must not sink the batch
+            # Class name only: the exception text can echo message content. Counted as a failure, not
+            # skipped, so the run is "partial" and the window is retried rather than silently advanced.
+            failures.append({"id": message_id, "error": f"{type(exc).__name__}: could not parse message"})
+            continue
+        items.append(Item("mail", message_id, occurred, payload))
 
     detail = f"{len(items)} messages"
     if unplaceable:

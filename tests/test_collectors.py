@@ -1327,3 +1327,128 @@ def test_gmail_report_previews_the_subject_line(monkeypatch, gmail_token, gmail_
     assert collect.report("gmail_x", hours=24, limit=5, raw=False) is True
     out = capsys.readouterr().out
     assert "Quarterly numbers are in" in out and "mail=1" in out
+
+
+# --- gmail hostile-input isolation --------------------------------------------------
+
+
+@pytest.mark.parametrize("charset", ["undefined", "idna"])
+def test_gmail_flatten_non_text_charset_falls_back_to_utf8_instead_of_raising(charset):
+    # Both names resolve in codecs but are not text codecs: decode raises UnicodeError, not LookupError.
+    part = {
+        "mimeType": "text/plain",
+        "body": {"data": b64url("café")},
+        "headers": [{"name": "Content-Type", "value": f"text/plain; charset={charset}"}],
+    }
+    assert gmail.flatten_message(gmail_msg([part]))["bodyText"] == "café"
+
+
+def deep_mime(depth):
+    """A multipart/mixed chain `depth` levels deep with one text leaf at the bottom."""
+    node = text_part("text/plain", "hidden body")
+    for _ in range(depth):
+        node = {"mimeType": "multipart/mixed", "filename": "", "parts": [node]}
+    return node
+
+
+def test_gmail_collect_deep_mime_tree_is_a_failure_and_other_messages_survive(monkeypatch, gmail_token, gmail_sleeps):
+    bad = mail("bad")
+    bad["payload"] = deep_mime(1500)
+    gmail_mailbox(monkeypatch, {"a": mail("a"), "bad": bad, "c": mail("c")}, listed=["a", "bad", "c"])
+
+    result = gmail.collect_gmail("x", "refresh", SINCE, UNTIL)
+
+    assert result.status == "partial" and result.ok
+    assert [i.external_id for i in result.items] == ["a", "c"]
+    assert result.detail.startswith("2 messages (1 failed: bad: RecursionError: could not parse message)")
+
+
+class LeakyPayload(dict):
+    """A (non-empty, so truthy) payload whose access raises with message content in the exception text."""
+
+    def get(self, key, default=None):
+        raise ValueError("leaked: hidden body text")
+
+
+def test_gmail_collect_flatten_failure_names_the_class_never_the_content(monkeypatch, gmail_token, gmail_sleeps):
+    bad = mail("bad")
+    bad["payload"] = LeakyPayload(mimeType="text/plain")
+    gmail_mailbox(monkeypatch, {"a": mail("a"), "bad": bad, "c": mail("c")}, listed=["a", "bad", "c"])
+
+    result = gmail.collect_gmail("x", "refresh", SINCE, UNTIL)
+
+    assert result.status == "partial"
+    assert "bad: ValueError: could not parse message" in result.detail
+    assert "leaked" not in result.detail and "hidden body" not in result.detail
+    assert "\n" not in result.detail
+
+
+def test_gmail_collect_bad_message_between_good_ones_keeps_both_and_counts_once(monkeypatch, gmail_token, gmail_sleeps):
+    bad = mail("bad")
+    bad["payload"] = LeakyPayload(mimeType="text/plain")
+    gmail_mailbox(monkeypatch, {"a": mail("a"), "bad": bad, "c": mail("c")}, listed=["a", "bad", "c"])
+
+    result = gmail.collect_gmail("x", "refresh", SINCE, UNTIL)
+
+    assert result.status == "partial"
+    assert [i.external_id for i in result.items] == ["a", "c"]
+    assert result.detail.startswith("2 messages (1 failed: bad: ")  # not double counted as a fetch failure
+
+
+def test_gmail_collect_every_message_failing_to_flatten_is_error(monkeypatch, gmail_token, gmail_sleeps):
+    bad = mail("bad")
+    bad["payload"] = LeakyPayload(mimeType="text/plain")
+    gmail_mailbox(monkeypatch, {"bad": bad})
+
+    result = gmail.collect_gmail("x", "refresh", SINCE, UNTIL)
+
+    assert result.status == "error" and not result.ok and result.items == []
+    assert "1 failed" in result.detail
+
+
+def test_gmail_collect_flatten_failure_and_fetch_failure_are_both_counted(monkeypatch, gmail_token, gmail_sleeps):
+    bad = mail("bad")
+    bad["payload"] = LeakyPayload(mimeType="text/plain")
+    gmail_mailbox(
+        monkeypatch,
+        {"a": mail("a"), "bad": bad},
+        listed=["a", "bad", "gone"],
+        fail={"gone": gmail_error(404, "notFound")},
+    )
+
+    result = gmail.collect_gmail("x", "refresh", SINCE, UNTIL)
+
+    assert result.status == "partial"
+    assert [i.external_id for i in result.items] == ["a"]
+    assert result.detail.startswith("1 messages (2 failed: gone: ")  # fetch failures are listed first
+
+
+class RecursiveJsonResponse(FakeResponse):
+    """Stands in for a ~5000-level JSON body: requests' .json() raises RecursionError parsing it."""
+
+    def json(self):
+        raise RecursionError("maximum recursion depth exceeded while decoding a JSON document")
+
+
+def test_gmail_call_deep_json_body_is_a_gmail_error_not_a_recursion_error(monkeypatch):
+    route(monkeypatch, gmail, lambda url, params: RecursiveJsonResponse(None))
+    with pytest.raises(gmail.GmailError, match="non-JSON response"):
+        gmail.fetch_message("tok", "deep")
+
+
+def test_gmail_collect_deep_json_body_is_a_per_message_failure(monkeypatch, gmail_token, gmail_sleeps):
+    def handler(url, params):
+        if url.endswith("/messages"):
+            return FakeResponse({"messages": [{"id": i, "threadId": "t"} for i in ("a", "deep", "c")]})
+        message_id = url.rsplit("/", 1)[1]
+        if message_id == "deep":
+            return RecursiveJsonResponse(None)
+        return FakeResponse(mail(message_id))
+
+    route(monkeypatch, gmail, handler)
+
+    result = gmail.collect_gmail("x", "refresh", SINCE, UNTIL)
+
+    assert result.status == "partial"
+    assert [i.external_id for i in result.items] == ["a", "c"]
+    assert "1 failed: deep: " in result.detail and "non-JSON response" in result.detail
