@@ -29,10 +29,16 @@
 
 <script setup lang="ts">
 import type { QTableColumn } from 'quasar'
+import { parseUtc } from '~/composables/useApi'
 
 const api = useApi()
 const runs = ref<Awaited<ReturnType<typeof api.getRuns>>>([])
 const loading = ref(true)
+
+function formatDate(iso: string) {
+  const date = parseUtc(iso)
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString()
+}
 
 const columns: QTableColumn[] = [
   { name: 'id', label: 'ID', field: 'id', align: 'left' },
@@ -43,7 +49,7 @@ const columns: QTableColumn[] = [
     label: 'Started',
     field: 'started_at',
     align: 'left',
-    format: (v: string) => new Date(v).toLocaleString(),
+    format: formatDate,
   },
   { name: 'summary', label: 'Summary', field: 'summary', align: 'left' },
   { name: 'has_pdf', label: 'PDF', field: 'has_pdf', align: 'center' },
