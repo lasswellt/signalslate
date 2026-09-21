@@ -1,12 +1,15 @@
 """
 pipeline.triage: schema, aliasing, batching, output validation and the deterministic stub.
 
-Everything under test is pure, so nothing is mocked. Items are built through the real Gmail adapter
-(normalize_gmail) so a change to NormalizedItem breaks these tests instead of drifting silently.
+Everything under test is pure, so nothing is mocked, except the Anthropic API (a true external) in the
+triage_items hostile-sender tests, which use a scripted FakeClient. Items are built through the real Gmail
+adapter (normalize_gmail) so a change to NormalizedItem breaks these tests instead of drifting silently.
 """
 from datetime import datetime
-from typing import Any, Optional
+from types import SimpleNamespace
+from typing import Any, Optional, cast
 
+import anthropic
 import pytest
 from pydantic import ValidationError
 
@@ -20,12 +23,14 @@ from pipeline.triage import (
     Category,
     Importance,
     TriageBatch,
+    TriagedItem,
     TriageRecord,
     assign_aliases,
     batches,
     sanitize_record,
     sanitize_text,
     stub_record,
+    triage_items,
     validate_batch,
 )
 
@@ -441,6 +446,209 @@ def test_stub_record_is_deterministic():
     item = make_item()
 
     assert stub_record("m001", item) == stub_record("m001", item)
+
+
+# --- hostile sender names: stub_record and triage_items ---------------------------------------------
+# Synthetic strings only (example.* hosts). Each name is attacker-controlled From-header text that must
+# never reach the digest as a link, markup or control character, and must respect the length caps.
+
+HOSTILE_SENDER_NAMES = [
+    pytest.param("Bob https://evil.example/x", id="https-url"),
+    pytest.param("Bob http://evil.example/x", id="http-url"),
+    pytest.param("Bob www.evil.example/login", id="www-url"),
+    pytest.param("Bob javascript:alert(1)", id="javascript-uri"),
+    pytest.param("Bob mailto:a@evil.example", id="mailto-uri"),
+    pytest.param("[Bob](https://evil.example/p)", id="markdown-link"),
+    pytest.param("Bob <script>x</script>", id="html-tag"),
+    pytest.param("Bob\x00\x07\x1b[31m", id="control-chars"),
+    pytest.param("B" * 5000, id="5000-char-run"),
+    pytest.param("Bob " * 2000, id="5000-char-words"),
+    pytest.param("https://evil.example/only-a-url", id="url-only"),
+]
+FORBIDDEN_IN_TEXT = ("://", "www.", "javascript:", "mailto:", "<", ">", "](")
+
+
+def has_control_char(text: str) -> bool:
+    return any(ord(ch) < 0x20 or 0x7F <= ord(ch) <= 0x9F for ch in text)
+
+
+def assert_clean_text(text: str, limit: int) -> None:
+    lowered = text.lower()
+    for token in FORBIDDEN_IN_TEXT:
+        assert token not in lowered, f"{token!r} survived in {text!r}"
+    assert not has_control_char(text), f"control character survived in {text!r}"
+    assert len(text) <= limit
+
+
+def assert_record_clean(record: TriageRecord) -> None:
+    assert_clean_text(record.one_line, ONE_LINE_MAX)
+    assert len(record.people) <= PEOPLE_MAX
+    for person in record.people:
+        assert person != ""
+        assert_clean_text(person, PERSON_MAX)
+    if not record.people:
+        assert "(from )" not in record.one_line
+
+
+def make_sender_item(name: str, address: str = "sender@example.com", title: str = "Quarterly planning") -> NormalizedItem:
+    sender = Participant(name=name, address=address, role="from")
+    return make_item().model_copy(update={"title": title, "participants": [sender]})
+
+
+@pytest.mark.parametrize("name", HOSTILE_SENDER_NAMES)
+def test_stub_record_hostile_sender_name_is_neutralized(name: str):
+    record = stub_record("m001", make_sender_item(name))
+
+    assert_record_clean(record)
+    assert record.one_line.startswith("Quarterly planning")
+
+
+@pytest.mark.parametrize("name", HOSTILE_SENDER_NAMES)
+def test_stub_record_hostile_sender_name_person_matches_sanitize_text(name: str):
+    record = stub_record("m001", make_sender_item(name))
+
+    expected = sanitize_text(name, PERSON_MAX)
+    assert record.people == ([expected] if expected else [])
+
+
+def test_stub_record_url_only_sender_name_leaves_no_dangling_from():
+    record = stub_record("m001", make_sender_item("https://evil.example/only-a-url"))
+
+    assert record.people == []
+    assert record.one_line == "Quarterly planning"
+
+
+def test_stub_record_markdown_link_sender_name_keeps_only_the_label():
+    record = stub_record("m001", make_sender_item("[Bob](https://evil.example/p)"))
+
+    assert record.people == ["Bob"]
+    assert record.one_line == "Quarterly planning (from Bob)"
+
+
+def test_stub_record_long_sender_name_is_capped_at_person_max():
+    record = stub_record("m001", make_sender_item("B" * 5000))
+
+    assert record.people == ["B" * PERSON_MAX]
+    assert len(record.one_line) <= ONE_LINE_MAX
+
+
+def test_stub_record_long_title_and_long_sender_name_keep_one_line_within_cap():
+    record = stub_record("m001", make_sender_item("Bob " * 2000, title="word " * 100))
+
+    assert len(record.one_line) <= ONE_LINE_MAX
+    assert len(record.people[0]) <= PERSON_MAX
+    assert_record_clean(record)
+
+
+@pytest.mark.parametrize(
+    "address",
+    ["javascript:x@example.org", "mailto:a@example.org", "www.evil.example@example.org", "https://evil.example@example.org"],
+)
+def test_stub_record_hostile_address_without_display_name_is_neutralized(address: str):
+    record = stub_record("m001", make_sender_item("", address=address))
+
+    assert_record_clean(record)
+    assert record.people == ([sanitize_text(address, PERSON_MAX)] if sanitize_text(address, PERSON_MAX) else [])
+
+
+def test_stub_record_whitespace_only_name_falls_back_to_the_hostile_address_sanitized():
+    record = stub_record("m001", make_sender_item("   ", address="javascript:x@example.org"))
+
+    assert record.people == []
+    assert record.one_line == "Quarterly planning"
+
+
+class FakeClient:
+    """Scripted stand-in for anthropic.Anthropic: each parse() pops the next response or raises it."""
+
+    def __init__(self, *script: Any) -> None:
+        self.script = list(script)
+        self.messages = SimpleNamespace(parse=self._parse)
+
+    def _parse(self, **kwargs: Any) -> Any:
+        step = self.script.pop(0)
+        if isinstance(step, Exception):
+            raise step
+        return step
+
+
+def connection_error() -> anthropic.APIConnectionError:
+    return anthropic.APIConnectionError(
+        request=cast(Any, SimpleNamespace(method="POST", url="https://example.com/v1/messages"))
+    )
+
+
+def batch_reply(*records: TriageRecord) -> SimpleNamespace:
+    return SimpleNamespace(parsed_output=TriageBatch(records=list(records)), stop_reason="end_turn")
+
+
+def stubbed_item(triaged: TriagedItem) -> TriagedItem:
+    assert triaged.stubbed is True
+    return triaged
+
+
+@pytest.mark.parametrize("name", HOSTILE_SENDER_NAMES)
+def test_triage_items_stub_path_hostile_sender_name_is_neutralized(name: str):
+    items = [make_sender_item(name), make_sender_item(name, title="Second item")]
+    client = FakeClient(connection_error())
+
+    result = triage_items(items, client, model="test-model")
+
+    assert result.stubbed_count == 2
+    assert len(result.items) == 2
+    for triaged in result.items:
+        assert_record_clean(stubbed_item(triaged).record)
+        assert triaged.record.people == ([sanitize_text(name, PERSON_MAX)] if sanitize_text(name, PERSON_MAX) else [])
+
+
+def test_triage_items_stub_path_matches_stub_record_for_the_same_item():
+    item = make_sender_item("Bob javascript:alert(1)")
+
+    result = triage_items([item], FakeClient(connection_error()), model="test-model")
+
+    assert result.items[0].record == stub_record("m001", item)
+
+
+def test_triage_items_omitted_after_retry_stub_path_hostile_sender_name_is_neutralized():
+    item = make_sender_item("Bob www.evil.example/login " + "B" * 5000)
+    client = FakeClient(batch_reply(), batch_reply())
+
+    result = triage_items([item], client, model="test-model")
+
+    assert result.stubbed_count == 1
+    assert_record_clean(result.items[0].record)
+    assert result.items[0].record.people != []
+
+
+def test_triage_items_model_reply_with_hostile_people_and_one_line_is_neutralized():
+    hostile_people = [
+        "Bob https://evil.example/x",
+        "www.evil.example/login",
+        "javascript:alert(1)",
+        "mailto:a@evil.example",
+        "[Carol](https://evil.example/p)",
+        "Dave <script>x</script>",
+        "Erin\x00\x07\x1b[31m",
+        "F" * 5000,
+    ]
+    hostile = TriageRecord(
+        id="m001",
+        category=Category.FYI,
+        importance=Importance.NORMAL,
+        one_line="Read https://evil.example/x and [click](javascript:alert(1)) <b>now</b>\x00 " + "word " * 100,
+        action_needed=False,
+        action_text=None,
+        due=None,
+        people=hostile_people,
+    )
+
+    result = triage_items([make_sender_item("Alex Example")], FakeClient(batch_reply(hostile)), model="test-model")
+
+    triaged = result.items[0]
+    assert triaged.stubbed is False
+    assert_record_clean(triaged.record)
+    assert triaged.record.people == ["Bob", "Carol", "Dave x", "Erin [31m", "F" * PERSON_MAX]
+    assert triaged.record.one_line.startswith("Read and click now word")
 
 
 # --- schema ----------------------------------------------------------------------------------------
