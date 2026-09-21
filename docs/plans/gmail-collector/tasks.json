@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T04:10:25Z",
+  "updated": "2026-09-21T04:38:02Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1324,11 +1324,39 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T04:38:02Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'MAX_HTML_CHARS' pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T04:38:02Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T04:38:02Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+            "exit": 0,
+            "duration_ms": 414,
+            "tail": "........................................................................ [ 65%]\n......................................                                   [100%]\n110 passed, 51 deselected in 0.25s",
+            "recorded_at": "2026-09-21T04:38:02Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check finding P2, reproduced 2026-09-21. _TextExtractor.handle_endtag scans the whole open-element stack for every end tag, so unmatched end tags over a deep stack are O(n^2): _html_to_text('<b>'*n + '</i>'*n) took 0.15s at n=2500, 0.56s at 5000, 2.16s at 10000 (30 KB), ~9s at 140 KB, minutes at ~1 MB; the HTML path is reached whenever text/plain is empty, which the sender controls, and nothing bounds the input before parsing (BODY_CAP only slices AFTER). Fix both: (a) truncate the HTML input to a documented MAX_HTML_CHARS (start at 500000, a guess to be re-tuned from the dry run) before parsing, and (b) make the unmatched-end-tag check O(1) (e.g. a collections.Counter of currently open tag names) instead of scanning the stack. Keep hidden-content semantics identical: every existing hidden-content and nesting test must pass unchanged. Tests: the 10000-pair unmatched case completes in well under a second (assert on a generous bound, e.g. < 1.0s, not on exact time), an input over MAX_HTML_CHARS is cut and still yields the visible text before the cut, and a deep but well-formed nest still strips hidden regions correctly."
     },

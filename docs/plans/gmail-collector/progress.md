@@ -48,3 +48,5 @@ Ruling: defer — sanitize_text now removes any scheme:// URL (generic, a supers
 ## 2026-09-21T04:06:23Z check FAIL check-report.md
 ## 2026-09-21T04:07:52Z build T-017 start (attempt 1)
 ## 2026-09-21T04:10:25Z verify T-017 ok=true
+## 2026-09-21T04:35:16Z build T-018 start (attempt 1)
+## 2026-09-21T04:38:02Z verify T-018 ok=true
