@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T04:38:02Z",
+  "updated": "2026-09-21T04:41:07Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1383,11 +1383,39 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T04:41:07Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'timeout' auth/gmail_bootstrap.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T04:41:04Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" auth/gmail_bootstrap.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T04:41:04Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_gmail_bootstrap.py -q",
+            "exit": 0,
+            "duration_ms": 2629,
+            "tail": "........................                                                 [100%]\n24 passed in 2.48s",
+            "recorded_at": "2026-09-21T04:41:07Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check finding P2, reproduced 2026-09-21: wait_for_code(0, 'S', 1) followed by an idle socket.create_connection to the bound port is still blocked 4s after its 1s deadline. HTTPServer is single-threaded and the handler has no socket timeout, so any local process (or a browser speculative preconnect accepted before the real callback) stalls the accept loop and the real callback waits behind it; the deadline is never enforced. Fix: set a short per-connection timeout on accepted sockets (StreamRequestHandler.timeout, a few seconds) AND enforce the overall deadline in the serve loop (server.timeout + a monotonic deadline check), so the function raises its existing timeout error at the deadline even with a stalled connection open. Also add the loopback-bind test the patterns lens noted is missing: assert the listener's bound address is 127.0.0.1 (server.server_address[0]), not merely reachable there. Tests: an idle connection does not prevent the real callback from being served or the timeout from firing within a bounded slack; a stalled connection followed by a valid callback still returns the code."
     }
