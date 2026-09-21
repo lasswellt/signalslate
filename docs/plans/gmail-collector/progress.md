@@ -25,3 +25,6 @@ Ruling: defer — a state-mismatched loopback callback aborts the bootstrap run 
 ## 2026-09-21T02:56:02Z build T-009 start (attempt 1)
 Ruling: defer — dev added '# pyright: ignore[reportMissingImports]' to pydantic/pytest imports in pipeline/normalize.py and two test files because the post-edit pyright hook does not resolve venv/. That is a tooling gap, not a code defect; the clean fix is a pyrightconfig.json (venvPath/venv) and removing the ignores. Not done here (out of scope of every task). NormalizedItem.attachments are Attachment models (use .model_dump() for dicts); PayloadError added. (T-009, round 1)
 ## 2026-09-21T02:59:19Z verify T-009 ok=true
+## 2026-09-21T02:59:19Z build T-010 start (attempt 1)
+Ruling: defer — sanitize_record's due check is stricter than fromisoformat on purpose (YYYY-MM-DD only; 3.12 fromisoformat also accepts 20260920 and ISO week dates). stub_record falls back to NO_SUBJECT for an empty or link-only title so a stub digest line is never blank. (T-010, round 1)
+## 2026-09-21T03:02:47Z verify T-010 ok=true

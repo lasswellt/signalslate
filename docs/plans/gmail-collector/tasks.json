@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T02:59:19Z",
+  "updated": "2026-09-21T03:02:47Z",
   "tasks": [
     {
       "id": "T-001",
@@ -763,11 +763,53 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T03:02:47Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'class TriageRecord' pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:02:47Z"
+          },
+          {
+            "cmd": "grep -qE 'extra=.forbid.' pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:02:47Z"
+          },
+          {
+            "cmd": "grep -qE 'def (validate_batch|stub_record|assign_aliases)' pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:02:47Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T03:02:47Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_triage.py -q",
+            "exit": 0,
+            "duration_ms": 232,
+            "tail": "..............................................................           [100%]\n62 passed in 0.09s",
+            "recorded_at": "2026-09-21T03:02:47Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research §8 Q1,Q3,Q4: pure logic, no SDK import yet. TriageRecord/TriageBatch Pydantic models with model_config extra='forbid'; categories and importance are string ENUMS (structured outputs reject numeric min/max and string length constraints, so ranges and lengths are enforced in Python post-parse). assign_aliases() gives per-run short ids (m001...) mapped to real ids in a dict: the model never sees or echoes real ids. batches(items, size~20). validate_batch(): every returned alias must be in the input set (unknown -> dropped), every input alias must be present (missing -> returned for one retry). sanitize_text(): strips URLs and markup and caps length (the model never emits URLs; links come from our own id->permalink map later). stub_record(item): deterministic record from subject/sender so a failed call degrades to a partial digest, never a dead run."
     },
