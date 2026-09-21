@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T08:00:16Z",
+  "updated": "2026-09-21T08:11:48Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2346,11 +2346,25 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T08:11:48Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_management_e2e.py -q",
+            "exit": 0,
+            "duration_ms": 1147,
+            "tail": ".......                                                                  [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n7 passed, 1 warning in 0.93s",
+            "recorded_at": "2026-09-21T08:11:47Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "test-only: the product is the end-to-end regression suite; there is no production symbol to grep. Never touch the network. Drive the REAL app object (lifespan, router wiring, security middleware) with a temp DB and env and TestClient. Scenarios: (1) fresh start with SIGNALSLATE_SECRET_KEY set and .env declaring a Slack workspace, a Zoom account and a Gmail account: GET /connections lists them with origin env and NO secret value anywhere in the response text; (2) POST a new slack connection with the required header: it is inactive; test it (stub the slack health call); activate through PUT /config; run one collector (stub dispatch) and read last_attempt and items through the API; (3) PATCH replaces only the token and the old token appears nowhere afterwards; (4) delete a seeded connection and restart the app on the same DB: it does NOT come back (tombstone), and an edited seeded connection keeps its edit when .env changes (STORE WINS); (5) sweep: collect EVERY response body of the whole scenario (including error responses, /status, /system and run rows) and assert none contains any secret value used in the scenario nor any ciphertext; (6) CSRF: the same mutating calls without X-Requested-With, or with a foreign Origin, are rejected and change nothing; (7) no key configured: the app starts, /system reports the store inactive, writes that include secrets return 503 secret_key_missing, and .env-only collection still works. If a step exposes a defect in source do NOT weaken the test: reply BLOCKED with the failing assertion."
     },
