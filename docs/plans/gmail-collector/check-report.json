@@ -1,0 +1,29 @@
+{
+  "$schema": "blitz-check-report/1.0",
+  "result": "FAIL",
+  "ts": "2026-09-21T04:05:14Z",
+  "ref": "1a3dfe9df2a2d42edae809dcc1e78a8d863aff9d",
+  "scope": "plan",
+  "plan": "gmail-collector",
+  "stacks": ["python"],
+  "lanes": {
+    "deterministic": {"selected": 19, "ran": 15, "pass": 14, "finding": 1, "error": 0},
+    "semantic": {"selected": 3, "ran": 3, "pass": 2, "finding": 1, "error": 0}
+  },
+  "findings": [
+    {"id": "survey:security", "severity": "P1", "where": "pipeline/collectors/gmail.py:_decode_part", "what": "sender-controlled Content-Type charset (undefined, idna) raises UnicodeError out of flatten_message; only LookupError is caught (reproduced). Tracked as T-017."},
+    {"id": "survey:backend", "severity": "P1", "where": "pipeline/collectors/gmail.py:collect_gmail", "what": "no per-message guard around flatten_message: one bad message discards the fetched batch and the runner's 3-strike watermark advance loses the window. Tracked as T-017."},
+    {"id": "survey:security", "severity": "P2", "where": "pipeline/collectors/gmail.py:_TextExtractor.handle_endtag", "what": "quadratic on unmatched end tags (2.16s at 30KB); unbounded HTML input (reproduced). Tracked as T-018."},
+    {"id": "survey:security", "severity": "P2", "where": "auth/gmail_bootstrap.py:wait_for_code", "what": "no per-connection timeout; an idle local connection blocks past the deadline (reproduced). Tracked as T-019."},
+    {"id": "det-12", "severity": "P0", "where": "repo", "what": "pyright reports 54 errors, identical to main's 54 (0 introduced by this branch); the absolute type-error floor trips on pre-existing debt only."}
+  ],
+  "cannot_verify": [
+    {"what": "after:/before: epoch boundary vs internalDate; list ordering", "needs": "real account dry run"},
+    {"what": "RFC 2047 decoding of Subject/From in payload.headers", "needs": "real format=full payload"},
+    {"what": "digest renderer escaping of one_line/action_text/people", "needs": "renderer (Phase 4)"},
+    {"what": "README claims about Google policy", "needs": "human check vs current Google docs"},
+    {"what": "test_triage.py, test_triage_cli.py, T-016 tests could pass on broken behavior", "needs": "mutation run"}
+  ],
+  "critic": {"mode": "reject", "verdict": "LGTM"},
+  "tasks": {"verified": 16, "failed": 0}
+}

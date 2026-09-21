@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "gmail-collector",
-  "updated": "2026-09-21T03:22:52Z",
+  "updated": "2026-09-21T03:55:06Z",
   "tasks": [
     {
       "id": "T-001",
@@ -30,7 +30,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T02:40:40Z",
+        "ts": "2026-09-21T03:54:54Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -40,21 +40,21 @@
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T02:40:39Z"
+            "recorded_at": "2026-09-21T03:54:52Z"
           },
           {
             "cmd": "venv/bin/python -c 'import msal, requests, fastapi, sqlmodel, apscheduler, pytest'",
             "exit": 0,
-            "duration_ms": 381,
+            "duration_ms": 410,
             "tail": "",
-            "recorded_at": "2026-09-21T02:40:39Z"
+            "recorded_at": "2026-09-21T03:54:52Z"
           },
           {
             "cmd": "venv/bin/python -m pytest -q",
             "exit": 0,
-            "duration_ms": 741,
-            "tail": "........................................................................ [ 52%]\n.................................................................        [100%]\n137 passed in 0.52s",
-            "recorded_at": "2026-09-21T02:40:40Z"
+            "duration_ms": 2042,
+            "tail": "........................................................................ [ 14%]\n........................................................................ [ 28%]\n........................................................................ [ 43%]\n........................................................................ [ 57%]\n........................................................................ [ 72%]\n........................................................................ [ 86%]\n....................................................................     [100%]\n500 passed in 1.61s",
+            "recorded_at": "2026-09-21T03:54:54Z"
           }
         ]
       },
@@ -100,7 +100,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T02:40:40Z",
+        "ts": "2026-09-21T03:54:55Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -108,37 +108,37 @@
           {
             "cmd": "grep -qE 'def check_gmail' pipeline/health.py",
             "exit": 0,
-            "duration_ms": 4,
+            "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:40:40Z"
+            "recorded_at": "2026-09-21T03:54:54Z"
           },
           {
             "cmd": "grep -qE 'GMAIL_' tests/conftest.py",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:40:40Z"
+            "recorded_at": "2026-09-21T03:54:54Z"
           },
           {
             "cmd": "grep -qE 'gmail_\\{' pipeline/health.py",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:40:40Z"
+            "recorded_at": "2026-09-21T03:54:54Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/health.py",
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T02:40:40Z"
+            "recorded_at": "2026-09-21T03:54:54Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_health.py -q",
             "exit": 0,
-            "duration_ms": 228,
-            "tail": "..........................................                               [100%]\n42 passed in 0.09s",
-            "recorded_at": "2026-09-21T02:40:40Z"
+            "duration_ms": 254,
+            "tail": "................................................                         [100%]\n48 passed in 0.10s",
+            "recorded_at": "2026-09-21T03:54:55Z"
           }
         ]
       },
@@ -180,7 +180,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T02:42:05Z",
+        "ts": "2026-09-21T03:54:55Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -190,28 +190,28 @@
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T02:42:04Z"
+            "recorded_at": "2026-09-21T03:54:55Z"
           },
           {
             "cmd": "! grep -nE \"declared = \\[f\\\"m365_\" pipeline/runner.py",
             "exit": 0,
-            "duration_ms": 6,
+            "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:42:04Z"
+            "recorded_at": "2026-09-21T03:54:55Z"
           },
           {
             "cmd": "! grep -nE \"import .*(m365_aliases|slack_workspaces)\" pipeline/runner.py",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:42:04Z"
+            "recorded_at": "2026-09-21T03:54:55Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_runner.py -q",
             "exit": 0,
-            "duration_ms": 680,
-            "tail": ".............................................                            [100%]\n45 passed in 0.46s",
-            "recorded_at": "2026-09-21T02:42:05Z"
+            "duration_ms": 647,
+            "tail": ".............................................                            [100%]\n45 passed in 0.44s",
+            "recorded_at": "2026-09-21T03:54:55Z"
           }
         ]
       },
@@ -256,7 +256,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T02:44:10Z",
+        "ts": "2026-09-21T03:54:56Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -266,35 +266,35 @@
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:44:10Z"
+            "recorded_at": "2026-09-21T03:54:55Z"
           },
           {
             "cmd": "grep -qE 'after:' pipeline/collectors/gmail.py",
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T02:44:10Z"
+            "recorded_at": "2026-09-21T03:54:55Z"
           },
           {
             "cmd": "! grep -nE \"gmail\\.googleapis\\.com/batch|users/me/history|/watch\" pipeline/collectors/gmail.py",
             "exit": 0,
             "duration_ms": 6,
             "tail": "",
-            "recorded_at": "2026-09-21T02:44:10Z"
+            "recorded_at": "2026-09-21T03:54:55Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
             "exit": 0,
-            "duration_ms": 5,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T02:44:10Z"
+            "recorded_at": "2026-09-21T03:54:56Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
             "exit": 0,
-            "duration_ms": 205,
-            "tail": "..........................                                               [100%]\n26 passed, 51 deselected in 0.06s",
-            "recorded_at": "2026-09-21T02:44:10Z"
+            "duration_ms": 244,
+            "tail": "........................................................................ [ 78%]\n....................                                                     [100%]\n92 passed, 51 deselected in 0.09s",
+            "recorded_at": "2026-09-21T03:54:56Z"
           }
         ]
       },
@@ -340,7 +340,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T02:49:16Z",
+        "ts": "2026-09-21T03:54:56Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -348,37 +348,37 @@
           {
             "cmd": "grep -qE 'def flatten_message' pipeline/collectors/gmail.py",
             "exit": 0,
-            "duration_ms": 5,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T02:49:16Z"
+            "recorded_at": "2026-09-21T03:54:56Z"
           },
           {
             "cmd": "grep -qE 'urlsafe_b64decode' pipeline/collectors/gmail.py",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:49:16Z"
+            "recorded_at": "2026-09-21T03:54:56Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:49:16Z"
+            "recorded_at": "2026-09-21T03:54:56Z"
           },
           {
             "cmd": "venv/bin/python -c 'import json; json.load(open(\"tests/fixtures/gmail_message_multipart.json\"))'",
             "exit": 0,
-            "duration_ms": 16,
+            "duration_ms": 17,
             "tail": "",
-            "recorded_at": "2026-09-21T02:49:16Z"
+            "recorded_at": "2026-09-21T03:54:56Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
             "exit": 0,
-            "duration_ms": 227,
-            "tail": "........................................................................ [ 94%]\n....                                                                     [100%]\n76 passed, 51 deselected in 0.08s",
-            "recorded_at": "2026-09-21T02:49:16Z"
+            "duration_ms": 240,
+            "tail": "........................................................................ [ 78%]\n....................                                                     [100%]\n92 passed, 51 deselected in 0.09s",
+            "recorded_at": "2026-09-21T03:54:56Z"
           }
         ]
       },
@@ -424,7 +424,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T02:51:47Z",
+        "ts": "2026-09-21T03:54:57Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -434,35 +434,35 @@
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:51:47Z"
+            "recorded_at": "2026-09-21T03:54:56Z"
           },
           {
             "cmd": "grep -qE 'gmail_' pipeline/collectors/__init__.py",
             "exit": 0,
-            "duration_ms": 5,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T02:51:47Z"
+            "recorded_at": "2026-09-21T03:54:56Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:51:47Z"
+            "recorded_at": "2026-09-21T03:54:56Z"
           },
           {
             "cmd": "venv/bin/python -c 'from datetime import datetime; from pipeline.collectors import dispatch; r = dispatch(\"gmail_nolabel\", datetime(2026,1,1), datetime(2026,1,2)); assert r.status == \"error\" and \"token\" in r.detail.lower(), r'",
             "exit": 0,
-            "duration_ms": 92,
+            "duration_ms": 93,
             "tail": "",
-            "recorded_at": "2026-09-21T02:51:47Z"
+            "recorded_at": "2026-09-21T03:54:56Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
             "exit": 0,
-            "duration_ms": 241,
+            "duration_ms": 234,
             "tail": "........................................................................ [ 78%]\n....................                                                     [100%]\n92 passed, 51 deselected in 0.09s",
-            "recorded_at": "2026-09-21T02:51:47Z"
+            "recorded_at": "2026-09-21T03:54:57Z"
           }
         ]
       },
@@ -507,7 +507,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T02:54:33Z",
+        "ts": "2026-09-21T03:54:57Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -515,37 +515,37 @@
           {
             "cmd": "grep -qE 'def build_auth_url' auth/gmail_bootstrap.py",
             "exit": 0,
-            "duration_ms": 4,
+            "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:54:32Z"
+            "recorded_at": "2026-09-21T03:54:57Z"
           },
           {
             "cmd": "grep -qE 'code_challenge_method' auth/gmail_bootstrap.py",
             "exit": 0,
-            "duration_ms": 4,
+            "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:54:32Z"
+            "recorded_at": "2026-09-21T03:54:57Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" auth/gmail_bootstrap.py",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:54:32Z"
+            "recorded_at": "2026-09-21T03:54:57Z"
           },
           {
             "cmd": "venv/bin/python auth/gmail_bootstrap.py --help",
             "exit": 0,
-            "duration_ms": 104,
+            "duration_ms": 91,
             "tail": "usage: gmail_bootstrap.py [-h] [--force] [--port PORT] [--no-browser] label\n\nInteractive (browser, loopback + PKCE) sign-in for one Gmail label\n\npositional arguments:\n  label         mailbox label, letters/digits only, e.g. personal; becomes\n                GMAIL_<LABEL>_REFRESH_TOKEN\n\noptions:\n  -h, --help    show this help message and exit\n  --force       mint a new token even if the configured one is healthy\n  --port PORT   loopback port to listen on (default: random free port)\n  --no-browser  print the URL instead of opening a browser",
-            "recorded_at": "2026-09-21T02:54:33Z"
+            "recorded_at": "2026-09-21T03:54:57Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_gmail_bootstrap.py -q",
             "exit": 0,
-            "duration_ms": 615,
-            "tail": ".................                                                        [100%]\n17 passed in 0.47s",
-            "recorded_at": "2026-09-21T02:54:33Z"
+            "duration_ms": 601,
+            "tail": ".................                                                        [100%]\n17 passed in 0.45s",
+            "recorded_at": "2026-09-21T03:54:57Z"
           }
         ]
       },
@@ -595,7 +595,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T02:55:38Z",
+        "ts": "2026-09-21T03:54:58Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -603,44 +603,44 @@
           {
             "cmd": "grep -qE '^GMAIL_CLIENT_ID=' .env.example",
             "exit": 0,
-            "duration_ms": 5,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T02:55:38Z"
+            "recorded_at": "2026-09-21T03:54:57Z"
           },
           {
             "cmd": "grep -qE '^GMAIL_CLIENT_SECRET=' .env.example",
             "exit": 0,
-            "duration_ms": 5,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T02:55:38Z"
+            "recorded_at": "2026-09-21T03:54:57Z"
           },
           {
             "cmd": "grep -qE '^GMAIL_PERSONAL_REFRESH_TOKEN=' .env.example",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:55:38Z"
+            "recorded_at": "2026-09-21T03:54:57Z"
           },
           {
             "cmd": "grep -qE 'In production' README.md",
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T02:55:38Z"
+            "recorded_at": "2026-09-21T03:54:57Z"
           },
           {
             "cmd": "grep -qE 'gmail_bootstrap.py' README.md",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:55:38Z"
+            "recorded_at": "2026-09-21T03:54:57Z"
           },
           {
             "cmd": "! grep -nE \"/home/[a-z]|(^|[^0-9])(10\\.[0-9]+\\.[0-9]+\\.[0-9]+|192\\.168\\.[0-9]+\\.[0-9]+)\" README.md .env.example",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:55:38Z"
+            "recorded_at": "2026-09-21T03:54:58Z"
           }
         ]
       },
@@ -685,7 +685,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T02:59:19Z",
+        "ts": "2026-09-21T03:54:58Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -693,37 +693,37 @@
           {
             "cmd": "grep -qE 'class NormalizedItem' pipeline/normalize.py",
             "exit": 0,
-            "duration_ms": 5,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T02:59:18Z"
+            "recorded_at": "2026-09-21T03:54:58Z"
           },
           {
             "cmd": "grep -qE 'def normalize_gmail' pipeline/normalize.py",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:59:18Z"
+            "recorded_at": "2026-09-21T03:54:58Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/normalize.py",
             "exit": 0,
-            "duration_ms": 6,
+            "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T02:59:18Z"
+            "recorded_at": "2026-09-21T03:54:58Z"
           },
           {
             "cmd": "venv/bin/python -c 'from pipeline.normalize import NormalizedItem'",
             "exit": 0,
-            "duration_ms": 87,
+            "duration_ms": 89,
             "tail": "",
-            "recorded_at": "2026-09-21T02:59:19Z"
+            "recorded_at": "2026-09-21T03:54:58Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_normalize.py -q",
             "exit": 0,
-            "duration_ms": 247,
-            "tail": "...................................                                      [100%]\n35 passed in 0.10s",
-            "recorded_at": "2026-09-21T02:59:19Z"
+            "duration_ms": 265,
+            "tail": "...................................                                      [100%]\n35 passed in 0.11s",
+            "recorded_at": "2026-09-21T03:54:58Z"
           }
         ]
       },
@@ -768,7 +768,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T03:02:47Z",
+        "ts": "2026-09-21T03:54:59Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -778,35 +778,35 @@
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T03:02:47Z"
+            "recorded_at": "2026-09-21T03:54:58Z"
           },
           {
             "cmd": "grep -qE 'extra=.forbid.' pipeline/triage.py",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T03:02:47Z"
+            "recorded_at": "2026-09-21T03:54:58Z"
           },
           {
             "cmd": "grep -qE 'def (validate_batch|stub_record|assign_aliases)' pipeline/triage.py",
             "exit": 0,
-            "duration_ms": 5,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T03:02:47Z"
+            "recorded_at": "2026-09-21T03:54:58Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T03:02:47Z"
+            "recorded_at": "2026-09-21T03:54:58Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_triage.py -q",
             "exit": 0,
-            "duration_ms": 232,
-            "tail": "..............................................................           [100%]\n62 passed in 0.09s",
-            "recorded_at": "2026-09-21T03:02:47Z"
+            "duration_ms": 689,
+            "tail": "........................................................................ [ 80%]\n..................                                                       [100%]\n90 passed in 0.47s",
+            "recorded_at": "2026-09-21T03:54:59Z"
           }
         ]
       },
@@ -858,7 +858,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T03:04:57Z",
+        "ts": "2026-09-21T03:55:01Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -866,44 +866,44 @@
           {
             "cmd": "grep -qE '^anthropic==' requirements.txt",
             "exit": 0,
-            "duration_ms": 5,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T03:04:55Z"
+            "recorded_at": "2026-09-21T03:54:59Z"
           },
           {
             "cmd": "grep -qE 'ANTHROPIC_API_KEY' pipeline/health.py",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T03:04:55Z"
+            "recorded_at": "2026-09-21T03:54:59Z"
           },
           {
             "cmd": "grep -qE 'ANTHROPIC_API_KEY' tests/conftest.py",
             "exit": 0,
-            "duration_ms": 5,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T03:04:55Z"
+            "recorded_at": "2026-09-21T03:54:59Z"
           },
           {
             "cmd": "grep -qE '^ANTHROPIC_API_KEY=' .env.example",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T03:04:55Z"
+            "recorded_at": "2026-09-21T03:54:59Z"
           },
           {
             "cmd": "venv/bin/python -c 'import anthropic'",
             "exit": 0,
-            "duration_ms": 445,
+            "duration_ms": 405,
             "tail": "",
-            "recorded_at": "2026-09-21T03:04:55Z"
+            "recorded_at": "2026-09-21T03:54:59Z"
           },
           {
             "cmd": "venv/bin/python -m pytest -q",
             "exit": 0,
-            "duration_ms": 1346,
-            "tail": "........................................................................ [ 20%]\n........................................................................ [ 41%]\n........................................................................ [ 61%]\n........................................................................ [ 82%]\n..............................................................           [100%]\n350 passed in 1.11s",
-            "recorded_at": "2026-09-21T03:04:57Z"
+            "duration_ms": 2015,
+            "tail": "........................................................................ [ 14%]\n........................................................................ [ 28%]\n........................................................................ [ 43%]\n........................................................................ [ 57%]\n........................................................................ [ 72%]\n........................................................................ [ 86%]\n....................................................................     [100%]\n500 passed in 1.60s",
+            "recorded_at": "2026-09-21T03:55:01Z"
           }
         ]
       },
@@ -945,7 +945,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T03:08:46Z",
+        "ts": "2026-09-21T03:55:02Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -953,30 +953,30 @@
           {
             "cmd": "grep -qE 'def (build_request|triage_items)' pipeline/triage.py",
             "exit": 0,
-            "duration_ms": 5,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T03:08:45Z"
+            "recorded_at": "2026-09-21T03:55:01Z"
           },
           {
             "cmd": "! grep -nE \"^\\s*[\\\"']?(temperature|top_p|top_k|tools)[\\\"']?\\s*[:=]\" pipeline/triage.py",
             "exit": 0,
-            "duration_ms": 6,
+            "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T03:08:45Z"
+            "recorded_at": "2026-09-21T03:55:01Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
             "exit": 0,
-            "duration_ms": 6,
+            "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T03:08:45Z"
+            "recorded_at": "2026-09-21T03:55:01Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_triage_client.py -q",
             "exit": 0,
-            "duration_ms": 614,
-            "tail": ".........................                                                [100%]\n25 passed in 0.41s",
-            "recorded_at": "2026-09-21T03:08:46Z"
+            "duration_ms": 726,
+            "tail": "............................                                             [100%]\n28 passed in 0.45s",
+            "recorded_at": "2026-09-21T03:55:02Z"
           }
         ]
       },
@@ -1005,7 +1005,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T03:16:30Z",
+        "ts": "2026-09-21T03:55:03Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -1013,14 +1013,14 @@
           {
             "cmd": "venv/bin/python -m pytest tests/test_triage_injection.py -q",
             "exit": 0,
-            "duration_ms": 618,
-            "tail": "........................................................................ [ 91%]\n.......                                                                  [100%]\n79 passed in 0.42s",
-            "recorded_at": "2026-09-21T03:16:30Z"
+            "duration_ms": 720,
+            "tail": "........................................................................ [ 91%]\n.......                                                                  [100%]\n79 passed in 0.47s",
+            "recorded_at": "2026-09-21T03:55:03Z"
           }
         ]
       },
       "origin": "plan",
-      "notes": "test-only: the product is the regression suite; there is no production symbol to grep. Synthetic fixtures only (public repo). Cases: body containing </document> and 'ignore previous instructions'; HTML with display:none / hidden instructions (must be absent from the built request, end to end: raw Gmail fixture -> flatten_message -> normalize -> build_request); a fake model reply whose one_line carries a URL and a canary string (URL must be stripped, alias to unknown id dropped); request has no tools key; system prompt contains the untrusted-content policy. Run injection-resistance assertions across several fake replies (pass^k style: all must hold), never assert exact LLM text (Sonnet-class output is not reproducible)."
+      "notes": "test-only: the product is the regression suite; there is no production symbol to grep. Synthetic fixtures only (public repo). Cases: body containing </document> and an instruction-override phrase (see the fixture); HTML with display:none / hidden instructions (must be absent from the built request, end to end: raw Gmail fixture -> flatten_message -> normalize -> build_request); a fake model reply whose one_line carries a URL and a canary string (URL must be stripped, alias to unknown id dropped); request has no tools key; system prompt contains the untrusted-content policy. Run injection-resistance assertions across several fake replies (pass^k style: all must hold), never assert exact LLM text (Sonnet-class output is not reproducible)."
     },
     {
       "id": "T-014",
@@ -1062,7 +1062,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T03:19:50Z",
+        "ts": "2026-09-21T03:55:05Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -1070,37 +1070,37 @@
           {
             "cmd": "grep -qE '\\-\\-dry' pipeline/triage_cli.py",
             "exit": 0,
-            "duration_ms": 4,
+            "duration_ms": 5,
             "tail": "grep: warning: stray \\ before -",
-            "recorded_at": "2026-09-21T03:19:48Z"
+            "recorded_at": "2026-09-21T03:55:03Z"
           },
           {
             "cmd": "grep -qE 'def items_for_source_since' pipeline/db.py",
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T03:19:48Z"
+            "recorded_at": "2026-09-21T03:55:03Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage_cli.py",
             "exit": 0,
-            "duration_ms": 4,
+            "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T03:19:48Z"
+            "recorded_at": "2026-09-21T03:55:03Z"
           },
           {
             "cmd": "venv/bin/python -m pipeline.triage_cli --help",
             "exit": 0,
-            "duration_ms": 617,
+            "duration_ms": 708,
             "tail": "usage: triage_cli.py [-h] [--hours HOURS] [--limit LIMIT]\n                     [--batch-size BATCH_SIZE] [--dry]\n                     source\n\nRun the triage map call over collected Gmail items. Writes nothing.\n\npositional arguments:\n  source                stored source id, e.g. gmail_personal\n\noptions:\n  -h, --help            show this help message and exit\n  --hours HOURS         lookback window (default 24)\n  --limit LIMIT         records to print (default 5)\n  --batch-size BATCH_SIZE\n                        items per call (default 20)\n  --dry                 print the first request only: no API key, no network",
-            "recorded_at": "2026-09-21T03:19:49Z"
+            "recorded_at": "2026-09-21T03:55:04Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_triage_cli.py -q",
             "exit": 0,
-            "duration_ms": 846,
+            "duration_ms": 913,
             "tail": "...............                                                          [100%]\n15 passed in 0.61s",
-            "recorded_at": "2026-09-21T03:19:50Z"
+            "recorded_at": "2026-09-21T03:55:05Z"
           }
         ]
       },
@@ -1141,7 +1141,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T03:20:49Z",
+        "ts": "2026-09-21T03:55:05Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -1149,30 +1149,30 @@
           {
             "cmd": "grep -qE 'def _participant_line' pipeline/triage.py",
             "exit": 0,
-            "duration_ms": 4,
+            "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T03:20:48Z"
+            "recorded_at": "2026-09-21T03:55:05Z"
           },
           {
             "cmd": "! grep -nE \"^(import|from) httpx\" tests/test_triage_client.py",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T03:20:48Z"
+            "recorded_at": "2026-09-21T03:55:05Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T03:20:48Z"
+            "recorded_at": "2026-09-21T03:55:05Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_triage.py tests/test_triage_client.py -q",
             "exit": 0,
-            "duration_ms": 680,
-            "tail": "........................................................................ [ 80%]\n..................                                                       [100%]\n90 passed in 0.48s",
-            "recorded_at": "2026-09-21T03:20:49Z"
+            "duration_ms": 720,
+            "tail": "........................................................................ [ 61%]\n..............................................                           [100%]\n118 passed in 0.48s",
+            "recorded_at": "2026-09-21T03:55:05Z"
           }
         ]
       },
@@ -1209,7 +1209,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T03:22:52Z",
+        "ts": "2026-09-21T03:55:06Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -1217,28 +1217,123 @@
           {
             "cmd": "grep -qiE 'javascript' pipeline/triage.py",
             "exit": 0,
-            "duration_ms": 5,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T03:22:51Z"
+            "recorded_at": "2026-09-21T03:55:06Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/triage.py",
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-21T03:22:51Z"
+            "recorded_at": "2026-09-21T03:55:06Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_triage.py tests/test_triage_client.py tests/test_triage_injection.py -q",
             "exit": 0,
-            "duration_ms": 773,
-            "tail": "........................................................................ [ 36%]\n........................................................................ [ 73%]\n.....................................................                    [100%]\n197 passed in 0.55s",
-            "recorded_at": "2026-09-21T03:22:52Z"
+            "duration_ms": 829,
+            "tail": "........................................................................ [ 36%]\n........................................................................ [ 73%]\n.....................................................                    [100%]\n197 passed in 0.57s",
+            "recorded_at": "2026-09-21T03:55:06Z"
           }
         ]
       },
       "origin": "plan",
       "notes": "Found in T-013 review. sanitize_text (pipeline/triage.py, _URL) strips only http(s):// and www. forms; a hostile or confused model reply can still carry ftp://, mailto:, javascript:, data:, file:, tel: URIs or protocol-relative //host/path into the digest, which is later rendered to PDF. Extend the URL removal to those schemes (case-insensitive, also when written with odd spacing is NOT required) and to //host/path forms, removing them the same way existing URLs are removed. Do NOT strip bare domains (evil.example.net, Acme.com): false positives on company names and file names outweigh the gain for a PDF digest; say so in a comment. Keep the existing behavior for markdown links (label kept, target dropped). Add tests to tests/test_triage.py for each new scheme (in plain text and as a markdown link target), for //host, for a bare domain being left alone, and for a sentence where removal leaves no double spaces. The existing 62 triage tests and the injection suite must keep passing unchanged."
+    },
+    {
+      "id": "T-017",
+      "title": "Isolate per-message failures in collect_gmail and harden charset decoding",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/gmail.py",
+        "tests/test_collectors.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qE 'UnicodeError' pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "check",
+      "notes": "check finding P1 x2, both reproduced 2026-09-21. (1) _decode_part catches only LookupError around raw.decode(charset, errors='replace'), but a sender-controlled Content-Type charset of 'undefined' raises UnicodeError('undefined encoding') and 'idna' raises UnicodeError('Unsupported error handling replace'); catch (LookupError, UnicodeError) and fall back to utf-8 with errors='replace'. (2) collect_gmail calls flatten_message(msg) with no guard, so ONE message that makes it raise (bad charset, a 2000-deep MIME tree -> RecursionError) discards every already-fetched message and no CollectionResult is returned; the runner then counts a hard failure and after MAX_STUCK_RUNS=3 advances the watermark, losing the window. Wrap the per-message flatten in try/except Exception (RecursionError is an Exception), skip that message, count it as a FAILURE (not the 'unplaceable' bucket) with the message id and exception class in the failure list so the result is 'partial' with the first failure named and every other message kept. Tests: charset=undefined and charset=idna decode without raising; a batch of [good, bad, good] returns both good items with status partial; a 1500-deep nested multipart message (build it programmatically) does not escape; the failure detail names the exception class but never the body."
+    },
+    {
+      "id": "T-018",
+      "title": "Bound the cost of HTML-to-text extraction on hostile input",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/gmail.py",
+        "tests/test_collectors.py"
+      ],
+      "depends_on": [
+        "T-017"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'MAX_HTML_CHARS' pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/gmail.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q -k gmail",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "check",
+      "notes": "check finding P2, reproduced 2026-09-21. _TextExtractor.handle_endtag scans the whole open-element stack for every end tag, so unmatched end tags over a deep stack are O(n^2): _html_to_text('<b>'*n + '</i>'*n) took 0.15s at n=2500, 0.56s at 5000, 2.16s at 10000 (30 KB), ~9s at 140 KB, minutes at ~1 MB; the HTML path is reached whenever text/plain is empty, which the sender controls, and nothing bounds the input before parsing (BODY_CAP only slices AFTER). Fix both: (a) truncate the HTML input to a documented MAX_HTML_CHARS (start at 500000, a guess to be re-tuned from the dry run) before parsing, and (b) make the unmatched-end-tag check O(1) (e.g. a collections.Counter of currently open tag names) instead of scanning the stack. Keep hidden-content semantics identical: every existing hidden-content and nesting test must pass unchanged. Tests: the 10000-pair unmatched case completes in well under a second (assert on a generous bound, e.g. < 1.0s, not on exact time), an input over MAX_HTML_CHARS is cut and still yields the visible text before the cut, and a deep but well-formed nest still strips hidden regions correctly."
+    },
+    {
+      "id": "T-019",
+      "title": "Give the OAuth loopback listener a real per-connection timeout",
+      "role": "backend",
+      "files": [
+        "auth/gmail_bootstrap.py",
+        "tests/test_gmail_bootstrap.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qE 'timeout' auth/gmail_bootstrap.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" auth/gmail_bootstrap.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_gmail_bootstrap.py -q",
+          "timeout": 120
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "check",
+      "notes": "check finding P2, reproduced 2026-09-21: wait_for_code(0, 'S', 1) followed by an idle socket.create_connection to the bound port is still blocked 4s after its 1s deadline. HTTPServer is single-threaded and the handler has no socket timeout, so any local process (or a browser speculative preconnect accepted before the real callback) stalls the accept loop and the real callback waits behind it; the deadline is never enforced. Fix: set a short per-connection timeout on accepted sockets (StreamRequestHandler.timeout, a few seconds) AND enforce the overall deadline in the serve loop (server.timeout + a monotonic deadline check), so the function raises its existing timeout error at the deadline even with a stalled connection open. Also add the loopback-bind test the patterns lens noted is missing: assert the listener's bound address is 127.0.0.1 (server.server_address[0]), not merely reachable there. Tests: an idle connection does not prevent the real callback from being served or the timeout from firing within a bounded slack; a stalled connection followed by a valid callback still returns the code."
     }
   ]
 }
