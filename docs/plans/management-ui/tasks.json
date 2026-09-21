@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T06:50:01Z",
+  "updated": "2026-09-21T06:54:15Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1165,11 +1165,46 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T06:54:15Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def start' pipeline/oauth_gmail.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:54:14Z"
+          },
+          {
+            "cmd": "grep -qE 'def finish' pipeline/oauth_gmail.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:54:14Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/oauth_gmail.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T06:54:14Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_oauth_gmail.py -q",
+            "exit": 0,
+            "duration_ms": 593,
+            "tail": ".....................................                                    [100%]\n37 passed in 0.42s",
+            "recorded_at": "2026-09-21T06:54:15Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research docs/_research/2026-09-21_management-ui.md sections 4 and 6. start(connection_id, mode, *, store, public_base_url=None) -> StartResult(flow_id, auth_url, mode, expires_at, nonce, instructions): loads the gmail connection (client_id and client_secret via pipeline.connections; a clear error when either is missing), builds PKCE and state through pipeline.oauth_google, redirect_uri = for paste_back http://127.0.0.1:<port> with a fixed documented port constant (default 8765: nothing listens; a Desktop client accepts any loopback port) and for callback build_callback_url(public_base_url,'google') (an error when public_base_url is None: callback needs https); auth URL from oauth_google.build_auth_url (scope gmail.readonly ONLY, access_type=offline, prompt=consent, S256); the PendingFlow stores the code_verifier server-side. finish(flow, code, ...) -> ConnectionView: exchanges the code with the STORED redirect_uri and verifier via oauth_google.exchange_code, runs assert_granted (refresh token present and gmail.readonly granted, else a clear error), then connections.set_secret(connection_id, 'refresh_token', token) and returns the updated view (no secrets). finish_paste(store, flow_id, pasted_url, nonce) and finish_callback(store, state, code, nonce) wrap parse or consume plus finish. Errors map to typed exceptions with user-safe messages (denied consent, state problems, expired flow, exchange rejected with the status only). Never log or return the code, verifier, refresh token or client secret. Tests (network stubbed at requests.post inside pipeline.oauth_google): paste_back and callback happy paths store the refresh token ENCRYPTED (decrypt through the connections internals in the test); scope missing refused; no refresh token refused; callback without public_base_url refused; denied consent (error=access_denied); replay of the same state fails; expired flow; the exchange uses the STORED redirect_uri not a pasted one (assert the request body); the token and secrets never appear in any exception string or returned dict."
     },
@@ -1210,7 +1245,7 @@
       "attempts": 0,
       "last_verify": null,
       "origin": "plan",
-      "notes": "Research docs/_research/2026-09-21_management-ui.md section 5. start(connection_id, mode, *, store, public_base_url=None): loads the m365 connection (tenant_id, client_id), builds msal.PublicClientApplication with the tenant-specific authority (the health.m365_app pattern), redirect_uri = http://localhost for paste_back (Entra ignores the port; that URI is what the app registration holds today) or build_callback_url(public_base_url,'microsoft') for callback, and calls app.initiate_auth_code_flow(SCOPES, redirect_uri=..., login_hint optional) with the default response_mode=query (form_post would put the code in a POST body, not the address bar). Store the FULL msal flow dict server-side in the PendingFlow payload (it contains code_verifier; never sent to the browser). Return auth_uri, flow id, nonce, expires_at and a note that Microsoft codes live about a minute so the pasted URL must be submitted immediately. finish: under tokencache.locked(alias) load or create the SerializableTokenCache, build the app with that cache, call app.acquire_token_by_auth_code_flow(flow, auth_response) where auth_response is the parsed {code, state, ...} dict of str values, treat an error key or a missing access_token as failure with error_description bounded to 200 characters, save the cache atomically with tokencache.save, and return the connection view plus the account label (the preferred_username claim). Catch ValueError from MSAL (state mismatch: usually CSRF) and map it to a generic safe error. Tests with a fake msal app (monkeypatch pipeline.oauth_m365.msal.PublicClientApplication with a fake exposing initiate_auth_code_flow, acquire_token_by_auth_code_flow and get_accounts): paste and callback happy paths write the cache file with mode 0600 for the right alias; the flow dict never appears in returned data; MSAL ValueError -> safe error; an error response (AADSTS text) is bounded and no token appears; concurrent finish on one alias serializes; expired flow; a traversal alias is rejected (tokencache validation)."
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 5. start(connection_id, mode, *, store, public_base_url=None): loads the m365 connection (tenant_id, client_id), builds msal.PublicClientApplication with the tenant-specific authority (the health.m365_app pattern), redirect_uri = http://localhost for paste_back (Entra ignores the port; that URI is what the app registration holds today) or build_callback_url(public_base_url,'microsoft') for callback, and calls app.initiate_auth_code_flow(SCOPES, redirect_uri=..., login_hint optional) with the default response_mode=query (form_post would put the code in a POST body, not the address bar). Store the FULL msal flow dict server-side in the PendingFlow payload (it contains code_verifier; never sent to the browser). Return auth_uri, flow id, nonce, expires_at and a note that Microsoft codes live about a minute so the pasted URL must be submitted immediately. finish: under tokencache.locked(alias) load or create the SerializableTokenCache, build the app with that cache, call app.acquire_token_by_auth_code_flow(flow, auth_response) where auth_response is the parsed {code, state, ...} dict of str values, treat an error key or a missing access_token as failure with error_description bounded to 200 characters, save the cache atomically with tokencache.save, and return the connection view plus the account label (the preferred_username claim). Catch ValueError from MSAL (state mismatch: usually CSRF) and map it to a generic safe error. Tests with a fake msal app (monkeypatch pipeline.oauth_m365.msal.PublicClientApplication with a fake exposing initiate_auth_code_flow, acquire_token_by_auth_code_flow and get_accounts): paste and callback happy paths write the cache file with mode 0600 for the right alias; the flow dict never appears in returned data; MSAL ValueError -> safe error; an error response (AADSTS text) is bounded and no token appears; concurrent finish on one alias serializes; expired flow; a traversal alias is rejected (tokencache validation). ADDED at build time (from T-016 review): mirror pipeline/oauth_gmail.py's public shape so the API can treat providers alike: start(...) returns the same StartResult shape, finish_paste(store, flow_id, pasted_url, nonce) and finish_callback(store, state, code, nonce, error=None) where a provider error= callback with no code is consumed and mapped to a ConsentDenied-style FlowError. Read pipeline/oauth_gmail.py first and REUSE its error classes where they are provider-neutral (import them; do not duplicate); every error must subclass FlowError (fixed message, no arguments, raise from None on exchange failures)."
     },
     {
       "id": "T-018",
@@ -1372,7 +1407,7 @@
       "attempts": 0,
       "last_verify": null,
       "origin": "plan",
-      "notes": "Research docs/_research/2026-09-21_management-ui.md section 6. POST /oauth/{provider}/start {connection_id, mode} (provider google or microsoft; the connection kind must match: gmail with google, m365 with microsoft, else 400) -> {flow_id, auth_url, mode, expires_at, instructions}; the response sets an HttpOnly, SameSite=Lax cookie named ss_oauth_<flow_id> whose value is the nonce (Path=/api/oauth, Secure only when public_base_url is https, Max-Age = ttl); POST /oauth/{provider}/paste {flow_id, url} reads the nonce cookie, calls the provider finish_paste and returns {status: connected, connection: view}; GET /oauth/callback/{provider}?state=&code=&error= is unauthenticated by necessity: it validates state plus the nonce cookie through FlowStore.consume, calls finish_callback, then answers 302 to a FIXED target (the first allowed web origin plus /connections?oauth=ok, or ?oauth=error&reason=<code> where the reason is one of a small fixed set and never text from the provider or the query), always deletes the cookie, and never logs or echoes the code or state; an unknown or mismatched provider path gets the same generic error redirect. mode callback is refused with a clear 400 when health.public_base_url() is None. The FlowStore is a module singleton exposed for tests. Tests (router-only app, stubbed provider modules): start sets a cookie with HttpOnly, SameSite=lax and the Path, and no code_verifier or secret state appears in any response; paste happy path; paste with a missing or wrong cookie fails WITHOUT consuming; callback happy path redirects to the fixed target; callback with a forged state -> generic error redirect and no side effects; replay; provider mismatch (a google state on the microsoft path); callback mode refused without public_base_url; kind and provider mismatch -> 400; fuzz state, code and error params to prove the redirect never contains an attacker-controlled URL; no exception or redirect string contains the code."
+      "notes": "Research docs/_research/2026-09-21_management-ui.md section 6. POST /oauth/{provider}/start {connection_id, mode} (provider google or microsoft; the connection kind must match: gmail with google, m365 with microsoft, else 400) -> {flow_id, auth_url, mode, expires_at, instructions}; the response sets an HttpOnly, SameSite=Lax cookie named ss_oauth_<flow_id> whose value is the nonce (Path=/api/oauth, Secure only when public_base_url is https, Max-Age = ttl); POST /oauth/{provider}/paste {flow_id, url} reads the nonce cookie, calls the provider finish_paste and returns {status: connected, connection: view}; GET /oauth/callback/{provider}?state=&code=&error= is unauthenticated by necessity: it validates state plus the nonce cookie through FlowStore.consume, calls finish_callback, then answers 302 to a FIXED target (the first allowed web origin plus /connections?oauth=ok, or ?oauth=error&reason=<code> where the reason is one of a small fixed set and never text from the provider or the query), always deletes the cookie, and never logs or echoes the code or state; an unknown or mismatched provider path gets the same generic error redirect. mode callback is refused with a clear 400 when health.public_base_url() is None. The FlowStore is a module singleton exposed for tests. Tests (router-only app, stubbed provider modules): start sets a cookie with HttpOnly, SameSite=lax and the Path, and no code_verifier or secret state appears in any response; paste happy path; paste with a missing or wrong cookie fails WITHOUT consuming; callback happy path redirects to the fixed target; callback with a forged state -> generic error redirect and no side effects; replay; provider mismatch (a google state on the microsoft path); callback mode refused without public_base_url; kind and provider mismatch -> 400; fuzz state, code and error params to prove the redirect never contains an attacker-controlled URL; no exception or redirect string contains the code. ADDED at build time (from T-016 review): pipeline/oauth_gmail.finish_callback takes an optional error= argument (a provider error=access_denied callback carries no code); the callback route must forward the provider's error query parameter to the provider module's finish_callback, and the pipeline/oauth_m365 counterpart has the same signature. The nonce is REQUIRED on every FlowStore.consume call, including paste_back mode, so the paste route must read the nonce cookie too. Import the provider modules by name so tests can stub them."
     },
     {
       "id": "T-022",

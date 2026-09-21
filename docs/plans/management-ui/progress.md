@@ -40,3 +40,6 @@ Ruling: defer — dry_run() shares a private _execute with report() (report skip
 ## 2026-09-21T06:45:26Z build T-015 start (attempt 1)
 Ruling: defer — FlowStore.consume requires the nonce on EVERY call (None is a mismatch, so paste_back mode needs the cookie too), a wrong nonce or a provider mismatch does NOT consume the record (an attacker cannot burn a victim's flow), expiry is reported before nonce mismatch; parse_pasted_url additionally rejects backslash/control characters, repeated parameters and more than 50 query fields; hypothesis is not installed so the never-leaks-the-code property is a seeded 400-URL loop. Adversarially re-verified by hand. (T-015, round 1)
 ## 2026-09-21T06:50:01Z verify T-015 ok=true
+## 2026-09-21T06:50:01Z build T-016 start (attempt 1)
+Ruling: defer — oauth_gmail.finish_callback gained an optional error= argument (a denied-consent callback carries no code); paste-back parses the URL BEFORE consuming the flow so a malformed paste can be retried, while a state mismatch, denial or rejected exchange after consumption ends the flow; all flow errors subclass FlowError with fixed messages and drop provider text. T-017 and T-021's notes were extended to mirror that shape. (T-016, round 1)
+## 2026-09-21T06:54:15Z verify T-016 ok=true
