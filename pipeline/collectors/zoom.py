@@ -76,8 +76,10 @@ def _get(token: str, path: str, params: Optional[dict] = None) -> dict:
 def list_summaries(token: str, since: datetime, until: datetime) -> list[dict]:
     out: list[dict] = []
     params = {
-        "from": since.strftime("%Y-%m-%d"),
-        "to": until.strftime("%Y-%m-%d"),
+        # OpenAPI spec: yyyy-MM-dd'T'HH:mm:ss'Z' UTC, not date-only — a date-only `from`/`to` is
+        # silently reinterpreted and can shift the window by up to a day.
+        "from": since.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "to": until.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "time_filter_field": "summary_created_time",
         "page_size": PAGE_SIZE,
     }

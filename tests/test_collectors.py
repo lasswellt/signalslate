@@ -539,7 +539,18 @@ def test_zoom_lookback_is_wider_than_the_window(monkeypatch):
 
     zoom.collect_zoom(SINCE, UNTIL)
     requested_from = calls[0]["params"]["from"]
-    assert requested_from == (UNTIL - zoom.SUMMARY_LOOKBACK).strftime("%Y-%m-%d")
+    assert requested_from == (UNTIL - zoom.SUMMARY_LOOKBACK).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_zoom_summaries_query_uses_iso_z_from_and_to(monkeypatch):
+    """The OpenAPI spec requires yyyy-MM-dd'T'HH:mm:ss'Z' UTC, not date-only, for from/to."""
+    monkeypatch.setattr(zoom, "zoom_token", lambda: "tok")
+    calls = route(monkeypatch, zoom, lambda url, params: FakeResponse({"summaries": []}))
+
+    zoom.collect_zoom(SINCE, UNTIL)
+    params = calls[0]["params"]
+    assert params["from"] == (UNTIL - zoom.SUMMARY_LOOKBACK).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert params["to"] == UNTIL.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def test_zoom_token_failure_is_error_result(monkeypatch):

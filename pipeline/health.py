@@ -35,11 +35,18 @@ SLACK_SCOPES = {
 }
 # Dropped when SLACK_SKIP_DMS is set — the digest can be built without reading personal DMs.
 SLACK_DM_SCOPES = {"im:history", "im:read"}
-# cloud_recording:read:meeting_transcript:admin stays out: transcripts are optional.
+# The final S2S set the collector calls, one scope per endpoint:
+# - meeting:read:list_summaries:admin  -- GET /users/{userId}/meeting_summaries (enumerate)
+# - meeting:read:summary:admin         -- GET /meetings/{meetingUUID}/meeting_summary (fetch body)
+# - meeting:read:list_meetings:admin   -- GET /users/{userId}/meetings (list meetings)
+# - meeting:read:list_past_participants:admin -- GET /past_meetings/{meetingUUID}/participants
+# - report:read:user:admin             -- GET /report/users/{userId}/meetings (past meeting report)
+# cloud_recording:read:meeting_transcript:admin stays out here: transcripts are optional and a
+# later task adds that scope conditionally, not in this base set.
 ZOOM_SCOPES = {
     "meeting:read:list_summaries:admin",
     "meeting:read:summary:admin",
-    "meeting:read:past_meeting:admin",
+    "meeting:read:list_meetings:admin",
     "meeting:read:list_past_participants:admin",
     "report:read:user:admin",
 }
