@@ -14,7 +14,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-CONFIG_PREFIXES = ("M365_", "SLACK_", "ZOOM_", "MSTODO_")
+CONFIG_PREFIXES = ("M365_", "SLACK_", "ZOOM_", "MSTODO_", "GMAIL_")
 CONFIG_KEYS = ("RMAPI_CONFIG", "LAN_HOST", "TZ")
 
 
