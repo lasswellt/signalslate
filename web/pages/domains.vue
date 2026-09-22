@@ -117,7 +117,18 @@
                   <span class="text-grey-8">See details</span>
                 </q-td>
                 <q-td key="mail" :props="rowProps">
-                  <span class="text-grey-8">See details</span>
+                  <span v-if="rowProps.row.mail.status === 'unavailable'" class="text-grey-8">Not synced</span>
+                  <span v-else-if="rowProps.row.mail.status !== 'ok'" class="text-grey-8">Unavailable</span>
+                  <div v-else class="row q-gutter-xs">
+                    <q-badge
+                      v-for="badge in mailBadges(rowProps.row.mail)"
+                      :key="badge.key"
+                      :color="badge.color"
+                      :data-testid="`mail-badge-${rowProps.row.name}-${badge.key}`"
+                    >
+                      {{ badge.label }}
+                    </q-badge>
+                  </div>
                 </q-td>
                 <q-td key="missing_since" :props="rowProps">
                   <span v-if="rowProps.row.missing_since" class="text-negative">{{ formatDate(rowProps.row.missing_since) }}</span>
@@ -170,7 +181,18 @@
                   <span class="text-grey-8">See details</span>
                 </q-td>
                 <q-td key="mail" :props="rowProps">
-                  <span class="text-grey-8">See details</span>
+                  <span v-if="rowProps.row.mail.status === 'unavailable'" class="text-grey-8">Not synced</span>
+                  <span v-else-if="rowProps.row.mail.status !== 'ok'" class="text-grey-8">Unavailable</span>
+                  <div v-else class="row q-gutter-xs">
+                    <q-badge
+                      v-for="badge in mailBadges(rowProps.row.mail)"
+                      :key="badge.key"
+                      :color="badge.color"
+                      :data-testid="`mail-badge-${rowProps.row.name}-${badge.key}`"
+                    >
+                      {{ badge.label }}
+                    </q-badge>
+                  </div>
                 </q-td>
                 <q-td key="missing_since" :props="rowProps">
                   <span v-if="rowProps.row.missing_since" class="text-negative">{{ formatDate(rowProps.row.missing_since) }}</span>
@@ -380,9 +402,11 @@ const ownedDomains = computed(() =>
 )
 const watchedDomains = computed(() => domains.value.filter((d) => d.ownership === 'watched'))
 
-// NS provider and mail posture are not returned by GET /api/domains (api/routers/domains.py
-// DomainOut): they live on a per-domain snapshot, so the table points at the detail dialog
-// (DomainDetailDialog) rather than fetching every row's snapshot up front.
+// NS provider is not returned by GET /api/domains (api/routers/domains.py DomainOut): it lives on
+// a per-domain snapshot with no compact summary field, so that column still points at the detail
+// dialog (DomainDetailDialog) rather than fetching every row's snapshot up front. Mail posture (the
+// `mail` column) got one: DomainOut.mail is a presence-only summary of the same latest-snapshot
+// data the dialog shows in full, so the table can render it directly (see mailBadges() below).
 const columns: DomainColumn[] = [
   { name: 'name', label: 'Domain', field: 'name', align: 'left' },
   { name: 'source', label: 'Source / account', field: () => null, align: 'left' },
@@ -449,6 +473,29 @@ function boolLabel(value: boolean | null): string {
 
 function boolColor(value: boolean | null): string {
   return value === null ? 'grey' : value ? 'positive' : 'grey-7'
+}
+
+interface MailBadge {
+  key: string
+  label: string
+  color: string
+}
+
+// Same color semantics as DomainDetailDialog's mailBadges (positive: present/strict, warning: a
+// weaker-than-reject DMARC policy, negative: missing) but compact labels for the table cell —
+// the full per-record detail (record text, DKIM per-selector) stays in the detail dialog.
+function mailBadges(mail: DomainOut['mail']): MailBadge[] {
+  return [
+    { key: 'spf', label: 'SPF', color: mail.spf ? 'positive' : 'negative' },
+    {
+      key: 'dmarc',
+      label: 'DMARC',
+      color: mail.dmarc_policy === 'reject' ? 'positive' : mail.dmarc_policy ? 'warning' : 'negative',
+    },
+    { key: 'dkim', label: 'DKIM', color: mail.dkim ? 'positive' : 'negative' },
+    { key: 'mta-sts', label: 'MTA-STS', color: mail.mta_sts ? 'positive' : 'negative' },
+    { key: 'bimi', label: 'BIMI', color: mail.bimi ? 'positive' : 'negative' },
+  ]
 }
 
 function purchaseStatusColor(status: string): string {

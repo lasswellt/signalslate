@@ -20,6 +20,7 @@ function domain(overrides: Partial<DomainOut> = {}): DomainOut {
     first_seen: '2026-01-01T00:00:00Z',
     last_seen: '2026-09-01T00:00:00Z',
     missing_since: null,
+    mail: { status: 'ok', spf: true, dmarc_policy: 'reject', dkim: false, mta_sts: false, bimi: false },
     ...overrides,
   }
 }
@@ -196,6 +197,32 @@ describe('domains page', () => {
     expect(wrapper.find('[data-testid="portfolio-empty"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="portfolio-table"]').text()).toContain('acme.com')
     expect(wrapper.get('[data-testid="portfolio-table"]').text()).toContain('beta.com')
+  })
+
+  it('renders the Mail column from DomainOut.mail with no per-row snapshot fetch', async () => {
+    stubApi({
+      domains: [
+        domain({
+          name: 'acme.com',
+          mail: { status: 'ok', spf: true, dmarc_policy: 'reject', dkim: false, mta_sts: false, bimi: false },
+        }),
+        domain({ name: 'unsynced.com', mail: { status: 'unavailable', spf: false, dmarc_policy: null, dkim: false, mta_sts: false, bimi: false } }),
+      ],
+    })
+    const wrapper = await mountPage()
+    const table = wrapper.get('[data-testid="portfolio-table"]')
+
+    expect(table.get('[data-testid="mail-badge-acme.com-spf"]').text()).toBe('SPF')
+    expect(table.get('[data-testid="mail-badge-acme.com-spf"]').classes().join(' ')).toContain('bg-positive')
+    expect(table.get('[data-testid="mail-badge-acme.com-dmarc"]').text()).toBe('DMARC')
+    expect(table.get('[data-testid="mail-badge-acme.com-dmarc"]').classes().join(' ')).toContain('bg-positive')
+    expect(table.get('[data-testid="mail-badge-acme.com-dkim"]').classes().join(' ')).toContain('bg-negative')
+    expect(table.get('[data-testid="mail-badge-acme.com-mta-sts"]').classes().join(' ')).toContain('bg-negative')
+    expect(table.get('[data-testid="mail-badge-acme.com-bimi"]').classes().join(' ')).toContain('bg-negative')
+
+    // No sync/snapshot has ever run for this one: the column says so instead of guessing.
+    expect(table.text()).toContain('Not synced')
+    expect(table.find('[data-testid="mail-badge-unsynced.com-spf"]').exists()).toBe(false)
   })
 
   it('shows the portfolio empty state pointing at Connections', async () => {

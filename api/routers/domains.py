@@ -50,6 +50,19 @@ _MAX_IMPORT_CHARS = 200_000
 _MAX_SNAPSHOT_HISTORY = 30
 
 
+class MailSummaryOut(BaseModel):
+    """Presence-only summary of the domain's latest stored mail-posture snapshot (pipeline.domains.
+    dns.mail_posture, already computed by every sync/refresh — no new lookup here), for the
+    Portfolio/Watchlist table's Mail column. The richer per-record detail (record text, DMARC
+    policy strength, DKIM per-selector) stays in DomainDetailOut/the detail dialog."""
+    status: str  # "ok" | "error" | "unavailable" (no snapshot has been taken yet)
+    spf: bool
+    dmarc_policy: Optional[str]  # None: no DMARC record. Otherwise the published policy (reject/quarantine/none).
+    dkim: bool  # true if ANY of the checked selectors (pipeline.domains.dns.DKIM_SELECTORS) has a record
+    mta_sts: bool
+    bimi: bool
+
+
 class DomainOut(BaseModel):
     name: str
     ownership: str
@@ -62,6 +75,7 @@ class DomainOut(BaseModel):
     first_seen: Optional[str]
     last_seen: Optional[str]
     missing_since: Optional[str]
+    mail: MailSummaryOut
 
 
 class SnapshotSummary(BaseModel):
@@ -146,6 +160,13 @@ def _coded(status_code: int, code: str, message: str) -> HTTPException:
     return HTTPException(status_code, {"code": code, "message": message})
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    """A snapshot's stored JSON is trusted (this app wrote it), but _mail_summary reads several
+    levels of nested dict deep, so one isinstance check per level keeps a future shape change a
+    missing field, never an AttributeError."""
+    return value if isinstance(value, dict) else {}
+
+
 def _domain_fields(row: Domain) -> dict[str, Any]:
     return {
         "name": row.name,
@@ -162,8 +183,48 @@ def _domain_fields(row: Domain) -> dict[str, Any]:
     }
 
 
-def _domain_out(row: Domain) -> DomainOut:
-    return DomainOut(**_domain_fields(row))
+_UNAVAILABLE_MAIL = MailSummaryOut(status="unavailable", spf=False, dmarc_policy=None, dkim=False, mta_sts=False, bimi=False)
+
+
+def _latest_snapshot(session: Any, domain_id: int) -> Optional[DomainSnapshot]:
+    return session.exec(
+        select(DomainSnapshot).where(DomainSnapshot.domain_id == domain_id).order_by(col(DomainSnapshot.taken_at).desc())
+    ).first()
+
+
+def _mail_summary(latest: Optional[DomainSnapshot]) -> MailSummaryOut:
+    """Presence-only fields from the domain's latest snapshot's "mail" section (already computed
+    by pipeline.domains.snapshot.inspect() at sync/refresh time — no lookup happens here)."""
+    if latest is None:
+        return _UNAVAILABLE_MAIL
+    try:
+        data = json.loads(latest.data)
+    except ValueError:
+        return MailSummaryOut(status="error", spf=False, dmarc_policy=None, dkim=False, mta_sts=False, bimi=False)
+    mail = _as_dict(data.get("mail")) if isinstance(data, dict) else {}
+    if mail.get("status") != "ok":
+        return MailSummaryOut(
+            status=str(mail.get("status") or "error"), spf=False, dmarc_policy=None, dkim=False, mta_sts=False, bimi=False
+        )
+    spf = _as_dict(mail.get("spf"))
+    dmarc = _as_dict(mail.get("dmarc"))
+    dkim_map = _as_dict(mail.get("dkim"))
+    mta_sts = _as_dict(mail.get("mta_sts"))
+    bimi = _as_dict(mail.get("bimi"))
+    dkim_present = any(isinstance(entry, dict) and bool(entry.get("present")) for entry in dkim_map.values())
+    return MailSummaryOut(
+        status="ok",
+        spf=bool(spf.get("present")),
+        dmarc_policy=dmarc.get("policy") if dmarc.get("present") else None,
+        dkim=dkim_present,
+        mta_sts=bool(mta_sts.get("txt_present")),
+        bimi=bool(bimi.get("present")),
+    )
+
+
+def _domain_out(row: Domain, session: Any) -> DomainOut:
+    assert row.id is not None  # row came from a select() on the DB, so it always has a primary key
+    return DomainOut(**_domain_fields(row), mail=_mail_summary(_latest_snapshot(session, row.id)))
 
 
 def _get_domain(normalized: str) -> Domain:
@@ -186,7 +247,7 @@ def list_domains(ownership: Optional[str] = None, source: Optional[str] = None) 
         if source is not None:
             statement = statement.where(Domain.source == source)
         rows = session.exec(statement.order_by(col(Domain.name))).all()
-    return [_domain_out(row) for row in rows]
+        return [_domain_out(row, session) for row in rows]
 
 
 @router.get("/domains/egress-ip", response_model=EgressIpOut)
@@ -228,6 +289,7 @@ def get_domain(name: str) -> DomainDetailOut:
     latest = snapshots[0] if snapshots else None
     return DomainDetailOut(
         **fields,
+        mail=_mail_summary(latest),
         latest=json.loads(latest.data) if latest is not None else None,
         latest_taken_at=iso_z(latest.taken_at) if latest is not None else None,
         history=[SnapshotSummary(taken_at=iso_z(s.taken_at), data_hash=s.data_hash) for s in snapshots],
@@ -241,7 +303,8 @@ def add_domain(body: AddBody) -> DomainOut:
         row = inventory.add_manual(body.name, body.ownership)
     except ValueError as exc:
         raise _coded(422, "invalid_domain", str(exc)) from None
-    return _domain_out(row)
+    with db.get_session() as session:
+        return _domain_out(row, session)
 
 
 @router.delete("/domains/{name}", status_code=204)

@@ -4,6 +4,17 @@
 // while sending the exact same CSRF header, JSON body and error normalization.
 import { ApiError } from '~/composables/useApi'
 
+// api/routers/domains.py MailSummaryOut: a presence-only summary of the domain's latest stored
+// mail-posture snapshot. status "unavailable" means no snapshot has been taken yet (never synced).
+export interface MailSummaryOut {
+  status: string // "ok" | "error" | "unavailable"
+  spf: boolean
+  dmarc_policy: string | null // null: no DMARC record; otherwise the published policy (reject/quarantine/none)
+  dkim: boolean
+  mta_sts: boolean
+  bimi: boolean
+}
+
 export interface DomainOut {
   name: string
   ownership: string
@@ -16,6 +27,7 @@ export interface DomainOut {
   first_seen: string | null
   last_seen: string | null
   missing_since: string | null
+  mail: MailSummaryOut
 }
 
 export interface SnapshotSummary {

@@ -252,10 +252,17 @@ def install_rdap(monkeypatch) -> None:
     """
     whoisit is a true external: lookup_rdap's domain_lookup/bootstrap/is_bootstrapped keywords
     default to the real whoisit.domain/bootstrap/is_bootstrapped, bound once at def time, so
-    patching the whoisit module itself would not reach an already-bound default. Patching
-    lookup_rdap's own __defaults__ is the seam pipeline/domains/rdap.py actually exposes.
-    Every lookup reports not_found (a real whoisit.errors exception), keeping the "rdap" section
-    stable across snapshots so it never masks the DNS-driven ns_changed assertion.
+    patching the whoisit module itself would not reach an already-bound default.
+
+    All three are keyword-only (declared after the bare "*" in lookup_rdap's signature), so their
+    defaults live in __kwdefaults__ (a dict keyed by name), not __defaults__ (a tuple, and here an
+    empty one, since lookup_rdap's only positional parameter — name — has no default of its own).
+    This file previously patched __defaults__, which is simply never consulted for a keyword-only
+    parameter: the assignment silently succeeded and silently did nothing, so every call here was
+    quietly falling through to the real whoisit.bootstrap()/whoisit.domain() — caught only because
+    a live run occasionally hit whoisit's real follow_related sub-query against a rate-limited RDAP
+    server for "mailcheck.com" and took 30+ real seconds instead of the usual ~2. __kwdefaults__ is
+    the seam pipeline/domains/rdap.py actually exposes for these three.
     """
 
     def fake_domain_lookup(name: str) -> dict:
@@ -263,9 +270,28 @@ def install_rdap(monkeypatch) -> None:
 
     monkeypatch.setattr(
         domain_rdap.lookup_rdap,
-        "__defaults__",
-        (fake_domain_lookup, lambda *a, **kw: None, lambda: True),
+        "__kwdefaults__",
+        {"domain_lookup": fake_domain_lookup, "bootstrap": lambda *a, **kw: None, "is_bootstrapped": lambda: True},
     )
+
+
+def block_real_network(monkeypatch) -> None:
+    """
+    Hard backstop for this file's module-docstring "no network" contract, on top of install_rdap's
+    now-corrected __kwdefaults__ patch above. Every registrar, DNS and RDAP call is already faked
+    at its own construction point (install_namecheap/install_godaddy/FakeResolver/install_rdap), so
+    nothing legitimate in this file ever opens a real socket: TestClient's ASGI transport calls the
+    app in-process, and sqlite3 talks to a local file, not a socket. Blocking socket.socket.connect
+    turns any future gap in one of those fakes into an immediate, loud ConnectionError instead of a
+    silent real network round-trip that happens to still pass — the class of bug __kwdefaults__ vs.
+    __defaults__ just was.
+    """
+    import socket
+
+    def _blocked_connect(self, address):
+        raise ConnectionError(f"tests/test_domains_e2e.py blocks real network access; attempted connect to {address!r}")
+
+    monkeypatch.setattr(socket.socket, "connect", _blocked_connect)
 
 
 # --- fixtures -------------------------------------------------------------------------------------
@@ -316,6 +342,7 @@ def env(monkeypatch, tmp_path) -> Iterator[Env]:
     resolver = FakeResolver()
     monkeypatch.setattr(domain_dns, "_make_resolver", lambda: resolver)
     install_rdap(monkeypatch)
+    block_real_network(monkeypatch)
 
     nc_state = NamecheapState()
     gd_state = GodaddyState()
@@ -403,6 +430,44 @@ def test_sync_lists_domains_from_both_registrars(env):
         assert listed["gd-beta.com"]["ownership"] == "owned"
     env.capture.assert_clean()
     env.capture.assert_items_clean()
+
+
+def test_list_and_detail_carry_a_mail_posture_summary_from_the_real_snapshot(env):
+    """The Portfolio/Watchlist table's Mail column (api/routers/domains.py MailSummaryOut) reuses
+    the mail-posture data pipeline.domains.snapshot.inspect() already computes at sync time — no
+    new DNS lookup for this feature, so the real mail_posture() runs here, through the fake
+    resolver, exactly as it does in production."""
+    env.gd_state.domains = [
+        {"domain": "mailcheck.com", "expires": "2027-09-21T00:00:00.000Z", "renewAuto": True, "locked": True}
+    ]
+    with env.app() as client:
+        # A manually-added domain has never been through refresh_snapshots(): no stored snapshot
+        # yet. sync_all() and refresh_snapshots() always run together (POST /domains/sync), so this
+        # is the only realistic way to observe the "unavailable" state.
+        added = client.post("/api/domains", json={"name": "neversynced.com", "ownership": "owned"})
+        assert added.status_code == 201
+        assert added.json()["mail"] == {
+            "status": "unavailable", "spf": False, "dmarc_policy": None, "dkim": False, "mta_sts": False, "bimi": False,
+        }
+
+        assert create_godaddy(client).status_code == 201
+        env.resolver.records[("mailcheck.com", "MX")] = ["10 mail.mailcheck.com."]
+        env.resolver.records[("mailcheck.com", "TXT")] = ["v=spf1 -all"]
+        env.resolver.records[("_dmarc.mailcheck.com", "TXT")] = ["v=DMARC1; p=reject"]
+        # DKIM (every selector), MTA-STS and BIMI deliberately left unset: NXDOMAIN, i.e. "missing".
+
+        assert client.post("/api/domains/sync").status_code == 200
+
+        listed = next(row for row in client.get("/api/domains").json() if row["name"] == "mailcheck.com")
+        assert listed["mail"] == {"status": "ok", "spf": True, "dmarc_policy": "reject", "dkim": False, "mta_sts": False, "bimi": False}
+
+        # The detail route's summary must agree with the list route's (both read the same latest
+        # snapshot), and its own richer "latest.mail" section carries the same underlying data.
+        detail = client.get("/api/domains/mailcheck.com").json()
+        assert detail["mail"] == listed["mail"]
+        assert detail["latest"]["mail"]["spf"]["present"] is True
+        assert detail["latest"]["mail"]["dmarc"]["policy"] == "reject"
+    env.capture.assert_clean()
 
 
 # --- scenario: domain_buy's static routes are not shadowed by domains.py's GET /domains/{name} -----
