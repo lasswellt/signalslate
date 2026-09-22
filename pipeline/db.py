@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import event
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, col, create_engine, func, select
 
 from pipeline.clock import utcnow
 
@@ -78,6 +78,110 @@ class SourceCursor(SQLModel, table=True):
     # licensed, say) would otherwise freeze the watermark forever, re-fetching the full backfill
     # window every day for good. See runner.MAX_STUCK_RUNS.
     consecutive_failures: int = 0
+    # Last collection attempt, successful or not. last_success_at only moves on a clean run, so it
+    # cannot tell "never tried" from "tried and failed". These four columns are all nullable on
+    # purpose: _add_missing_columns() silently skips a NOT NULL column without a Python default,
+    # which would leave an existing install raising "no such column" on every cursor read.
+    last_attempt_at: Optional[datetime] = None
+    last_status: Optional[str] = None  # "ok" | "error"
+    last_detail: Optional[str] = None
+    last_item_count: Optional[int] = None
+
+
+class Connection(SQLModel, table=True):
+    """
+    One configured source, editable from the management UI. `id` equals the source id used by
+    CollectedItem.source, SourceHealth.source and SourceCursor.source, so nothing downstream
+    needs a lookup.
+
+    `config` holds NON-secret fields as JSON. `secret_ciphertext` is an encrypted JSON envelope of
+    the secrets dict, kept in a plain nullable TEXT column and encrypted/decrypted only in the
+    service module (a TypeDecorator would hide the crypto from callers and make every ORM load
+    attempt a decrypt).
+    """
+    id: str = Field(primary_key=True)
+    kind: str  # "m365" | "zoom" | "slack" | "gmail"
+    label: str  # the alias for m365, the literal "zoom" for zoom
+    origin: str  # "env" | "ui"
+    seq: int = 0  # stable creation order; numbers the M365_ORG<n> env keys
+    config: str  # JSON of non-secret fields
+    secret_ciphertext: Optional[str] = None
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class Tombstone(SQLModel, table=True):
+    """A deleted connection id: stops the startup .env seeding from re-creating a connection the user removed."""
+    id: str = Field(primary_key=True)
+    deleted_at: datetime = Field(default_factory=utcnow)
+
+
+class Domain(SQLModel, table=True):
+    """
+    A domain in the owner's portfolio — state, not an event. Unlike CollectedItem, one row per
+    domain is updated in place by each refresh rather than appended; `first_seen`/`last_seen`/
+    `missing_since` track that lifecycle without a delete (a registrar drop should read as history,
+    not disappear).
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True, index=True)  # lower-case punycode
+    ownership: str = "owned"  # owned | watched
+    source: str  # namecheap | godaddy | wordpress | manual
+    connection_id: Optional[str] = Field(default=None, foreign_key="connection.id")
+    expires_at: Optional[datetime] = None
+    auto_renew: Optional[bool] = None
+    locked: Optional[bool] = None
+    privacy: Optional[bool] = None
+    first_seen: datetime = Field(default_factory=utcnow)
+    last_seen: datetime = Field(default_factory=utcnow)
+    # Set when a refresh no longer lists this domain at its registrar; cleared if it reappears.
+    # Nullable/no-default columns above stay off an existing install's ALTER TABLE path (db.py:83);
+    # this table is new, so create_all() covers it regardless — kept nullable for future columns.
+    missing_since: Optional[datetime] = None
+
+
+class DomainSnapshot(SQLModel, table=True):
+    """
+    One point-in-time capture of a domain's public state (DNS, RDAP, mail posture) as JSON. The
+    `domains` digest collector diffs consecutive snapshots for one domain rather than re-fetching;
+    `data_hash` lets it skip a full JSON diff when nothing changed.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    domain_id: int = Field(foreign_key="domain.id", index=True)
+    taken_at: datetime = Field(default_factory=utcnow)
+    data: str  # JSON blob: DNS records, RDAP registration, mail posture
+    data_hash: str  # hash of `data`, for cheap unchanged-snapshot detection
+
+
+class DomainQuote(SQLModel, table=True):
+    """
+    A server-issued, short-lived price quote from a registrar `check` call. `id` is a UUID chosen
+    by the caller so it can be handed to the client and referenced by a later purchase without a
+    lookup. Money is stored as decimal strings — SQLite has no native Decimal type and float would
+    silently corrupt cents.
+    """
+    id: str = Field(primary_key=True)  # uuid4 hex
+    name: str = Field(index=True)
+    connection_id: str = Field(foreign_key="connection.id")
+    price: str  # first-year price, decimal as str, account currency
+    renewal_price: Optional[str] = None  # decimal as str
+    currency: str
+    premium: bool = False
+    expires_at: datetime  # quote TTL (5 min); enforced by the purchase route, not the DB
+
+
+class DomainPurchase(SQLModel, table=True):
+    """
+    A purchase intent, inserted as `pending` before the registrar call and updated after. The
+    unique `quote_id` is the whole double-submit guard: a retry (client or user) that references
+    the same quote fails on insert rather than buying twice.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    quote_id: str = Field(unique=True, index=True, foreign_key="domainquote.id")
+    status: str = "pending"  # pending | succeeded | failed | unknown
+    price: str  # decimal as str, what was actually charged/attempted
+    created_at: datetime = Field(default_factory=utcnow)
+    detail: Optional[str] = None  # redacted registrar response/error — never a raw credential
 
 
 def _add_missing_columns() -> None:
@@ -163,6 +267,40 @@ def items_for_source_since(source: str, since: datetime) -> list[CollectedItem]:
     return sorted(rows, key=lambda row: (row.occurred_at, row.id or 0))
 
 
+MAX_ITEM_PAGE = 200
+MAX_DETAIL_CHARS = 500
+
+
+def list_items(
+    source: str, item_type: Optional[str] = None, before_id: Optional[int] = None, limit: int = 50
+) -> list[CollectedItem]:
+    """
+    One source's items, newest first, one keyset page at a time.
+
+    Keyed on id rather than an offset: collection keeps inserting while the UI pages, and an offset
+    would shift under the reader and repeat or skip rows. `before_id` is exclusive, so the last id of
+    one page is passed straight back for the next. `limit` is clamped to 1..MAX_ITEM_PAGE.
+    """
+    limit = max(1, min(limit, MAX_ITEM_PAGE))
+    statement = select(CollectedItem).where(CollectedItem.source == source)
+    if item_type is not None:
+        statement = statement.where(CollectedItem.item_type == item_type)
+    if before_id is not None:
+        statement = statement.where(col(CollectedItem.id) < before_id)
+    statement = statement.order_by(col(CollectedItem.id).desc()).limit(limit)
+    with get_session() as session:
+        return list(session.exec(statement))
+
+
+def count_items(source: str, item_type: Optional[str] = None) -> int:
+    """How many items one source has stored, optionally narrowed to one item_type."""
+    statement = select(func.count()).select_from(CollectedItem).where(CollectedItem.source == source)
+    if item_type is not None:
+        statement = statement.where(CollectedItem.item_type == item_type)
+    with get_session() as session:
+        return session.exec(statement).one()
+
+
 def item_counts_for_run(run_id: int) -> dict[str, int]:
     """{source: count} for one run — feeds the run summary string without loading every payload."""
     counts: dict[str, int] = {}
@@ -217,6 +355,53 @@ def record_failure(source: str) -> int:
         session.add(row)
         session.commit()
         return row.consecutive_failures
+
+
+def reset_cursor(source: str, to: Optional[datetime]) -> None:
+    """
+    Move a source's watermark for a re-backfill. None deletes the row, so the next run collects the
+    full window as on first use; a datetime behaves exactly like set_cursor (and clears the streak).
+    """
+    if to is not None:
+        set_cursor(source, to)
+        return
+    with get_session() as session:
+        row = session.get(SourceCursor, source)
+        if row is not None:
+            session.delete(row)
+            session.commit()
+
+
+def clear_failures(source: str) -> None:
+    """Zero the failure streak only. The watermark stays: the source did not just collect cleanly."""
+    with get_session() as session:
+        row = session.get(SourceCursor, source)
+        if row is not None:
+            row.consecutive_failures = 0
+            session.add(row)
+            session.commit()
+
+
+def record_attempt(
+    source: str, status: str, detail: Optional[str], item_count: Optional[int], at: Optional[datetime] = None
+) -> None:
+    """
+    Note that a collection was attempted, whatever the outcome.
+
+    Deliberately leaves last_success_at and consecutive_failures alone: those belong to set_cursor and
+    record_failure, and a failed attempt must not move the watermark. `detail` is truncated because
+    it can carry an upstream error body.
+    """
+    with get_session() as session:
+        row = session.get(SourceCursor, source)
+        if row is None:
+            row = SourceCursor(source=source)
+        row.last_attempt_at = at if at is not None else utcnow()
+        row.last_status = status
+        row.last_detail = detail[:MAX_DETAIL_CHARS] if detail is not None else None
+        row.last_item_count = item_count
+        session.add(row)
+        session.commit()
 
 
 def reap_orphaned_runs() -> int:

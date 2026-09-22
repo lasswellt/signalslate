@@ -4,15 +4,19 @@ GET /api/status and the pipeline runner. Each returns a plain result instead of 
 and exiting, so callers (API, scheduler) can handle failure without a crashed process.
 """
 import base64
+import contextvars
 import os
 import re
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Iterator, Mapping, Optional
 
 import msal
 import requests
 from dotenv import dotenv_values
+
+from pipeline import tokencache
 
 ROOT = Path(__file__).resolve().parent.parent
 TOKEN_DIR = ROOT / "tokens"
@@ -57,13 +61,15 @@ class HealthResult:
     detail: str
 
 
-def _env() -> dict:
+def _raw_env() -> dict:
     """
-    Config from .env, with the real environment taking precedence.
+    Config from .env, with the real environment taking precedence, and NO connection-store overlay.
 
-    Both are needed. Local dev reads the file; the container has no .env at all — the Dockerfile
-    doesn't copy it and compose's `env_file:` injects it into the process environment instead — so
-    reading only the file made every tenant and workspace invisible once deployed.
+    Both sources are needed. Local dev reads the file; the container has no .env at all — the
+    Dockerfile doesn't copy it and compose's `env_file:` injects it into the process environment
+    instead — so reading only the file made every tenant and workspace invisible once deployed.
+    Startup seeding reads this, not _env(): it must see what .env declares, not what the store
+    already replaced.
     """
     merged = dict(dotenv_values(ROOT / ".env"))
     for key, value in os.environ.items():
@@ -72,9 +78,105 @@ def _env() -> dict:
     return merged
 
 
+# Registered by startup, never imported: pipeline.connections imports the database layer and this
+# module is imported by nearly everything, so a module-level import back would be a cycle. The
+# provider and its family test are ONE tuple so a reader on another thread can never see a new
+# provider paired with the old test.
+_overlay: Optional[tuple[Callable[[], Optional[Mapping[str, str]]], Callable[[str], bool]]] = None
+# Per-context, not per-process: only the run (or test-connection) that entered sees its own view.
+# A thread that never entered reads None and takes the live path.
+_frozen_env: contextvars.ContextVar[Optional[dict]] = contextvars.ContextVar("signalslate_frozen_env", default=None)
+_env_layer: contextvars.ContextVar[Optional[dict]] = contextvars.ContextVar("signalslate_env_layer", default=None)
+
+
+def set_env_overlay_provider(
+    provider: Optional[Callable[[], Optional[Mapping[str, str]]]],
+    family_test: Optional[Callable[[str], bool]],
+) -> None:
+    """
+    Registers where the connection store's env-style keys come from, or removes it.
+
+    provider: returns the overlay mapping, or None to leave the environment untouched (no vault).
+    family_test: True for a key the store owns; those keys are DROPPED from the raw environment
+    before the overlay is added, so a connection deleted in the UI cannot come back through a
+    stale .env line or the container's injected environment. Passing None for either clears both.
+    """
+    global _overlay
+    _overlay = (provider, family_test) if provider is not None and family_test is not None else None
+
+
+def _live_env() -> dict:
+    """The raw environment with the registered overlay applied. Identical to _raw_env() when none is."""
+    merged = _raw_env()
+    registered = _overlay
+    if registered is None:
+        return merged
+    provider, family_test = registered
+    overlay = provider()
+    if overlay is None:
+        return merged
+    # The provider hands out a read-only mapping shared between threads: copy it, never mutate it.
+    merged = {key: value for key, value in merged.items() if not family_test(key)}
+    merged.update(dict(overlay))
+    return merged
+
+
+def _env() -> dict:
+    """
+    The config every collector and health check reads: the overlaid environment, frozen when the
+    calling context holds an env_snapshot, with any env_override layered on top.
+
+    Always a fresh dict, so a caller that edits it cannot corrupt a frozen snapshot.
+    """
+    frozen = _frozen_env.get()
+    env = dict(frozen) if frozen is not None else _live_env()
+    layer = _env_layer.get()
+    if layer:
+        env.update(layer)
+    return env
+
+
+def env() -> dict:
+    """Public read of the same config for callers outside this module."""
+    return _env()
+
+
+@contextmanager
+def env_snapshot() -> Iterator[None]:
+    """
+    Freezes the overlaid environment for the calling context, so every _env() inside sees one
+    consistent view even if a connection is edited meanwhile (known_sources() and dispatch() must
+    agree within a run). Nested use keeps the outer snapshot. Threads that did not enter are unaffected.
+    """
+    if _frozen_env.get() is not None:
+        yield
+        return
+    token = _frozen_env.set(_live_env())
+    try:
+        yield
+    finally:
+        _frozen_env.reset(token)
+
+
+@contextmanager
+def env_override(mapping: Mapping[str, str]) -> Iterator[None]:
+    """
+    Layers candidate keys over the frozen or current environment for the calling context, so a
+    connection can be tested with credentials that are not saved yet. Restored on exit; nests.
+    """
+    token = _env_layer.set({**(_env_layer.get() or {}), **mapping})
+    try:
+        yield
+    finally:
+        _env_layer.reset(token)
+
+
 # Non-prefixed keys worth picking up from the environment. Deliberately a fixed list rather than
 # merging all of os.environ, which would pull in hundreds of unrelated container variables.
-_SINGLE_KEYS = {"RMAPI_CONFIG", "LAN_HOST", "TZ", "ANTHROPIC_API_KEY", "SIGNALSLATE_MAP_MODEL"}
+_SINGLE_KEYS = {
+    "RMAPI_CONFIG", "LAN_HOST", "TZ", "ANTHROPIC_API_KEY", "SIGNALSLATE_MAP_MODEL",
+    "SIGNALSLATE_SECRET_KEY", "WEB_ORIGINS", "PUBLIC_BASE_URL",
+}
 
 # Model ids are config, not code: Anthropic announces retirements with notice, and Haiku 4.5's is
 # "not sooner than October 15, 2026". Re-check the deprecations page before that date and override
@@ -95,6 +197,38 @@ def llm_settings() -> dict:
     api_key = (env.get("ANTHROPIC_API_KEY") or "").strip() or None
     map_model = (env.get("SIGNALSLATE_MAP_MODEL") or "").strip() or DEFAULT_MAP_MODEL
     return {"api_key": api_key, "map_model": map_model}
+
+
+def secret_key_setting() -> Optional[str]:
+    """SIGNALSLATE_SECRET_KEY as written (a comma-separated key list), None when unset or blank."""
+    return (_env().get("SIGNALSLATE_SECRET_KEY") or "").strip() or None
+
+
+def web_origins() -> list[str]:
+    """
+    Origins allowed to make mutating requests: WEB_ORIGINS split on commas, blanks dropped.
+
+    Unset (or all blank) defaults to the dev frontend, plus the same port on LAN_HOST when that is
+    set, since that is the address the UI is opened at from another machine on the network.
+    """
+    env = _env()
+    origins = [part.strip() for part in (env.get("WEB_ORIGINS") or "").split(",") if part.strip()]
+    if origins:
+        return origins
+    origins = ["http://localhost:3000"]
+    lan_host = (env.get("LAN_HOST") or "").strip()
+    if lan_host:
+        origins.append(f"http://{lan_host}:3000")
+    return origins
+
+
+def public_base_url() -> Optional[str]:
+    """
+    PUBLIC_BASE_URL without a trailing slash, or None when unset or not https. It comes from config
+    only, never from request headers: OAuth redirect URIs built from a Host header are spoofable.
+    """
+    url = (_env().get("PUBLIC_BASE_URL") or "").strip().rstrip("/")
+    return url if url.lower().startswith("https://") else None
 
 
 def env_flag(key: str) -> bool:
@@ -168,7 +302,9 @@ def m365_tenant_config(alias: str) -> Optional[dict]:
 
 
 def m365_cache_path(alias: str) -> Path:
-    return TOKEN_DIR / f"{alias}_cache.bin"
+    # TOKEN_DIR is passed explicitly: tokencache has its own TOKEN_DIR, and callers (tests, the
+    # bootstrap scripts) repoint this module's, so the default would read the real tokens/ directory.
+    return tokencache.cache_path(alias, token_dir=TOKEN_DIR)
 
 
 def m365_app(cfg: dict, cache: msal.SerializableTokenCache) -> msal.PublicClientApplication:
@@ -186,22 +322,31 @@ def check_m365(alias: str) -> HealthResult:
     if cfg is None:
         return HealthResult(source, "error", f"No usable .env entry for alias={alias!r} (tenant_id + client_id)")
 
-    cache_path = m365_cache_path(alias)
-    if not cache_path.exists():
-        return HealthResult(source, "error", "No token cache — run auth/m365_bootstrap.py once on a machine with a browser")
+    # An alias is a filename component; one tokencache refuses (traversal, empty, too long) must become
+    # this source's error, not a ValueError that aborts check_all_configured for every other source.
+    try:
+        tokencache.cache_path(alias, token_dir=TOKEN_DIR)
+    except ValueError:
+        return HealthResult(source, "error", "Alias cannot name a token cache file: use 1-64 letters, digits, '_', '.' or '-', starting with a letter or digit")
 
-    cache = msal.SerializableTokenCache()
-    cache.deserialize(cache_path.read_text())
-    app = m365_app(cfg, cache)
-    accounts = app.get_accounts()
-    if not accounts:
-        return HealthResult(source, "error", "Cache has no account — re-run auth/m365_bootstrap.py")
+    # The lock spans load -> refresh -> save: MSAL rotates the refresh token on use, so two
+    # unserialized refreshes of one alias strand the loser's token.
+    with tokencache.locked(alias, token_dir=TOKEN_DIR):
+        cache = tokencache.load(alias, token_dir=TOKEN_DIR)
+        if cache is None:
+            if not m365_cache_path(alias).exists():
+                return HealthResult(source, "error", "No token cache — run auth/m365_bootstrap.py once on a machine with a browser")
+            return HealthResult(source, "error", "Token cache unreadable: re-run sign-in")
 
-    # _with_error distinguishes "nothing cached" (None) from "refresh rejected" (error dict), so
-    # a revoked refresh token surfaces its AADSTS code on the dashboard instead of a generic message.
-    result = app.acquire_token_silent_with_error(SCOPES, account=accounts[0])
-    if cache.has_state_changed:
-        cache_path.write_text(cache.serialize())
+        app = m365_app(cfg, cache)
+        accounts = app.get_accounts()
+        if not accounts:
+            return HealthResult(source, "error", "Cache has no account — re-run auth/m365_bootstrap.py")
+
+        # _with_error distinguishes "nothing cached" (None) from "refresh rejected" (error dict), so
+        # a revoked refresh token surfaces its AADSTS code on the dashboard instead of a generic message.
+        result = app.acquire_token_silent_with_error(SCOPES, account=accounts[0])
+        tokencache.save(alias, cache, token_dir=TOKEN_DIR)
 
     if not result:
         return HealthResult(source, "error", "No token in cache for these scopes — re-run auth/m365_bootstrap.py")
@@ -279,13 +424,18 @@ def gmail_token_response(label: str) -> dict:
     requests.RequestException (incl. HTTPError) for every other failure.
     """
     env = _env()
-    client_id = env.get("GMAIL_CLIENT_ID")
-    client_secret = env.get("GMAIL_CLIENT_SECRET")
+    # A per-label pair wins so one account can use its own OAuth client; today's configs only
+    # declare the shared pair and keep working through the fallback.
+    upper = label.upper()
+    client_id = env.get(f"GMAIL_{upper}_CLIENT_ID") or env.get("GMAIL_CLIENT_ID")
+    client_secret = env.get(f"GMAIL_{upper}_CLIENT_SECRET") or env.get("GMAIL_CLIENT_SECRET")
     if not all([client_id, client_secret]):
         raise RuntimeError("Missing GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET in .env")
     refresh_token = gmail_accounts().get(label.lower())
     if not refresh_token:
-        raise RuntimeError(f"No GMAIL_{label.upper()}_REFRESH_TOKEN in .env — run auth/gmail_bootstrap.py {label}")
+        raise RuntimeError(
+            f"Not signed in yet: use Sign in, or run auth/gmail_bootstrap.py {label} (no GMAIL_{label.upper()}_REFRESH_TOKEN)"
+        )
 
     resp = requests.post(
         "https://oauth2.googleapis.com/token",
@@ -316,6 +466,10 @@ def gmail_token_response(label: str) -> dict:
 
 def check_gmail(label: str) -> HealthResult:
     source = f"gmail_{label}"
+    # A connection created in the UI has no token until its first sign-in. Answer before any
+    # network call: exchanging an empty refresh token would only produce a confusing Google error.
+    if not gmail_accounts().get(label.lower()):
+        return HealthResult(source, "error", "Not signed in yet: use Sign in")
     try:
         data = gmail_token_response(label)
     except GmailAuthError as exc:
@@ -372,13 +526,38 @@ def check_slack(label: str, token: Optional[str]) -> HealthResult:
     return HealthResult(source, "ok", f"user={data['user']} team={data['team']}, {len(granted)} scopes")
 
 
+def check_domains() -> HealthResult:
+    """
+    "domains" is always healthy: it reads only the local DomainSnapshot table (no network, no
+    credentials — see pipeline.collectors.domains), so there is nothing to authenticate and an
+    empty portfolio is not a failure. Only a broken DB session counts as unhealthy.
+
+    Imported locally, matching dispatch()'s own local import of pipeline.collectors.domains: this
+    module is imported by nearly everything (see module docstring), so a module-level import of the
+    database layer here should stay avoidable even though pipeline.db itself doesn't import back.
+    """
+    from sqlmodel import select
+
+    from pipeline import db
+    from pipeline.db import Domain
+
+    try:
+        with db.get_session() as session:
+            count = len(session.exec(select(Domain)).all())
+    except Exception as exc:  # noqa: BLE001 — a health check must report, never crash the run
+        return HealthResult("domains", "error", type(exc).__name__)
+    return HealthResult("domains", "ok", f"{count} domain(s) tracked")
+
+
 def known_sources() -> list[str]:
-    """Every source id the current .env declares: m365_<alias>, zoom, slack_<label>, gmail_<label>."""
+    """Every source id the current .env declares: m365_<alias>, zoom, slack_<label>, gmail_<label>,
+    plus the always-available "domains" source (local DB, no .env entry needed)."""
     return (
         [f"m365_{a}" for a in m365_aliases()]
         + ["zoom"]
         + [f"slack_{l}" for l in slack_workspaces()]
         + [f"gmail_{l}" for l in gmail_accounts()]
+        + ["domains"]
     )
 
 
@@ -392,6 +571,9 @@ def check_all_configured(active_sources: dict[str, bool]) -> list[HealthResult]:
 
     if active_sources.get("zoom", False):
         results.append(check_zoom())
+
+    if active_sources.get("domains", False):
+        results.append(check_domains())
 
     for label, token in slack_workspaces().items():
         if active_sources.get(f"slack_{label}", False):

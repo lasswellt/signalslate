@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
 
+from api.serialize import iso_z
 from pipeline.db import get_run, has_running_run, list_runs, source_health_for_run
 from pipeline.runner import execute_run
 
@@ -14,8 +15,8 @@ def _run_to_dict(run) -> dict:
         "id": run.id,
         "trigger": run.trigger,
         "status": run.status,
-        "started_at": run.started_at,
-        "finished_at": run.finished_at,
+        "started_at": iso_z(run.started_at),
+        "finished_at": iso_z(run.finished_at),
         "summary": run.summary,
         "error": run.error,
         "has_pdf": bool(run.pdf_path),
@@ -35,7 +36,7 @@ def get_run_detail(run_id: int):
     return {
         **_run_to_dict(run),
         "source_health": [
-            {"source": h.source, "status": h.status, "detail": h.detail, "checked_at": h.checked_at}
+            {"source": h.source, "status": h.status, "detail": h.detail, "checked_at": iso_z(h.checked_at)}
             for h in source_health_for_run(run_id)
         ],
     }

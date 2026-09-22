@@ -10,9 +10,9 @@ Deliberately no delta queries and no $batch; see this package's docstring.
 from datetime import datetime, timedelta
 from typing import Iterator, Optional
 
-import msal
 import requests
 
+from pipeline import health, tokencache
 from pipeline.collectors import CollectionResult, Item, parse_iso, to_graph_time
 from pipeline.health import SCOPES, m365_app, m365_cache_path, m365_tenant_config
 
@@ -48,21 +48,23 @@ def access_token(alias: str) -> str:
     if cfg is None:
         raise GraphError(f"No usable .env entry for alias={alias!r}")
 
-    cache_path = m365_cache_path(alias)
-    if not cache_path.exists():
-        raise GraphError("No token cache — run auth/m365_bootstrap.py once on a machine with a browser")
+    # health.TOKEN_DIR, not tokencache's own: the two must agree on which directory holds the cache.
+    # The lock spans load -> refresh -> save so a concurrent health check on the alias cannot lose
+    # the rotated refresh token.
+    with tokencache.locked(alias, token_dir=health.TOKEN_DIR):
+        cache = tokencache.load(alias, token_dir=health.TOKEN_DIR)
+        if cache is None:
+            if not m365_cache_path(alias).exists():
+                raise GraphError("No token cache — run auth/m365_bootstrap.py once on a machine with a browser")
+            raise GraphError("Token cache unreadable: re-run sign-in")
 
-    cache = msal.SerializableTokenCache()
-    cache.deserialize(cache_path.read_text())
-    app = m365_app(cfg, cache)
+        app = m365_app(cfg, cache)
+        accounts = app.get_accounts()
+        if not accounts:
+            raise GraphError("Cache has no account — re-run auth/m365_bootstrap.py")
 
-    accounts = app.get_accounts()
-    if not accounts:
-        raise GraphError("Cache has no account — re-run auth/m365_bootstrap.py")
-
-    result = app.acquire_token_silent_with_error(SCOPES, account=accounts[0])
-    if cache.has_state_changed:
-        cache_path.write_text(cache.serialize())
+        result = app.acquire_token_silent_with_error(SCOPES, account=accounts[0])
+        tokencache.save(alias, cache, token_dir=health.TOKEN_DIR)
 
     if not result or "access_token" not in result:
         detail = (result or {}).get("error_description") or (result or {}).get("error") or "silent refresh failed"

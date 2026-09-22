@@ -14,8 +14,9 @@ Self-hosted, LAN-only, runs anywhere Docker runs.
 | Gmail (any number of accounts) | Mail | OAuth Desktop client, one-time interactive sign-in per account |
 | reMarkable | Delivery target for the rendered PDF | One-time device pairing via `rmapi` |
 
-Sources are declared in `.env` and toggled per-run in the web UI. Adding a tenant, workspace or
-account is one more block of environment variables; nothing in the code is fixed to a count.
+Sources are declared in `.env` or added in the web UI's [Management UI](#management-ui), and
+toggled per-run there. Adding a tenant, workspace or account is one more block of environment
+variables or one more connection; nothing in the code is fixed to a count.
 
 ## Phases
 
@@ -234,7 +235,7 @@ pagination against stubbed responses. No network — which is exactly why the dr
 ## Web interface
 
 FastAPI backend + Nuxt 3/Quasar frontend in the same Docker stack. Dashboard, run history, manual
-trigger, and config editor.
+trigger, config editor, connection management and collector tools.
 
 ```
 cp .env.example .env   # set LAN_HOST to the Docker host's LAN address
@@ -247,6 +248,103 @@ docker compose up -d --build
 `data/` (SQLite DB + config.json) and `tokens/` are bind-mounted so they survive rebuilds — back
 both up.
 
+### Management UI
+
+The **Connections** page adds, edits, tests, enables and deletes Microsoft 365 tenants, Zoom, Slack
+workspaces and Gmail accounts, and signs Microsoft 365 and Gmail in from the browser. The
+**Collectors** page runs one source, dry-runs it, resets its watermark, clears its failures and
+browses the items it collected. Connection ids match the `.env` naming: `m365_<alias>`, `zoom`,
+`slack_<label>`, `gmail_<label>`. A new connection is created **inactive**: test it, then switch it
+on. Todoist, reMarkable and the Anthropic API key are not managed here; they stay in `.env`, as
+does everything else not listed above (`TZ`, `LAN_HOST`, and so on).
+
+**Security model.** There is no login on the interface or the API. Run it on a trusted network or
+behind a reverse proxy that authenticates, and never expose ports 3000 and 8000 to the internet.
+Secrets are write-only: the API reports which secrets are set, never their values, and nothing
+returns or logs a secret after it is saved. Changes are accepted only from the browser origins in
+`WEB_ORIGINS` and only with the `X-Requested-With: signalslate` header, which the web app sends, so
+another website cannot drive the API from your browser.
+
+**Upgrading: the API now checks the Host header.** To defend against DNS-rebinding reads (a hostile
+website pointing its own name at your server to read the API from your browser), the API answers
+`400 host_not_allowed`, `/api/health` included, for any `Host` that is not `localhost`,
+`127.0.0.1`, `::1`, `LAN_HOST`, the hostname of an entry in `WEB_ORIGINS`, or the host of
+`PUBLIC_BASE_URL`. If you reach the API by any other name, or a reverse proxy forwards a different
+`Host` (for example the compose service name `api`), list those names in the new optional
+`ALLOWED_HOSTS`. It is not authentication: anyone who can reach the ports can still use the API.
+`ALLOWED_HOSTS` is comma-separated, hostnames only (no scheme, path or port; ports are ignored),
+case-insensitive, and IPv6 works with or without brackets. Wildcards are dropped, and the number
+dropped is logged at startup. `WEB_ORIGINS` and `ALLOWED_HOSTS` are read once at startup, so
+changing either needs a restart.
+
+**Encryption key.** Stored secrets are encrypted at rest with `SIGNALSLATE_SECRET_KEY`:
+
+```
+python -m pipeline.crypto genkey     # prints one key; put it in .env
+```
+
+- Losing the key loses every stored secret. Back it up separately from `data/`, which holds the
+  ciphertext.
+- `SIGNALSLATE_SECRET_KEY` is a comma-separated list: the first key encrypts, the rest only decrypt.
+  Changing the list does **not** re-encrypt anything by itself, so an old key can be dropped only
+  after the rotation below has run. To rotate:
+  1. `python -m pipeline.crypto genkey`, then put the new key **first** in `SIGNALSLATE_SECRET_KEY`
+     and **keep the old key after it** (`new,old`).
+  2. Restart the app so it reads the new list (`docker compose up -d`).
+  3. Run `python -m pipeline.crypto rotate` where the app's `.env` and `data/` are (in Docker:
+     `docker compose exec api python -m pipeline.crypto rotate`). It re-encrypts every stored secret
+     under the new key in one transaction and prints only counts and connection ids, never a
+     secret or a key. Exit 0 is success, 1 means a connection could not be decrypted (nothing was
+     changed; fix the key list or re-enter the secrets of the ids it names, then run it again),
+     2 means no usable key is set. Running it again is harmless.
+  4. Open the **Connections** page and test each connection; they should all still test ok.
+  5. Only now remove the old key from `SIGNALSLATE_SECRET_KEY` and restart. Keep a backup of the
+     old key until you have confirmed step 4 with the new list alone.
+- With no key set, the app keeps using `.env` exactly as before. The Connections page shows a
+  banner and cannot add or edit connections. An unusable key is reported in the API's startup log
+  (naming the key's position, never its text) and also falls back to `.env`.
+
+**Store wins.** On the first start with a key, the connections `.env` declares are copied into the
+store once. After that the store is authoritative: editing `.env` for a connection that already
+exists has no effect, and a connection deleted in the UI stays deleted even if `.env` still lists
+it. Change existing connections in the UI. The CLI bootstrap scripts under `auth/` remain as a
+fallback for signing in without the UI.
+
+**Settings.**
+
+| Variable | Meaning |
+|---|---|
+| `SIGNALSLATE_SECRET_KEY` | Encryption key list, see above. |
+| `WEB_ORIGINS` | Comma-separated browser origins allowed to make changes, written as typed in the address bar. Blank means `http://localhost:3000` plus `http://<LAN_HOST>:3000`. The first entry is where the automatic sign-in callback returns your browser, so make it the address you browse to. |
+| `ALLOWED_HOSTS` | Optional comma-separated extra hostnames the API answers to, on top of `localhost`, `LAN_HOST` and the hosts of `WEB_ORIGINS` and `PUBLIC_BASE_URL`. Hostnames only, no URLs. Read at startup; a change needs a restart, as does `WEB_ORIGINS`. Guards against DNS rebinding; it is not authentication. |
+| `PUBLIC_BASE_URL` | Public `https://<your-host>` address, no path. Needed only for the automatic callback; ignored unless it starts with `https://`. |
+
+#### Signing in from the browser
+
+Each Microsoft 365 or Gmail connection has a **Sign in** button with two modes.
+
+**Paste-back** works with the registrations described in the sections above (Gmail Desktop client,
+Microsoft public client) and needs no public address. Open the link the dialog shows and approve
+access. Your browser then lands on a page that cannot be reached (`http://127.0.0.1:8765` for Gmail,
+`http://localhost` for Microsoft); that is expected. Copy the full address from the address bar and
+paste it into the dialog straight away, because Microsoft codes live about a minute.
+
+**Automatic callback** needs the app served on a public HTTPS hostname:
+
+- Set `PUBLIC_BASE_URL=https://<your-host>` and put `https://<your-host>` first in `WEB_ORIGINS`.
+- The reverse proxy must route both the web app and `/api` on that one hostname. The sign-in cookie
+  is scoped to `/api/oauth`, and the callback then redirects the browser back to the UI.
+- The callback URL registered with the provider must use the same host as `PUBLIC_BASE_URL`:
+  - Google: create an OAuth client of type **Web application** and add the authorized redirect URI
+    `https://<your-host>/api/oauth/callback/google`. A Desktop client cannot use the callback; keep
+    paste-back for it.
+  - Microsoft: on the **same** app registration, add
+    `https://<your-host>/api/oauth/callback/microsoft` as a custom redirect under **Mobile and
+    desktop applications**, not under Web or SPA. Whether the Entra portal accepts a custom https
+    redirect there has not been confirmed yet; if the portal rejects it, use paste-back.
+- The Gmail consent screen must be **In production** (see [Gmail](#gmail)); in Testing status
+  refresh tokens expire after 7 days.
+
 ### Local dev
 
 The container runs Python 3.12 (`python:3.12-slim`), so create the venv with a 3.12 interpreter to
@@ -254,15 +352,79 @@ match; newer interpreters may lack wheels for the pinned dependencies.
 
 ```
 uvicorn api.main:app --reload --port 8000      # terminal 1
-cd web && npm install && NUXT_PUBLIC_API_BASE=http://localhost:8000 npm run dev   # terminal 2
+cd web && npm ci && NUXT_PUBLIC_API_BASE=http://localhost:8000 npm run dev   # terminal 2
+```
+
+Frontend checks, from `web/`:
+
+```
+npm run typecheck
+npm test
 ```
 
 ### Pages
 
 - **Dashboard** (`/`) — last run status, per-source health, next scheduled run, "Run now".
+- **Connections** (`/connections`) — add, edit, test, enable, delete and sign in sources; see
+  [Management UI](#management-ui).
+- **Collectors** (`/collectors`) — run one source, dry run, reset watermark, clear failures, browse
+  collected items.
 - **History** (`/history`, `/history/[id]`) — every run, per-source detail, PDF download once the
   render phase exists.
 - **Config** (`/config`) — schedule (cron), active sources, tracker choice. Saving reschedules
   immediately.
 
-No auth on the interface — LAN-only by design. Revisit before exposing it anywhere else.
+No auth on the interface or the API — LAN-only by design. Put it behind your network or an
+authenticating reverse proxy before exposing it anywhere else; see the
+[security model](#management-ui).
+
+## Domains
+
+A **Domains** page and daily job give a portfolio view of every domain you own, pulled from
+Namecheap, GoDaddy and WordPress.com plus anything added manually or by CSV import. For any
+domain, owned or not, it shows DNS records, mail posture (SPF/DMARC/DKIM/MTA-STS/BIMI) and RDAP
+registration data, and on demand CT-log subdomains and Wayback URLs. It can generate name ideas,
+check availability, and — only once you enable it — buy through your Namecheap or GoDaddy account.
+A `domains` source feeds the morning digest with what changed: expiry approaching, nameservers or
+mail records changed, lock removed.
+
+Registrar connections are added in the **Connections** page like every other source, not in `.env`.
+`.env` only holds the purchase guardrails and refresh schedule below.
+
+### Namecheap
+
+The API is off for new accounts until the account qualifies: **20 domains**, a **$50 balance**, or
+**$50 spent in the last 2 years** (whichever comes first). Once qualified, generate an API key
+under Profile > Tools > API Access, then whitelist the server's public **IPv4** address — Namecheap
+accepts IPv4 only, and calls silently fail if the whitelist and the server's actual egress address
+drift apart (common on a home connection with a dynamic IP). There is a sandbox
+(`sandbox.namecheap.com`) with its own account and test-registry data; use it to test the purchase
+flow first.
+
+### GoDaddy
+
+Any account with **at least one domain** gets the Domains API (list, detail, DNS, purchase).
+**Availability checks** are a separate, stricter tier: **50 or more domains**, or **average monthly
+spend of $20 or more**. Generate an API key/secret at developer.godaddy.com. GoDaddy also runs a
+test environment, **OTE** (`api.ote-godaddy.com`), with its own account — test purchases there
+before using a production key.
+
+### WordPress.com
+
+WordPress.com has no documented domain API. Signing in creates an OAuth app (developer.wordpress.com
+> Create New Application) with the `global` scope, and the connection calls an **undocumented**
+endpoint (`/rest/v1.1/all-domains`) that may change without notice. WordPress.com also issues no
+refresh token, so a lapsed connection just needs signing in again. If that adapter breaks or the
+account isn't set up for it, add those domains by pasting names or importing a CSV instead — every
+other feature (DNS, RDAP, mail posture, digest alerts) works the same regardless of how a domain
+was added.
+
+### Purchasing
+
+Buying a domain is disabled out of the box (`DOMAINS_PURCHASE_ENABLED=false`) and every purchase
+goes through a server-issued quote, a price cap, a daily spend cap, and retyping the domain name to
+confirm — see `.env.example` for the exact keys. **Test the full quote-then-purchase flow against
+the Namecheap sandbox or GoDaddy OTE connection before pointing it at a production account.** A
+green sandbox/OTE run is necessary but not sufficient: each registrar's test environment has its
+own, different pool of "available" names, so it cannot confirm a specific production domain is
+purchasable — only that the flow itself works.

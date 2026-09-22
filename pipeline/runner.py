@@ -11,6 +11,7 @@ terminal status is written in a finally block, because a Run left at status="run
 to the dashboard's poll loop and never resolves.
 """
 import json
+import threading
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -25,10 +26,12 @@ from pipeline.db import (
     get_cursor,
     get_session,
     has_running_run,
+    record_attempt,
     record_failure,
     set_cursor,
 )
-from pipeline.health import HealthResult, check_all_configured, known_sources
+from pipeline.health import HealthResult, check_all_configured, env_snapshot, known_sources
+from pipeline.redact import MARKER, redact
 
 
 # How many consecutive non-clean collections before a source's watermark advances anyway.
@@ -37,9 +40,57 @@ from pipeline.health import HealthResult, check_all_configured, known_sources
 # day, for good — and if that window ever exceeds the pagination cap, the source never recovers.
 MAX_STUCK_RUNS = 3
 
+# Cap on every free text the runner persists. Applied after redaction (redact() truncates last on
+# purpose): a cut token would no longer match its shape.
+MAX_PERSISTED_CHARS = 1000
+
+
+# Serialises "is a run in flight?" with "insert my Run row". Without it the scheduler and a UI
+# trigger can both read False from has_running_run() and both insert, which is the exact overlap the
+# guard exists to prevent. Process-local, which is enough: one uvicorn worker owns the scheduler and
+# the API; a second process would need a partial unique index on Run(status='running') instead.
+_start_lock = threading.Lock()
+
 
 class RunAlreadyInProgress(RuntimeError):
     """Raised when a run is started while another is still in flight."""
+
+
+def _stored_secrets() -> list[str]:
+    """
+    Every secret in the connection store, or [] when it cannot be read.
+
+    Imported lazily: connections pulls in the crypto layer, which the runner must not need in order
+    to run. Any failure (no vault, a locked DB row, an import error) degrades to pattern-only
+    redaction instead of blocking the run that is trying to report that failure.
+    """
+    try:
+        from pipeline import connections
+
+        return list(connections.secret_values())
+    except Exception:  # noqa: BLE001 — redaction must never end a run
+        return []
+
+
+def _scrub(text: Optional[str], secrets: Optional[list[str]] = None) -> Optional[str]:
+    """
+    `text` with credentials replaced and capped at MAX_PERSISTED_CHARS; None stays None.
+
+    Never raises. If redact() fails with the stored secrets, it is retried with none (token shapes
+    and key=value pairs only). If it fails again the text is dropped for the bare marker: persisting
+    unredacted text because the scrubber broke is the one outcome this exists to prevent.
+    `secrets` lets a caller that scrubs several texts read the store once.
+    """
+    if text is None:
+        return None
+    try:
+        known = _stored_secrets() if secrets is None else secrets
+        try:
+            return redact(text, known, max_len=MAX_PERSISTED_CHARS)
+        except Exception:  # noqa: BLE001
+            return redact(text, (), max_len=MAX_PERSISTED_CHARS)
+    except Exception:  # noqa: BLE001
+        return MARKER
 
 
 def collection_window(source: str, until: datetime) -> datetime:
@@ -197,20 +248,48 @@ def _summarize(
     return "partial", f"{tiers}. Collected {total} items ({breakdown}).{caveat}", error
 
 
-def execute_run(trigger: str = "manual") -> Run:
-    # The scheduler thread and a manual trigger can both land here; without this guard they
-    # interleave writes and produce two half-finished runs for the same window.
-    if has_running_run():
-        raise RunAlreadyInProgress("A run is already in progress")
+def execute_run(trigger: str = "manual", only: Optional[str] = None) -> Run:
+    """
+    Check and collect every active source, or just `only`.
+
+    A single-source run is a full run with the source set narrowed: same Run and SourceHealth rows,
+    same per-source cursor, backfill and failure-streak logic. Its Run.trigger is "manual-source"
+    whatever `trigger` says, so the history can tell it from a full run; pipeline/db.py's comment on
+    Run.trigger predates the value and is not updated here. It also runs a source that is toggled off,
+    since the operator asked for exactly that one.
+
+    The whole run executes inside one env_snapshot(): the health check, known_sources() and the
+    collector must agree on the configuration even if a connection is edited while it runs.
+
+    Raises ValueError (before any Run row exists) when `only` is not a declared source, and
+    RunAlreadyInProgress when another run is in flight.
+    """
+    with env_snapshot():
+        return _execute_run(trigger, only)
+
+
+def _execute_run(trigger: str, only: Optional[str]) -> Run:
+    if only is not None:
+        if only not in known_sources():
+            raise ValueError(f"Unknown source: {only!r}")
+        trigger = "manual-source"
 
     config = load_config()
+    if only is not None:
+        config = {**config, "active_sources": {only: True}}
 
-    with get_session() as session:
-        run = Run(trigger=trigger, status="running")
-        session.add(run)
-        session.commit()
-        session.refresh(run)
-        run_id = run.id
+    # The scheduler thread and a manual trigger can both land here; without this guard they
+    # interleave writes and produce two half-finished runs for the same window.
+    with _start_lock:
+        if has_running_run():
+            raise RunAlreadyInProgress("A run is already in progress")
+
+        with get_session() as session:
+            run = Run(trigger=trigger, status="running")
+            session.add(run)
+            session.commit()
+            session.refresh(run)
+            run_id = run.id
 
     until = utcnow()
     health: list[HealthResult] = []
@@ -238,6 +317,8 @@ def execute_run(trigger: str = "manual") -> Run:
             try:
                 result = _collect_source(source, until)
             except Exception as exc:  # noqa: BLE001 — one source must never end the run
+                # Class name only: the message can carry an upstream body or a credential.
+                record_attempt(source, "error", type(exc).__name__, None)
                 failures.append(f"{source}: {type(exc).__name__}: {exc}")
                 failed_sources.add(source)
                 # Counts toward the streak exactly as a returned failure does. A collector that
@@ -253,6 +334,7 @@ def execute_run(trigger: str = "manual") -> Run:
             # hitting the rate-limit canary should keep that half. Safe because the cursor below
             # does not advance, so the window is re-read next time and the dedupe absorbs it.
             collected[source] = _persist(run_id, result)
+            record_attempt(source, result.status, _scrub(result.detail), collected[source])
             if result.status == "ok":
                 # A clean collection advances the watermark and clears any failure streak.
                 set_cursor(source, until)
@@ -282,15 +364,23 @@ def execute_run(trigger: str = "manual") -> Run:
         if fatal is not None:
             status, error = "failed", fatal
 
+        # One store read for every text below. Scrubbing here, after _summarize, covers the joined
+        # failures list, the "Class: message" lines for raised exceptions, and the fatal message.
+        secrets = _stored_secrets()
+
         with get_session() as session:
             run = session.get(Run, run_id)
             for r in health:
-                session.add(SourceHealth(run_id=run_id, source=r.source, status=r.status, detail=r.detail))
+                session.add(
+                    SourceHealth(
+                        run_id=run_id, source=r.source, status=r.status, detail=_scrub(r.detail, secrets)
+                    )
+                )
 
             run.finished_at = utcnow()
             run.status = status
-            run.summary = summary
-            run.error = error
+            run.summary = _scrub(summary, secrets)
+            run.error = _scrub(error, secrets)
 
             session.add(run)
             session.commit()
