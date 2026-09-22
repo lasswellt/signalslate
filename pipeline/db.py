@@ -309,8 +309,8 @@ class JobApplication(SQLModel, table=True):
     """
     id: Optional[int] = Field(default=None, primary_key=True)
     posting_id: int = Field(unique=True, index=True, foreign_key="jobposting.id")
-    # draft | packet_ready | queued | in_progress | submitted | withdrawn | rejected | offer
-    status: str = "draft"
+    # saved | preparing | ready | submitted | interviewing | rejected | closed | withdrawn
+    status: str = "saved"
     packet: Optional[str] = None  # JSON blob: cover letter text + screening-answer drafts
     cover_letter_path: Optional[str] = None
     resume_path: Optional[str] = None

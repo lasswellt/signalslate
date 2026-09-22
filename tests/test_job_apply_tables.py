@@ -118,7 +118,7 @@ def test_job_application_round_trip(temp_db):
         session.commit()
         session.refresh(application)
         assert application.id is not None
-        assert application.status == "draft"
+        assert application.status == "saved"
         assert application.assist_state == "idle"
         assert application.packet is None
         assert application.assist_session_id is None
@@ -127,7 +127,7 @@ def test_job_application_round_trip(temp_db):
 
     with Session(temp_db) as session:
         stored = session.exec(select(JobApplication).where(JobApplication.posting_id == posting_id)).one()
-        assert (stored.status, stored.assist_state) == ("draft", "idle")
+        assert (stored.status, stored.assist_state) == ("saved", "idle")
 
 
 def test_job_application_posting_id_is_unique(temp_db):
