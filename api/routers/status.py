@@ -75,5 +75,9 @@ def get_system():
         "public_base_url_configured": callback_ready,
         "web_origins": health.web_origins(),
         "unseeded_env": connections.unseeded_env_keys(),
-        "oauth": {"google": {"modes": list(modes)}, "microsoft": {"modes": list(modes)}},
+        "oauth": {
+            "google": {"modes": list(modes)},
+            "microsoft": {"modes": list(modes)},
+            "wordpress": {"modes": list(modes)},
+        },
     }

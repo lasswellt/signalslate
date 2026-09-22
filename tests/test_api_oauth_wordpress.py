@@ -17,6 +17,7 @@ from sqlmodel import SQLModel, create_engine
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from api.routers import oauth as oauth_router  # noqa: E402
+from api.routers import status as status_router  # noqa: E402
 from api.security import install_security  # noqa: E402
 from pipeline import connections, crypto, db, health, oauth_wordpress  # noqa: E402
 from pipeline.oauth_flows import FlowStore  # noqa: E402
@@ -94,6 +95,7 @@ def client(env, flows, token_endpoint, caplog) -> TestClient:
     app = FastAPI()
     install_security(app, allowed_origins=[UI])
     app.include_router(oauth_router.router, prefix="/api")
+    app.include_router(status_router.router, prefix="/api")
     return TestClient(app, base_url="https://testserver")
 
 
@@ -335,3 +337,12 @@ def test_callback_unexpected_exception_is_a_generic_failure_and_only_the_type_is
 
     _assert_error_redirect(resp, "failed")
     assert CODE not in _everything(resp) and CODE not in _app_logs(caplog) and "secret detail" not in _app_logs(caplog)
+
+
+# ---- system info ----
+
+
+def test_system_advertises_wordpress_modes_like_google_and_microsoft(client, env):
+    body = client.get("/api/system").json()
+    assert body["oauth"]["wordpress"] == {"modes": ["paste_back", "callback"]}
+    assert body["oauth"]["wordpress"] == body["oauth"]["google"] == body["oauth"]["microsoft"]

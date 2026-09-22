@@ -167,7 +167,11 @@ def test_system_reports_callback_only_for_an_https_public_url(home, monkeypatch)
     with running_app() as client:
         plain = client.get("/api/system").json()
         assert plain["public_base_url_configured"] is False
-        assert plain["oauth"] == {"google": {"modes": ["paste_back"]}, "microsoft": {"modes": ["paste_back"]}}
+        assert plain["oauth"] == {
+            "google": {"modes": ["paste_back"]},
+            "microsoft": {"modes": ["paste_back"]},
+            "wordpress": {"modes": ["paste_back"]},
+        }
         assert plain["web_origins"] == ["http://localhost:3000"]
 
         monkeypatch.setenv("PUBLIC_BASE_URL", "http://insecure.example.com")
