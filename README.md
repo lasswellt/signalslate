@@ -9,7 +9,7 @@ Self-hosted, LAN-only, runs anywhere Docker runs.
 | Source | What it reads | Auth |
 |---|---|---|
 | Microsoft 365 (any number of tenants) | Mail, calendar, Teams chat, Microsoft To Do | Delegated Graph permissions, one-time interactive sign-in per tenant |
-| Zoom | Yesterday's meetings, participants, AI Companion summaries | Server-to-Server OAuth |
+| Zoom | Yesterday's meetings, participants, AI Companion summaries | Sign in with Zoom (OAuth), or Server-to-Server |
 | Slack (any number of workspaces) | Channels, group DMs, threads since the last run | User token per workspace |
 | Gmail (any number of accounts) | Mail | OAuth Desktop client, one-time interactive sign-in per account |
 | reMarkable | Delivery target for the rendered PDF | One-time device pairing via `rmapi` |
@@ -93,6 +93,33 @@ the scope list above.
 
 ### Zoom
 
+Two ways to connect: **Sign in with Zoom** (recommended — set up from the web UI, no `.env` edit)
+or **Server-to-Server** (the original, `.env`-only setup, kept as an alternative). Both read the
+same data; S2S additionally sees instant meetings and meetings joined but not hosted (see
+[What is collected](#what-is-collected) below).
+
+#### Sign in with Zoom (recommended)
+
+Zoom Marketplace > Develop > Build App > **General App**, user-managed (no account-owner
+requirement). Under **Redirect URL for OAuth**, set `<PUBLIC_BASE_URL>/api/oauth/callback/zoom`
+and add the same URL to **OAuth allow list**. Zoom only supports a server-side redirect for this
+app type — there is no loopback/paste-back option — so `PUBLIC_BASE_URL` must already be a public
+`https://` address (see [Signing in from the browser](#signing-in-from-the-browser)).
+
+User scopes:
+
+```
+meeting:read:list_summaries  meeting:read:summary
+meeting:read:list_meetings   meeting:read:list_past_participants
+```
+
+Add `cloud_recording:read:meeting_transcript` too while transcripts are on (the default).
+
+Then, on the **Connections** page: add a Zoom connection, choose "Sign in with Zoom", enter the
+app's client id and secret, save, click **Sign in**, approve on Zoom, and press **Test**.
+
+#### Server-to-Server (alternative)
+
 Zoom Marketplace > Develop > Build App > **Server-to-Server OAuth**, created while signed in as the
 **account owner** (the scope picker only offers what the creator's role can grant). Activate the app.
 
@@ -100,7 +127,7 @@ Zoom Marketplace > Develop > Build App > **Server-to-Server OAuth**, created whi
 |---|---|
 | List summaries | `meeting:read:list_summaries:admin` |
 | Summary body | `meeting:read:summary:admin` |
-| Past meeting details | `meeting:read:past_meeting:admin` |
+| List meetings | `meeting:read:list_meetings:admin` |
 | Past participants | `meeting:read:list_past_participants:admin` |
 | Report: a user's past meetings | `report:read:user:admin` |
 | Transcript (optional) | `cloud_recording:read:meeting_transcript:admin` |
@@ -116,6 +143,23 @@ Enumerate past meetings via `/users/{id}/meeting_summaries` or `/report/users/{i
 ```
 python auth/zoom_s2s_auth.py
 ```
+
+Configure S2S from `.env` (`ZOOM_ACCOUNT_ID` / `ZOOM_CLIENT_ID` / `ZOOM_CLIENT_SECRET`, see
+`.env.example`), or add it as a Server-to-Server connection on the Connections page instead.
+
+#### What is collected
+
+One item per meeting in the window, merged from the signed-in user's AI Companion summaries list
+and previous scheduled meetings, plus (Server-to-Server only) the meetings report, which also
+picks up instant meetings and meetings joined but not hosted. Summary body and participants are
+fetched only for meetings this connection hosted — Zoom doesn't expose either to a mere
+participant. Transcripts (on by default; toggle `include_transcripts` on the connection) are
+fetched for hosted, cloud-recorded meetings, converted to text and capped at 200,000 characters.
+
+#### Limitations
+
+Summaries are host-only. AI Companion's "My Notes" has no API, so it is never collected. A
+transcript needs the meeting to have been cloud-recorded; E2EE meetings have no summaries at all.
 
 ### Slack
 
@@ -251,7 +295,8 @@ both up.
 ### Management UI
 
 The **Connections** page adds, edits, tests, enables and deletes Microsoft 365 tenants, Zoom, Slack
-workspaces and Gmail accounts, and signs Microsoft 365 and Gmail in from the browser. The
+workspaces and Gmail accounts, and signs Microsoft 365, Gmail and Zoom (when set to "Sign in with
+Zoom") in from the browser. The
 **Collectors** page runs one source, dry-runs it, resets its watermark, clears its failures and
 browses the items it collected. Connection ids match the `.env` naming: `m365_<alias>`, `zoom`,
 `slack_<label>`, `gmail_<label>`. A new connection is created **inactive**: test it, then switch it
@@ -295,7 +340,10 @@ fallback for signing in without the UI.
 
 #### Signing in from the browser
 
-Each Microsoft 365 or Gmail connection has a **Sign in** button with two modes.
+Each Microsoft 365 or Gmail connection has a **Sign in** button with two modes. A Zoom connection
+set to "Sign in with Zoom" also has one, but callback-only — Zoom's app type has no paste-back
+option, so `PUBLIC_BASE_URL` and the provider callback registration below are required, not
+optional, for it (see [Sign in with Zoom](#sign-in-with-zoom-recommended)).
 
 **Paste-back** works with the registrations described in the sections above (Gmail Desktop client,
 Microsoft public client) and needs no public address. Open the link the dialog shows and approve
