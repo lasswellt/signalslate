@@ -30,3 +30,6 @@ Ruling: accept — T-010 Tier-1 out-of-scope edit web/tests/ConnectionDialog.tes
 ## 2026-09-22T00:37:04Z build T-011 start (attempt 1)
 ## 2026-09-22T00:47:20Z gate disarmed while dev-T-011 resumes (in-progress test file red by design); re-verify on reply
 ## 2026-09-22T00:50:02Z verify T-011 ok=true (round 1 resume after turn limit)
+## 2026-09-22T00:50:02Z build T-012 start (attempt 1)
+## 2026-09-22T01:14:05Z verify T-012 ok=true
+## 2026-09-22T01:14:31Z build complete 12/12 done — full sweep green
