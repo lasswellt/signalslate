@@ -27,3 +27,6 @@ Ruling: scope — T-010 widened to api/routers/status.py, web/composables/useApi
 ## 2026-09-22T00:30:06Z build T-010 start (attempt 1)
 ## 2026-09-22T00:37:04Z verify T-010 ok=true
 Ruling: accept — T-010 Tier-1 out-of-scope edit web/tests/ConnectionDialog.test.ts (fixture key zoom added, forced by OAuthProvider widening; no assertion changed; commit f141a3a) (T-010, round 1)
+## 2026-09-22T00:37:04Z build T-011 start (attempt 1)
+## 2026-09-22T00:47:20Z gate disarmed while dev-T-011 resumes (in-progress test file red by design); re-verify on reply
+## 2026-09-22T00:50:02Z verify T-011 ok=true (round 1 resume after turn limit)
