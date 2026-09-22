@@ -32,6 +32,7 @@ Design decisions:
 """
 import concurrent.futures
 import logging
+from datetime import timedelta
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -42,7 +43,7 @@ from api.serialize import iso_z
 from pipeline import db
 from pipeline.clock import utcnow
 from pipeline.db import JobBoard, JobCompany, JobPosting
-from pipeline.jobs import ats, inventory, research, resolve, seeds
+from pipeline.jobs import ats, inbox_seed, inventory, research, resolve, seeds
 
 router = APIRouter(tags=["jobs"])
 
@@ -58,6 +59,10 @@ _MAX_IMPORT_CHARS = 200_000
 _RESCAN_RESEARCH_TIMEOUT_SECONDS = 25
 
 _rescan_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="jobs-rescan")
+
+# How far back import-inbox scans CollectedItem for job-alert emails, each call. Wide enough to
+# catch anything missed by a prior run without re-scanning a whole mailbox's history every click.
+_INBOX_IMPORT_WINDOW_DAYS = 30
 
 
 def _coded(status_code: int, code: str, message: str) -> HTTPException:
@@ -248,6 +253,22 @@ def import_companies_hn() -> ImportOut:
     5xx."""
     with db.get_session() as session:
         result = seeds.import_hn(session)
+        session.commit()
+        return ImportOut(
+            added=result.added,
+            rejected=[RejectedRow(line=line_number, reason=reason) for line_number, reason in result.rejected],
+        )
+
+
+@router.post("/jobs/companies/import-inbox", response_model=ImportOut)
+def import_companies_inbox() -> ImportOut:
+    """Imports companies from job-alert emails already collected via the Gmail/M365 collectors
+    (source="email"), scanning the last _INBOX_IMPORT_WINDOW_DAYS days of CollectedItem rows.
+    Opt-in, best-effort: an unreachable/malformed extraction degrades to an empty ImportOut rather
+    than a 5xx, matching import-yc/import-hn."""
+    with db.get_session() as session:
+        until = utcnow()
+        result = inbox_seed.seed_from_inbox(session, until - timedelta(days=_INBOX_IMPORT_WINDOW_DAYS), until)
         session.commit()
         return ImportOut(
             added=result.added,

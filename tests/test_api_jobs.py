@@ -214,6 +214,24 @@ def test_import_hn_uses_seeds_module(client, monkeypatch):
     assert resp.json()["added"] == ["HN Co"]
 
 
+# --- POST /jobs/companies/import-inbox -----------------------------------------------------------
+
+
+def test_import_inbox_uses_inbox_seed_module(client, monkeypatch):
+    captured = {}
+
+    def fake_seed_from_inbox(session, since, until):
+        captured["since"] = since
+        captured["until"] = until
+        return ImportResult(added=["Inbox Co"], rejected=[])
+
+    monkeypatch.setattr(jobs_router.inbox_seed, "seed_from_inbox", fake_seed_from_inbox)
+    resp = client.post("/api/jobs/companies/import-inbox")
+    assert resp.status_code == 200
+    assert resp.json()["added"] == ["Inbox Co"]
+    assert captured["since"] < captured["until"]
+
+
 # --- PUT /jobs/boards/{id} ---------------------------------------------------------------------
 
 
