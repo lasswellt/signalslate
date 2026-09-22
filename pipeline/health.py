@@ -747,15 +747,40 @@ def check_domains() -> HealthResult:
     return HealthResult("domains", "ok", f"{count} domain(s) tracked")
 
 
+def check_jobs() -> HealthResult:
+    """
+    "jobs" is always healthy: it reads only the local JobCompany table (no network, no
+    credentials — see pipeline.collectors.jobs), so there is nothing to authenticate and an empty
+    watchlist is not a failure. Only a broken DB session counts as unhealthy.
+
+    Imported locally, matching dispatch()'s own local import of pipeline.collectors.jobs and
+    check_domains()'s local import of pipeline.db: this module is imported by nearly everything
+    (see module docstring), so a module-level import of the database layer here should stay
+    avoidable even though pipeline.db itself doesn't import back.
+    """
+    from sqlmodel import select
+
+    from pipeline import db
+    from pipeline.db import JobCompany
+
+    try:
+        with db.get_session() as session:
+            count = len(session.exec(select(JobCompany)).all())
+    except Exception as exc:  # noqa: BLE001 — a health check must report, never crash the run
+        return HealthResult("jobs", "error", type(exc).__name__)
+    return HealthResult("jobs", "ok", f"{count} companies tracked")
+
+
 def known_sources() -> list[str]:
     """Every source id the current .env declares: m365_<alias>, zoom, slack_<label>, gmail_<label>,
-    plus the always-available "domains" source (local DB, no .env entry needed)."""
+    plus the always-available "domains" and "jobs" sources (local DB, no .env entry needed)."""
     return (
         [f"m365_{a}" for a in m365_aliases()]
         + ["zoom"]
         + [f"slack_{l}" for l in slack_workspaces()]
         + [f"gmail_{l}" for l in gmail_accounts()]
         + ["domains"]
+        + ["jobs"]
     )
 
 
@@ -772,6 +797,9 @@ def check_all_configured(active_sources: dict[str, bool]) -> list[HealthResult]:
 
     if active_sources.get("domains", False):
         results.append(check_domains())
+
+    if active_sources.get("jobs", False):
+        results.append(check_jobs())
 
     for label, token in slack_workspaces().items():
         if active_sources.get(f"slack_{label}", False):
