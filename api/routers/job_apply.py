@@ -78,6 +78,18 @@ Design decisions:
   normalization is defined once.
 - GET /jobs/applications/{id}/files/{kind} mirrors runs.py's two-stage check (path unset -> 404,
   path set but missing on disk -> 404) before FileResponse, rather than trusting the DB column alone.
+- POST /jobs/assist/sessions/{session_id}/propose (T-030) is the ONLY place the desktop runner's
+  field list meets pipeline.jobs.assist.mapping.propose_values(), and therefore the only place
+  ANTHROPIC_API_KEY is used in the whole apply-assist flow: the runner posts the plain field
+  descriptors it extracted in-page and gets proposals back, so the key never leaves the server (see
+  mapping.py's own "runs SERVER-side" docstring). mapping is imported by module, like apply/packet
+  above, so tests monkeypatch job_apply.mapping.make_client at this file's import site. The route
+  looks the application up by assist_session_id (the same lookup PATCH
+  /jobs/assist/sessions/{session_id} uses — the runner holds a session id, not necessarily the
+  application row) and passes the singleton JobsProfile straight through; body.fields stays
+  list[dict] rather than a typed FieldDescriptor model because extract.js's field shape is the
+  desktop extractor's contract, not this API's, and propose_values() already ignores every key it
+  doesn't use.
 """
 import base64
 import binascii
@@ -97,6 +109,7 @@ from pipeline import db
 from pipeline.clock import utcnow
 from pipeline.db import DB_PATH, AnswerBank, JobApplication, JobPosting, JobsProfile
 from pipeline.jobs import apply, normalize_title, packet
+from pipeline.jobs.assist import mapping
 
 router = APIRouter(tags=["job_apply"])
 
@@ -109,6 +122,9 @@ _PDF_MAGIC = b"%PDF-"
 _MAX_TEXT_CHARS = 5000
 _MAX_FILENAME_CHARS = 255
 _MAX_LIST_ITEMS = 50
+# A single Workday/Greenhouse page can carry far more fillable inputs than _MAX_LIST_ITEMS allows
+# for the small progress-report lists, so the /propose body gets its own, roomier cap.
+_MAX_PROPOSE_FIELDS = 300
 
 
 def _coded(status_code: int, code: str, message: str) -> HTTPException:
@@ -657,6 +673,42 @@ def update_assist_session(session_id: str, body: AssistSessionUpdateBody) -> App
         session.commit()
         session.refresh(row)
         return _application_out(row)
+
+
+class ProposeBody(BaseModel):
+    """POST body for /jobs/assist/sessions/{session_id}/propose: the field descriptors the desktop
+    runner's in-page extractor just produced (pipeline.jobs.assist.extract.extract_fields())."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    fields: list[dict[str, Any]] = Field(max_length=_MAX_PROPOSE_FIELDS)
+
+
+class FieldProposalOut(BaseModel):
+    """One proposed value, mirroring pipeline.jobs.assist.mapping.FieldProposal's shape (`value` is
+    deliberately loose there: text, a bool, or a select option)."""
+
+    field_id: str
+    value: Any
+    confidence: float
+    source: str
+    needs_user: bool
+
+
+@router.post("/jobs/assist/sessions/{session_id}/propose", response_model=list[FieldProposalOut])
+def propose_session_values(session_id: str, body: ProposeBody) -> list[FieldProposalOut]:
+    """Proposes a value for every extracted field of one assist session's page, via
+    mapping.propose_values() — the only place the Anthropic key is used in the apply-assist flow
+    (see module docstring). 404 session_not_found when no application holds this session id."""
+    with db.get_session() as session:
+        row = session.exec(
+            select(JobApplication).where(JobApplication.assist_session_id == session_id)
+        ).first()
+        if row is None:
+            raise _coded(404, "session_not_found", "No application has this assist session id")
+        profile = _get_or_create_profile(session)
+        proposals = mapping.propose_values(body.fields, profile)
+    return [FieldProposalOut(**proposal.model_dump()) for proposal in proposals]
 
 
 @router.get("/jobs/applications/{id}/files/{kind}")
