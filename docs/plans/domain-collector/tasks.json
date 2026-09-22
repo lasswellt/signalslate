@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-21T23:47:13Z",
+  "updated": "2026-09-22T00:03:25Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1138,11 +1138,46 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T00:03:25Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'DOMAINS_JOB_ID = \"domains_refresh\"' api/scheduler.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:03:25Z"
+          },
+          {
+            "cmd": "grep -qE 'def _run_domains_scheduled' api/scheduler.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:03:25Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/scheduler.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:03:25Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_scheduler_domains.py -q",
+            "exit": 0,
+            "duration_ms": 538,
+            "tail": ".......                                                                  [100%]\n7 passed in 0.30s",
+            "recorded_at": "2026-09-22T00:03:25Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Finding 1 (scheduler.py:46 single job). Cron from domain_settings().refresh_cron (invalid -> default + warning), same timezone handling as reschedule(). Job runs sync_all then refresh_snapshots; exceptions caught and logged by class name (redaction rule). Must run before the digest's schedule_cron by default (05:30). Existing daily_digest_run behavior unchanged."
     },
