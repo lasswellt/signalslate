@@ -1,7 +1,10 @@
 FROM node:20-slim AS build
 WORKDIR /app
-COPY package.json ./
-RUN npm install --no-audit --no-fund
+COPY package.json package-lock.json ./
+# npm ci, not install: without the lockfile present, npm 10's fresh dependency
+# resolution can crash outright ("Cannot read properties of null (reading
+# 'edgesOut')", a known npm bug on some trees) instead of just being slow.
+RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 
