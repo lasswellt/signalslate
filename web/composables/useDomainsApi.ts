@@ -67,6 +67,11 @@ export interface SyncOut {
   refresh: SnapshotStatusOut[]
 }
 
+export interface EgressIpOut {
+  // "unknown" (never absent) on lookup failure — mirrors api/routers/domains.py's EgressIpOut.
+  ip: string
+}
+
 export interface InspectBody {
   name: string
   intel?: boolean
@@ -254,6 +259,9 @@ export function useDomainsApi() {
   return {
     listDomains: (options: { ownership?: string; source?: string } = {}) =>
       request<DomainOut[]>(url('/domains'), { params: { ownership: options.ownership, source: options.source } }),
+    // For prefilling a Namecheap connection's client_ip field: that address is not something
+    // Namecheap hands out, so the dialog offers to detect it instead.
+    getEgressIp: () => request<EgressIpOut>(url('/domains/egress-ip')),
     getDomain: (name: string) => request<DomainDetailOut>(url(`/domains/${seg(name)}`)),
     addDomain: (payload: AddDomainBody) => request<DomainOut>(url('/domains'), { method: 'POST', body: payload }),
     deleteDomain: (name: string) => request<void>(url(`/domains/${seg(name)}`), { method: 'DELETE' }),

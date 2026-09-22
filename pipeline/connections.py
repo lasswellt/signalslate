@@ -169,7 +169,11 @@ KINDS: dict[str, _Kind] = {
         ("label", "api_user", "username", "client_ip", "sandbox"),
         ("api_key", "registrant_contact"),
         ("api_key",),
-        optional_config=("sandbox",),
+        # api_user is optional: Namecheap's account settings page (Profile > Tools > API Access)
+        # issues only one credential, the API key, so its ApiUser and UserName parameters are the
+        # same value (your account username) for every account but a reseller acting on someone
+        # else's behalf. create() defaults api_user to the submitted username when omitted.
+        optional_config=("api_user", "sandbox"),
     ),
     "godaddy": _Kind(
         "label",
@@ -560,6 +564,12 @@ def create(kind: str, fields: Mapping[str, Any], origin: str = "ui") -> Connecti
         _check_zoom_auth_mode(config)
     elif kind == "godaddy":
         _check_godaddy_credentials(config, secrets)
+    elif kind == "namecheap":
+        # username is required and validated above by this point, so it always has a real value
+        # to default from. Only at create(): update() only ever touches fields it was given, so an
+        # explicit api_user (the reseller case) an edit doesn't resubmit is never silently
+        # overwritten by a later username change.
+        config.setdefault("api_user", config["username"])
 
     connection_id, label = _derive(kind, spec, config)
     ciphertext = _require_vault().encrypt_json(secrets) if secrets else None

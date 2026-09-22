@@ -81,10 +81,12 @@ export interface GmailCreate {
 export interface NamecheapCreate {
   kind: 'namecheap'
   label: string
-  api_user: string
   username: string
   client_ip: string
   api_key: string
+  // Optional: the server defaults it to username (a fresh Namecheap account only ever issues one
+  // credential, the API key) — see pipeline.connections' namecheap KINDS entry.
+  api_user?: string
   sandbox?: string
   registrant_contact?: string
 }

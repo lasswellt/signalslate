@@ -37,6 +37,7 @@ from pipeline import config_store, connections, crypto, db, health  # noqa: E402
 from pipeline.domains import dns as domain_dns  # noqa: E402
 from pipeline.domains import rdap as domain_rdap  # noqa: E402
 from pipeline.domains.registrars import godaddy, namecheap  # noqa: E402
+from pipeline.domains.registrars import _egress  # noqa: E402
 
 WRITE = {"X-Requested-With": "signalslate"}
 
@@ -434,6 +435,35 @@ def test_purchases_and_purchase_settings_routes_are_not_shadowed_by_domain_looku
         detail = client.get("/api/domains/purchases.com")
         assert detail.status_code == 200
         assert detail.json()["name"] == "purchases.com"
+    env.capture.assert_clean()
+
+
+def test_egress_ip_route_is_not_shadowed_by_domain_lookup(env, monkeypatch):
+    def fake_get(url, params=None, timeout=None):
+        class R:
+            text = "198.51.100.7"
+
+            def raise_for_status(self):
+                pass
+
+        return R()
+
+    monkeypatch.setattr(_egress.requests, "get", fake_get)
+    with env.app() as client:
+        resp = client.get("/api/domains/egress-ip")
+        assert resp.status_code == 200
+        assert resp.json() == {"ip": "198.51.100.7"}
+
+        # Same catch-all-shadowing hazard as /domains/purchases: a domain literally named
+        # "egress-ip" must still resolve as a domain, not get eaten by this new static route.
+        env.gd_state.domains = [
+            {"domain": "egress-ip.com", "expires": "2027-09-21T00:00:00.000Z", "renewAuto": True, "locked": True}
+        ]
+        assert create_godaddy(client, label="gdegress").status_code == 201
+        assert client.post("/api/domains/sync").status_code == 200
+        detail = client.get("/api/domains/egress-ip.com")
+        assert detail.status_code == 200
+        assert detail.json()["name"] == "egress-ip.com"
     env.capture.assert_clean()
 
 

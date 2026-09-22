@@ -83,6 +83,31 @@ def test_create_namecheap_happy_path(vault):
     assert connections._secrets_for("namecheap_prod") == {"api_key": NAMECHEAP_KEY}
 
 
+def test_create_namecheap_without_api_user_defaults_to_username(vault):
+    """Namecheap's account settings page issues only the API key; ApiUser and UserName are the
+    same value (your account username) for every account but a reseller."""
+    fields = {k: v for k, v in NAMECHEAP.items() if k != "api_user"}
+    view = connections.create("namecheap", fields)
+    assert view.config["api_user"] == "nc_user"
+    assert view.config["username"] == "nc_user"
+
+
+def test_create_namecheap_explicit_api_user_is_preserved(vault):
+    """The reseller case: ApiUser genuinely differs from UserName."""
+    view = connections.create("namecheap", {**NAMECHEAP, "api_user": "nc_reseller"})
+    assert view.config["api_user"] == "nc_reseller"
+    assert view.config["username"] == "nc_user"
+
+
+def test_update_namecheap_username_does_not_silently_change_a_different_api_user(vault):
+    """A later username edit must not retroactively overwrite an explicit reseller api_user — the
+    default only ever applies at create()."""
+    connections.create("namecheap", {**NAMECHEAP, "api_user": "nc_reseller"})
+    updated = connections.update("namecheap_prod", config={"username": "nc_user_renamed"})
+    assert updated.config["username"] == "nc_user_renamed"
+    assert updated.config["api_user"] == "nc_reseller"
+
+
 def test_create_namecheap_sandbox_is_optional_and_validated(vault):
     view = connections.create("namecheap", {**NAMECHEAP, "sandbox": "true"})
     assert view.config["sandbox"] == "true"
