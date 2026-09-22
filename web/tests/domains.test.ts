@@ -184,6 +184,20 @@ describe('domains page', () => {
     expect(wrapper.find('[data-testid="portfolio-table"]').exists()).toBe(true)
   })
 
+  it('still shows a successfully synced portfolio when the sibling purchases fetch fails', async () => {
+    // Regression: domains and purchases used to load with Promise.all, so a failure on either one
+    // discarded BOTH — a real bug (api/main.py route-ordering) made GET /domains/purchases 404,
+    // which made a fully synced 47-domain portfolio render as "no domains yet". They must load
+    // independently, and the error must show ALONGSIDE the data that did load, not hide it.
+    stubApi({ domains: [domain({ name: 'acme.com' }), domain({ name: 'beta.com' })], purchases: apiFailure(404, 'Domain not found') })
+    const wrapper = await mountPage()
+
+    expect(wrapper.get('[data-testid="load-error"]').text()).toContain('Domain not found')
+    expect(wrapper.find('[data-testid="portfolio-empty"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="portfolio-table"]').text()).toContain('acme.com')
+    expect(wrapper.get('[data-testid="portfolio-table"]').text()).toContain('beta.com')
+  })
+
   it('shows the portfolio empty state pointing at Connections', async () => {
     const wrapper = await mountPage()
     expect(wrapper.get('[data-testid="portfolio-empty"]').text()).toContain('Connect a registrar')

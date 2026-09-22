@@ -404,6 +404,39 @@ def test_sync_lists_domains_from_both_registrars(env):
     env.capture.assert_items_clean()
 
 
+# --- scenario: domain_buy's static routes are not shadowed by domains.py's GET /domains/{name} -----
+# Regression: api/main.py registered domains.router before domain_buy.router, so its catch-all
+# GET /domains/{name} matched "purchases" and "purchase-settings" as literal domain names and
+# 404'd them — invisibly, since every existing test hit these routes through domain_buy.router in
+# isolation, or only ever POSTed /domains/purchases (a different method, so it never collided).
+# The web page fetches domains and purchases together; that 404 discarded an otherwise-successful
+# domain sync, so a fully synced portfolio rendered as empty.
+
+
+def test_purchases_and_purchase_settings_routes_are_not_shadowed_by_domain_lookup(env):
+    env.gd_state.domains = [
+        {"domain": "purchases.com", "expires": "2027-09-21T00:00:00.000Z", "renewAuto": True, "locked": True}
+    ]
+    with env.app() as client:
+        assert create_godaddy(client).status_code == 201
+        assert client.post("/api/domains/sync").status_code == 200
+
+        purchases = client.get("/api/domains/purchases")
+        assert purchases.status_code == 200
+        assert purchases.json() == []
+
+        settings = client.get("/api/domains/purchase-settings")
+        assert settings.status_code == 200
+        assert settings.json()["enabled"] is False
+
+        # The catch-all still works for a genuine domain name, including one that happens to share
+        # the literal text "purchases" — the reorder must not make it invisible instead.
+        detail = client.get("/api/domains/purchases.com")
+        assert detail.status_code == 200
+        assert detail.json()["name"] == "purchases.com"
+    env.capture.assert_clean()
+
+
 # --- scenario: NS change -> domain_alert via the "domains" collector -------------------------------
 
 

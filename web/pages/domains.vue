@@ -53,14 +53,18 @@
       <q-spinner size="lg" color="primary" />
     </div>
 
-    <q-banner v-else-if="loadError" class="bg-negative text-white" data-testid="load-error">
-      {{ loadError }}
-      <template #action>
-        <q-btn flat label="Retry" @click="load()" />
-      </template>
-    </q-banner>
+    <template v-else>
+      <!-- Additive, not exclusive with the panels below: domains and purchases load
+           independently (Promise.allSettled), so one failing must still show whatever the
+           other one got — a banner on top of stale-but-real data, never a blank page hiding it. -->
+      <q-banner v-if="loadError" class="bg-negative text-white" data-testid="load-error">
+        {{ loadError }}
+        <template #action>
+          <q-btn flat label="Retry" @click="load()" />
+        </template>
+      </q-banner>
 
-    <q-tab-panels v-else v-model="tab" animated>
+      <q-tab-panels v-model="tab" animated>
       <q-tab-panel name="portfolio" data-testid="panel-portfolio">
         <div v-if="ownedDomains.length === 0" class="text-grey-8" data-testid="portfolio-empty">
           No owned domains yet.
@@ -198,7 +202,8 @@
           </tbody>
         </q-markup-table>
       </q-tab-panel>
-    </q-tab-panels>
+      </q-tab-panels>
+    </template>
 
     <DomainDetailDialog :open="detailOpen" :name="detailName" @update:open="detailOpen = $event" @closed="detailOpen = false" />
 
@@ -366,15 +371,16 @@ function errorText(error: unknown): string {
 async function load(silent = false) {
   if (!silent) loading.value = true
   loadError.value = null
-  try {
-    const [domainList, purchaseList] = await Promise.all([api.listDomains(), api.listPurchases()])
-    domains.value = domainList
-    purchases.value = purchaseList
-  } catch (error) {
-    loadError.value = errorText(error)
-  } finally {
-    loading.value = false
-  }
+  // Settled, not Promise.all: domains and purchases are independent lists from independent
+  // routes. One failing (e.g. a route regression, a transient 5xx) must not discard the other
+  // that already succeeded — that is exactly how a real routing bug here once made a fully
+  // synced portfolio look empty, because the sibling purchases fetch happened to 404.
+  const [domainResult, purchaseResult] = await Promise.allSettled([api.listDomains(), api.listPurchases()])
+  if (domainResult.status === 'fulfilled') domains.value = domainResult.value
+  if (purchaseResult.status === 'fulfilled') purchases.value = purchaseResult.value
+  const failed = [domainResult, purchaseResult].find((result) => result.status === 'rejected')
+  loadError.value = failed ? errorText((failed as PromiseRejectedResult).reason) : null
+  loading.value = false
 }
 
 function sourceLabel(row: DomainOut): string {
