@@ -69,3 +69,6 @@ Ruling: accept-with-followup — useDomainsApi.ts duplicates useApi.ts request()
 ## 2026-09-22T01:37:42Z verify T-026 ok=true
 ## 2026-09-22T01:37:43Z build T-027 start (attempt 1)
 ## 2026-09-22T01:44:25Z verify T-027 ok=true
+## 2026-09-22T01:44:25Z build T-028 start (attempt 1)
+Ruling: accept — dev hit 50-turn cap after typecheck + tests passed; main thread re-ran verify + web suite (233) and committed its files (T-028, round 1)
+## 2026-09-22T01:52:37Z verify T-028 ok=true

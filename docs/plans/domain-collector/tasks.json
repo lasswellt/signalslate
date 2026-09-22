@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-22T01:44:25Z",
+  "updated": "2026-09-22T01:52:37Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2200,11 +2200,53 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T01:52:37Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'to=\"/domains\"' web/app.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:52:34Z"
+          },
+          {
+            "cmd": "grep -qE 'DomainDetailDialog' web/pages/domains.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:52:34Z"
+          },
+          {
+            "cmd": "grep -qE 'DomainIdeasPanel' web/pages/domains.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:52:34Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/pages/domains.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:52:34Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/domains.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3273,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/domains.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n············\n\n Test Files  1 passed (1)\n      Tests  12 passed (12)\n   Start at  21:52:35\n   Duration  2.09s (transform 47%, tests 32%, import 9%, environment 9%, setup 2%)",
+            "recorded_at": "2026-09-22T01:52:37Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Tabs: Portfolio (table: name, source/account, expiry with <=30d highlight, auto-renew, lock, NS provider, mail badge, missing_since), Watchlist, Ideas, Purchases. Actions: Sync now, Add domain, Import CSV, inspect any domain. Empty state points to Connections for registrar setup."
     },
