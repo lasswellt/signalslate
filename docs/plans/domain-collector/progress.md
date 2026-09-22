@@ -55,3 +55,5 @@ Ruling: accept — registrar kinds bypass create_connection's known_sources/stor
 ## 2026-09-22T01:11:36Z build T-021 start (attempt 1)
 Ruling: scope+api/routers/status.py,tests/test_api_startup.py — wordpress modes advertised in /api/system so OAuthDialog can start sign-in; one exact-equality expectation extended (T-021, round 1)
 ## 2026-09-22T01:19:26Z verify T-021 ok=true
+## 2026-09-22T01:19:26Z build T-022 start (attempt 1)
+## 2026-09-22T01:23:26Z verify T-022 ok=true

@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-22T01:19:26Z",
+  "updated": "2026-09-22T01:23:26Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1792,11 +1792,46 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T01:23:26Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE \"ConnectionKind = .*'namecheap'.*'godaddy'.*'wordpress'\" web/composables/useApi.ts",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:23:22Z"
+          },
+          {
+            "cmd": "grep -qE 'namecheap:' web/components/ConnectionDialog.vue",
+            "exit": 0,
+            "duration_ms": 6,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:23:22Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/ConnectionDialog.vue web/composables/useApi.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:23:23Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/ConnectionDialog.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3846,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/ConnectionDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·························\n\n Test Files  1 passed (1)\n      Tests  25 passed (25)\n   Start at  21:23:24\n   Duration  2.60s (transform 50%, tests 33%, environment 8%, import 7%, setup 1%)",
+            "recorded_at": "2026-09-22T01:23:26Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Mirror router field names exactly (comment at ConnectionDialog.vue:137). KIND_OPTIONS gains the 3 kinds; client_ip hint 'public IPv4 of this server'; sandbox / environment as toggles; registrant_contact as a secret JSON textarea with client-side JSON check; secrets write-only as today."
     },
