@@ -24,3 +24,6 @@ Ruling: defer — report endpoint 1-month window not clamped; window is SUMMARY_
 ## 2026-09-22T00:10:53Z build T-009 start (attempt 1)
 ## 2026-09-22T00:30:06Z verify T-009 ok=true
 Ruling: scope — T-010 widened to api/routers/status.py, web/composables/useApi.ts, tests/test_api_startup.py: /api/system oauth map needs a zoom entry and OAuthProvider needs 'zoom'; public URL still never echoed (T-010, pre-dispatch)
+## 2026-09-22T00:30:06Z build T-010 start (attempt 1)
+## 2026-09-22T00:37:04Z verify T-010 ok=true
+Ruling: accept — T-010 Tier-1 out-of-scope edit web/tests/ConnectionDialog.test.ts (fixture key zoom added, forced by OAuthProvider widening; no assertion changed; commit f141a3a) (T-010, round 1)

@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "zoom-collector",
-  "updated": "2026-09-22T00:30:06Z",
+  "updated": "2026-09-22T00:37:04Z",
   "tasks": [
     {
       "id": "T-001",
@@ -720,11 +720,53 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T00:37:04Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE \"'zoom'\" web/pages/connections.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:36:50Z"
+          },
+          {
+            "cmd": "grep -qE \"zoom\" web/components/OAuthDialog.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:36:50Z"
+          },
+          {
+            "cmd": "cd web && npm run typecheck",
+            "exit": 0,
+            "duration_ms": 2961,
+            "tail": "\n> typecheck\n> nuxt typecheck",
+            "recorded_at": "2026-09-22T00:36:53Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/OAuthDialog.test.ts tests/connections.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3951,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate-zoom-collector/web\n\nstdout | tests/connections.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/OAuthDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······················································\n\n Test Files  2 passed (2)\n      Tests  54 passed (54)\n   Start at  20:36:54\n   Duration  2.76s (transform 48%, tests 33%, import 9%, environment 8%, setup 1%)\n\n  Transform  transforming modules took 2.35s · 48% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-09-22T00:36:57Z"
+          },
+          {
+            "cmd": "cd web && npm run build",
+            "exit": 0,
+            "duration_ms": 7333,
+            "tail": "yles.Pd4Strki.mjs (3.83 kB) (1.22 kB gzip)\n  ├─ .output/server/chunks/build/error-404-styles.Pd4Strki.mjs.map (196 B) (155 B gzip)\n  ├─ .output/server/chunks/build/error-500-Dk46He1_.mjs (4.72 kB) (1.94 kB gzip)\n  ├─ .output/server/chunks/build/error-500-Dk46He1_.mjs.map (205 B) (176 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs (2.18 kB) (862 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs.map (196 B) (156 B gzip)\n  ├─ .output/server/chunks/build/history-ClUW5Owp.mjs (79.9 kB) (17.8 kB gzip)\n  ├─ .output/server/chunks/build/history-ClUW5Owp.mjs.map (1.73 kB) (506 B gzip)\n  ├─ .output/server/chunks/build/index-CNbqLKWU.mjs (40.7 kB) (3.56 kB gzip)\n  ├─ .output/server/chunks/build/index-CNbqLKWU.mjs.map (18.3 kB) (2.69 kB gzip)\n  ├─ .output/server/chunks/build/interval-CGX2yBCt.mjs (376 B) (274 B gzip)\n  ├─ .output/server/chunks/build/interval-CGX2yBCt.mjs.map (167 B) (152 B gzip)\n  ├─ .output/server/chunks/build/server.mjs (157 kB) (41.7 kB gzip)\n  ├─ .output/server/chunks/build/server.mjs.map (5.93 kB) (1.33 kB gzip)\n  ├─ .output/server/chunks/build/styles.mjs (497 B) (260 B gzip)\n  ├─ .output/server/chunks/build/styles.mjs.map (395 B) (203 B gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs (167 kB) (41.2 kB gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs.map (3.04 kB) (753 B gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs (14.2 kB) (4.57 kB gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs.map (845 B) (272 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs (94 B) (100 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs.map (88 B) (97 B gzip)\n  ├─ .output/server/index.mjs (353 B) (205 B gzip)\n  └─ .output/server/package.json (723 B) (321 B gzip)\nΣ Total size: 3.27 MB (718 kB gzip)\n[nitro] ✔ You can preview this build using node .output/server/index.mjs\n│\n└  ✨ Build complete!",
+            "recorded_at": "2026-09-22T00:37:04Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Codebase finding 5: Sign-in button gated to gmail||m365 (connections.vue:104-111); OAuthDialog provider is a binary ternary (OAuthDialog.vue:174) and ready/signedIn ternaries at :268,:322. Replace with a kind->provider lookup; zoom -> 'zoom', uses the refresh_token-in-secrets_set branch like google. Show Sign in for zoom only when auth_mode === 'oauth'. Zoom offers callback mode only; hide the paste-back option and explain when PUBLIC_BASE_URL is missing. scope+api/routers/status.py scope+web/composables/useApi.ts scope+tests/test_api_startup.py (main-thread ruling: /api/system oauth map needs a zoom entry {modes: [\"callback\"] if PUBLIC_BASE_URL https else []} and OAuthProvider must include 'zoom'; the system endpoint must still never echo the public URL)"
     },
