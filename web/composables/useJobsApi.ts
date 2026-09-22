@@ -313,6 +313,7 @@ export function useJobsApi() {
       request<JobImportOut>(url('/jobs/companies/import'), { method: 'POST', body: payload }),
     importCompaniesYc: () => request<JobImportOut>(url('/jobs/companies/import-yc'), { method: 'POST' }),
     importCompaniesHn: () => request<JobImportOut>(url('/jobs/companies/import-hn'), { method: 'POST' }),
+    importCompaniesInbox: () => request<JobImportOut>(url('/jobs/companies/import-inbox'), { method: 'POST' }),
     rescanCompany: (id: number) => request<CompanyOut>(url(`/jobs/companies/${seg(id)}/rescan`), { method: 'POST' }),
     overrideBoard: (id: number, payload: BoardOverrideBody) =>
       request<BoardOut>(url(`/jobs/boards/${seg(id)}`), { method: 'PUT', body: payload }),

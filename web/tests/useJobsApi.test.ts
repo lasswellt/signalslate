@@ -26,6 +26,7 @@ describe('useJobsApi', () => {
     ['importCompanies', 'POST', '/api/jobs/companies/import', (c) => c.importCompanies({ csv: 'acme.com\n' })],
     ['importCompaniesYc', 'POST', '/api/jobs/companies/import-yc', (c) => c.importCompaniesYc()],
     ['importCompaniesHn', 'POST', '/api/jobs/companies/import-hn', (c) => c.importCompaniesHn()],
+    ['importCompaniesInbox', 'POST', '/api/jobs/companies/import-inbox', (c) => c.importCompaniesInbox()],
     ['rescanCompany', 'POST', '/api/jobs/companies/1/rescan', (c) => c.rescanCompany(1)],
     [
       'overrideBoard',
