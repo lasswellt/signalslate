@@ -86,8 +86,8 @@ class CompanyOut(BaseModel):
     domain: Optional[str]
     source: str
     status: str
-    first_seen: str
-    last_seen: str
+    first_seen: Optional[str]
+    last_seen: Optional[str]
     boards: list[BoardOut]
 
 
@@ -128,8 +128,8 @@ class PostingOut(BaseModel):
     remote: Optional[bool]
     comp_text: Optional[str]
     apply_url: str
-    first_seen: str
-    last_seen: str
+    first_seen: Optional[str]
+    last_seen: Optional[str]
     closed_at: Optional[str]
     fit_score: Optional[int]
     fit_reason: Optional[str]

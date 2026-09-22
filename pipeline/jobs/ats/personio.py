@@ -193,7 +193,7 @@ class PersonioAdapter:
         text, status, error = _fetch_text(_FEED_URL.format(company=company))
         if status == "unavailable":
             raise RuntimeError(f"personio probe unavailable for {company!r}: {error}")
-        if status == "error":
+        if status == "error" or text is None:
             return None
         try:
             fromstring(text)
@@ -219,7 +219,7 @@ class PersonioAdapter:
         text, status, error = _fetch_text(_FEED_URL.format(company=board_id))
         if status == "unavailable":
             raise RuntimeError(f"personio list_postings unavailable for {board_id!r}: {error}")
-        if status == "error":
+        if status == "error" or text is None:
             return []
         try:
             root = fromstring(text)

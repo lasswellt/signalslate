@@ -217,12 +217,12 @@ def _unscored_candidates(session: "db.Session") -> list[_ScoreCandidate]:
     board_ids = {posting.board_id for posting in postings}
     boards = {
         board.id: board
-        for board in session.exec(select(JobBoard).where(JobBoard.id.in_(board_ids))).all()
+        for board in session.exec(select(JobBoard).where(col(JobBoard.id).in_(board_ids))).all()
     }
     company_ids = {board.company_id for board in boards.values()}
     companies = {
         company.id: company
-        for company in session.exec(select(JobCompany).where(JobCompany.id.in_(company_ids))).all()
+        for company in session.exec(select(JobCompany).where(col(JobCompany.id).in_(company_ids))).all()
     }
 
     candidates: list[_ScoreCandidate] = []

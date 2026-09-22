@@ -251,6 +251,7 @@ def seed_from_inbox(
     items = select_job_alert_items(session, since, until)[:_MAX_INBOX_EMAILS]
 
     for item in items:
+        assert item.id is not None  # item came from a select(), so it always has a primary key
         try:
             payload = json.loads(item.payload)
         except (json.JSONDecodeError, TypeError):

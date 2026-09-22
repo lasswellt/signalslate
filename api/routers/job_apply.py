@@ -532,7 +532,7 @@ def edit_application_packet(id: int, body: PacketEditBody) -> ApplicationOut:
         row = session.get(JobApplication, id)
         if row is None:
             raise _coded(404, "application_not_found", "Application not found")
-        packet_data = json.loads(row.packet) if row.packet else {"screening_drafts": []}
+        packet_data: dict[str, Any] = json.loads(row.packet) if row.packet else {"screening_drafts": []}
         packet_data["cover_letter_text"] = body.cover_letter_text
         row.packet = json.dumps(packet_data, ensure_ascii=False)
         row.cover_letter_path = packet.render_cover_letter_pdf(id, body.cover_letter_text)
