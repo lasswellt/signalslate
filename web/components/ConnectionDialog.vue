@@ -59,6 +59,26 @@
             </template>
           </template>
 
+          <template v-if="kind === 'godaddy'">
+            <q-btn-toggle
+              :model-value="godaddyAuthMode"
+              no-caps
+              unelevated
+              toggle-color="primary"
+              :options="GODADDY_AUTH_MODE_OPTIONS"
+              :disable="busy"
+              data-testid="godaddy-auth-mode"
+              @update:model-value="onGodaddyAuthModeInput"
+            />
+            <div v-if="godaddyAuthMode === 'pat'" class="text-body2" data-testid="godaddy-pat-hint">
+              developer.godaddy.com issues a single Personal Access Token now — paste it here.
+            </div>
+            <div v-else class="text-body2" data-testid="godaddy-classic-hint">
+              The classic key+secret pair comes from classic-developer.godaddy.com, not
+              developer.godaddy.com; that portal is deprecated and being phased out by GoDaddy.
+            </div>
+          </template>
+
           <template v-for="field in visibleFields" :key="`${kind}-${field.name}`">
             <q-select
               v-if="field.options"
@@ -253,6 +273,7 @@ const KIND_FIELDS: Record<ConnectionKind, FieldDef[]> = {
   ],
   godaddy: [
     { name: 'label', label: 'Label', isLabel: true, hint: 'Lowercase letters and digits (max 32)' },
+    { name: 'api_token', label: 'Personal Access Token', secret: true },
     { name: 'api_key', label: 'API key', secret: true },
     { name: 'api_secret', label: 'API secret', secret: true },
     {
@@ -294,6 +315,15 @@ const KIND_OPTIONS = (['m365', 'zoom', 'slack', 'gmail', 'namecheap', 'godaddy',
 const ZOOM_AUTH_MODE_OPTIONS = [
   { label: 'Sign in with Zoom', value: 'oauth', attrs: { 'data-testid': 'zoom-auth-oauth' } },
   { label: 'Server-to-Server', value: 's2s', attrs: { 'data-testid': 'zoom-auth-s2s' } },
+]
+
+// godaddy's auth_mode: "pat" (a Personal Access Token, what developer.godaddy.com issues today —
+// the default) or "classic" (the deprecated sso-key api_key+api_secret pair, from the separate
+// classic-developer.godaddy.com portal). Same rule as pipeline.connections.godaddy_auth_mode: an
+// explicit auth_mode wins; otherwise "classic" when api_key is stored and "pat" otherwise.
+const GODADDY_AUTH_MODE_OPTIONS = [
+  { label: 'Personal Access Token', value: 'pat', attrs: { 'data-testid': 'godaddy-auth-pat' } },
+  { label: 'Classic key + secret', value: 'classic', attrs: { 'data-testid': 'godaddy-auth-classic' } },
 ]
 
 // Same rules as pipeline/connections.py (_LABEL_RULES, _IDENTIFIER and the secret bounds).
@@ -341,6 +371,10 @@ const zoomAuthMode = ref<'oauth' | 's2s'>('oauth')
 const zoomIncludeTranscripts = ref(true)
 const zoomAuthModeTouched = ref(false)
 const zoomTranscriptsTouched = ref(false)
+// godaddy-only: auth_mode picks which of api_token / api_key+api_secret is required; lives outside
+// `values`/`touched` for the same reason zoom's auth_mode does.
+const godaddyAuthMode = ref<'pat' | 'classic'>('pat')
+const godaddyAuthModeTouched = ref(false)
 // The API deliberately never returns the public URL itself (SystemInfo.public_base_url_configured
 // is a bool); fetched once so the redirect-URL note can warn when it is not set.
 const systemInfo = ref<SystemInfo | null>(null)
@@ -350,6 +384,9 @@ const visibleFields = computed(() =>
   fields.value.filter((field) => {
     if (isEdit.value && field.isLabel) return false
     if (kind.value === 'zoom' && field.name === 'account_id' && zoomAuthMode.value === 'oauth') return false
+    if (kind.value === 'godaddy' && field.name === 'api_token' && godaddyAuthMode.value === 'classic') return false
+    if (kind.value === 'godaddy' && (field.name === 'api_key' || field.name === 'api_secret') && godaddyAuthMode.value === 'pat')
+      return false
     return true
   }),
 )
@@ -384,6 +421,17 @@ function reset(forKind: ConnectionKind) {
     zoomAuthMode.value =
       config.auth_mode === 'oauth' || config.auth_mode === 's2s' ? config.auth_mode : config.account_id ? 's2s' : 'oauth'
     zoomIncludeTranscripts.value = config.include_transcripts !== 'false'
+  }
+  if (forKind === 'godaddy') {
+    godaddyAuthModeTouched.value = false
+    const config: Record<string, string> = isEdit.value && props.connection ? props.connection.config : {}
+    const secretsSet = isEdit.value && props.connection ? props.connection.secrets_set : []
+    godaddyAuthMode.value =
+      config.auth_mode === 'pat' || config.auth_mode === 'classic'
+        ? config.auth_mode
+        : secretsSet.includes('api_key')
+          ? 'classic'
+          : 'pat'
   }
 }
 
@@ -424,6 +472,11 @@ function keepSaved(name: string) {
 function onZoomAuthModeInput(value: string) {
   zoomAuthMode.value = value as 'oauth' | 's2s'
   zoomAuthModeTouched.value = true
+}
+
+function onGodaddyAuthModeInput(value: string) {
+  godaddyAuthMode.value = value as 'pat' | 'classic'
+  godaddyAuthModeTouched.value = true
 }
 
 function onZoomTranscriptsInput(value: boolean) {
@@ -485,7 +538,8 @@ const hasChanges = computed(
   () =>
     touched.value.size > 0 ||
     providedSecrets.value.length > 0 ||
-    (kind.value === 'zoom' && (zoomAuthModeTouched.value || zoomTranscriptsTouched.value)),
+    (kind.value === 'zoom' && (zoomAuthModeTouched.value || zoomTranscriptsTouched.value)) ||
+    (kind.value === 'godaddy' && godaddyAuthModeTouched.value),
 )
 
 function buildCreate(): ConnectionCreate {
@@ -493,6 +547,14 @@ function buildCreate(): ConnectionCreate {
   for (const field of fields.value) {
     // account_id is part of the zoom contract but only makes sense in s2s mode.
     if (kind.value === 'zoom' && field.name === 'account_id' && zoomAuthMode.value === 'oauth') continue
+    // api_token / api_key+api_secret: only the pair matching the selected godaddy auth mode is sent.
+    if (kind.value === 'godaddy' && field.name === 'api_token' && godaddyAuthMode.value === 'classic') continue
+    if (
+      kind.value === 'godaddy' &&
+      (field.name === 'api_key' || field.name === 'api_secret') &&
+      godaddyAuthMode.value === 'pat'
+    )
+      continue
     const value = field.secret ? (secrets.value[field.name] ?? '') : (values.value[field.name] ?? '')
     // An optional secret left blank (registrant_contact) must be omitted, not sent as '': the server
     // validates whatever it receives, and '' does not parse as the JSON object the field expects.
@@ -503,6 +565,9 @@ function buildCreate(): ConnectionCreate {
     // ZoomCreate.include_transcripts is a JSON bool (api/routers/connections.py); auth_mode is always sent.
     body.auth_mode = zoomAuthMode.value
     body.include_transcripts = zoomIncludeTranscripts.value
+  }
+  if (kind.value === 'godaddy') {
+    body.auth_mode = godaddyAuthMode.value
   }
   // The body is assembled from KIND_FIELDS, which is the API contract, so it is exactly one member of
   // the ConnectionCreate union for the selected kind.
@@ -521,6 +586,9 @@ function buildUpdate(): ConnectionUpdate {
     if (zoomAuthModeTouched.value) config.auth_mode = zoomAuthMode.value
     if (zoomAuthModeTouched.value && zoomAuthMode.value === 's2s') config.account_id = values.value.account_id ?? ''
     if (zoomTranscriptsTouched.value) config.include_transcripts = zoomIncludeTranscripts.value ? 'true' : 'false'
+  }
+  if (kind.value === 'godaddy' && godaddyAuthModeTouched.value) {
+    config.auth_mode = godaddyAuthMode.value
   }
   if (Object.keys(config).length) body.config = config
   if (providedSecrets.value.length) body.secrets = Object.fromEntries(providedSecrets.value)

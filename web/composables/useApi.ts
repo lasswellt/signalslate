@@ -92,8 +92,13 @@ export interface NamecheapCreate {
 export interface GodaddyCreate {
   kind: 'godaddy'
   label: string
-  api_key: string
-  api_secret: string
+  // api_token (pat, what developer.godaddy.com issues today) or api_key+api_secret (classic, the
+  // deprecated sso-key pair) — exactly one shape, keyed by auth_mode; see pipeline.connections
+  // godaddy_auth_mode and _check_godaddy_credentials.
+  api_token?: string
+  api_key?: string
+  api_secret?: string
+  auth_mode?: 'pat' | 'classic'
   environment?: string
   registrant_contact?: string
 }

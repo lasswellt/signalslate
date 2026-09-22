@@ -3,15 +3,20 @@ GoDaddy registrar adapter: the v1 REST API at api(.ote-)godaddy.com.
 
 Design decisions:
 
-- Single `_auth_headers()` builds the `Authorization: sso-key KEY:SECRET` header, and every request
-  goes through `GoDaddyClient._request()`, which is the only place that calls it. certbot #10733
-  (docs/_research/2026-09-21_domain-collector.md Finding 4 / Dissent) reports GoDaddy moving parts
-  of its API to Bearer PAT auth; keeping the header format behind one function makes that a one-line
-  change instead of a per-call-site hunt.
+- Single `_auth_headers()` builds the Authorization header, and every request goes through
+  `GoDaddyClient._request()`, which is the only place that calls it. certbot #10733
+  (docs/_research/2026-09-21_domain-collector.md Finding 4 / Dissent) anticipated GoDaddy moving to
+  Bearer PAT auth; confirmed live 2026-09-22 (a fresh developer.godaddy.com signup now issues only a
+  Personal Access Token, no key/secret pair — the classic sso-key pair comes from the separate,
+  deprecated classic-developer.godaddy.com). Both auth shapes work against the v1 Domains API this
+  module calls, so both are supported, keyed by pipeline.connections.godaddy_auth_mode(): "pat"
+  (default, a single api_token secret, `Authorization: Bearer <token>`) or "classic" (api_key +
+  api_secret, `Authorization: sso-key KEY:SECRET`). Keeping both behind one function makes the header
+  format a one-line-per-mode difference instead of a per-call-site hunt.
 - GoDaddyClient is built directly from a connection id (pipeline.connections.get/get_secret), same
-  seam as NamecheapClient: config (environment) comes from the connection's config, api_key/
-  api_secret from its vault-backed secrets. Building it is the one place this module touches
-  pipeline.connections.
+  seam as NamecheapClient: config (environment, auth_mode) comes from the connection's config,
+  api_token or api_key/api_secret from its vault-backed secrets, picked by auth_mode. Building it is
+  the one place this module touches pipeline.connections.
 - Error mapping is by HTTP status, not response text (unlike namecheap.py): GoDaddy's error bodies
   are JSON with a `code` field, which is a stable shape to match on. 401 is a credentials problem;
   403 with `code` ACCESS_DENIED or ACCOUNT_NOT_ELIGIBLE is the availability-tier gate (Finding 4:
@@ -95,8 +100,10 @@ _IPIFY_URL = "https://api.ipify.org"
 
 @dataclass(frozen=True)
 class _Config:
-    api_key: str
-    api_secret: str
+    auth_mode: str  # "pat" | "classic"
+    api_token: Optional[str]
+    api_key: Optional[str]
+    api_secret: Optional[str]
     environment: str  # "production" | "ote"
 
 
@@ -109,17 +116,26 @@ def _load_config(connection_id: str) -> _Config:
     view = connections.get(connection_id)
     if view is None:
         raise AuthFailed("no such connection")
-    api_key = connections.get_secret(connection_id, "api_key")
-    api_secret = connections.get_secret(connection_id, "api_secret")
-    if not api_key or not api_secret:
-        raise AuthFailed("connection has no GoDaddy API key/secret configured")
+    mode = connections.godaddy_auth_mode(view)
     environment = str(view.config.get("environment") or "production")
-    return _Config(api_key=api_key, api_secret=api_secret, environment=environment)
+    if mode == "classic":
+        api_key = connections.get_secret(connection_id, "api_key")
+        api_secret = connections.get_secret(connection_id, "api_secret")
+        if not api_key or not api_secret:
+            raise AuthFailed("connection has no GoDaddy API key/secret configured")
+        return _Config(auth_mode=mode, api_token=None, api_key=api_key, api_secret=api_secret, environment=environment)
+    api_token = connections.get_secret(connection_id, "api_token")
+    if not api_token:
+        raise AuthFailed("connection has no GoDaddy personal access token configured")
+    return _Config(auth_mode=mode, api_token=api_token, api_key=None, api_secret=None, environment=environment)
 
 
 def _auth_headers(config: _Config) -> dict[str, str]:
-    """The one place that builds GoDaddy's Authorization header (module docstring: PAT migration risk)."""
-    return {"Authorization": f"sso-key {config.api_key}:{config.api_secret}"}
+    """The one place that builds GoDaddy's Authorization header: sso-key for "classic", Bearer PAT
+    for "pat" (module docstring: both accepted by the v1 Domains API this module calls)."""
+    if config.auth_mode == "classic":
+        return {"Authorization": f"sso-key {config.api_key}:{config.api_secret}"}
+    return {"Authorization": f"Bearer {config.api_token}"}
 
 
 def _current_egress_ip() -> str:
@@ -343,6 +359,6 @@ class GoDaddyClient:
         )
 
     def check_connection(self) -> str:
-        """Confirms the sso-key credentials work via GET /v1/domains?limit=1."""
+        """Confirms the stored credentials (pat or classic) work via GET /v1/domains?limit=1."""
         self._request("GET", _DOMAINS_PATH, params={"limit": "1"})
         return f"connected to GoDaddy ({self._config.environment})"

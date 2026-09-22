@@ -20,9 +20,10 @@ from pipeline.connections import InvalidField, MissingField, UnknownField  # noq
 NAMECHEAP_KEY = "namecheap-key-Xy82QpL4vM"
 GODADDY_KEY = "godaddy-key-9dWr3ufjTq"
 GODADDY_SECRET = "godaddy-secret-2LaEskvNc8"
+GODADDY_PAT_TOKEN = "godaddy-pat-6vTq9nWbXe3s"
 WORDPRESS_SECRET = "wordpress-secret-8bNcXqE1zR"
 WORDPRESS_TOKEN = "wordpress-token-4mPqRstU7d"
-ALL_SECRETS = [NAMECHEAP_KEY, GODADDY_KEY, GODADDY_SECRET, WORDPRESS_SECRET, WORDPRESS_TOKEN]
+ALL_SECRETS = [NAMECHEAP_KEY, GODADDY_KEY, GODADDY_SECRET, GODADDY_PAT_TOKEN, WORDPRESS_SECRET, WORDPRESS_TOKEN]
 
 REGISTRANT_CONTACT = {
     "first_name": "Jane",
@@ -43,7 +44,10 @@ NAMECHEAP = {
     "client_ip": "203.0.113.5",
     "api_key": NAMECHEAP_KEY,
 }
-GODADDY = {"label": "prod", "api_key": GODADDY_KEY, "api_secret": GODADDY_SECRET}
+# auth_mode "classic": the legacy sso-key key/secret pair. GODADDY_PAT below is the "pat" default
+# (Personal Access Token) developer.godaddy.com now issues.
+GODADDY = {"label": "prod", "auth_mode": "classic", "api_key": GODADDY_KEY, "api_secret": GODADDY_SECRET}
+GODADDY_PAT = {"label": "patacct", "api_token": GODADDY_PAT_TOKEN}
 WORDPRESS = {"label": "blog", "client_id": "wp-client-id-123", "client_secret": WORDPRESS_SECRET}
 
 
@@ -160,7 +164,7 @@ def test_namecheap_no_vault_raises_secret_key_missing():
 def test_create_godaddy_happy_path_defaults_environment(vault):
     view = connections.create("godaddy", GODADDY)
     assert (view.id, view.label) == ("godaddy_prod", "prod")
-    assert view.config == {"label": "prod", "environment": "production"}
+    assert view.config == {"label": "prod", "auth_mode": "classic", "environment": "production"}
     assert sorted(view.secrets_set) == ["api_key", "api_secret"]
     assert connections._secrets_for("godaddy_prod") == {"api_key": GODADDY_KEY, "api_secret": GODADDY_SECRET}
 
@@ -189,6 +193,40 @@ def test_create_godaddy_registrant_contact_is_optional(vault):
     assert "registrant_contact" not in view.secrets_set
     updated = connections.update("godaddy_prod", secrets={"registrant_contact": REGISTRANT_CONTACT})
     assert sorted(updated.secrets_set) == ["api_key", "api_secret", "registrant_contact"]
+
+
+# --- godaddy: pat (Personal Access Token), the auth_mode default -----------------------
+# developer.godaddy.com's current signup flow issues a single token, not a key/secret pair; the
+# classic pair above comes from the separate, deprecated classic-developer.godaddy.com portal.
+
+
+def test_create_godaddy_pat_happy_path(vault):
+    view = connections.create("godaddy", GODADDY_PAT)
+    assert (view.id, view.label) == ("godaddy_patacct", "patacct")
+    assert view.secrets_set == ["api_token"]
+    assert connections._secrets_for("godaddy_patacct") == {"api_token": GODADDY_PAT_TOKEN}
+    assert connections.godaddy_auth_mode(view) == "pat"
+
+
+def test_create_godaddy_defaults_to_pat_when_auth_mode_omitted(vault):
+    """No explicit auth_mode at all (not even "pat") still resolves to pat, api_token required."""
+    with pytest.raises(MissingField) as info:
+        connections.create("godaddy", {"label": "bare", "api_key": GODADDY_KEY, "api_secret": GODADDY_SECRET})
+    assert info.value.field == "api_token"
+
+
+def test_create_godaddy_pat_mode_requires_api_token(vault):
+    with pytest.raises(MissingField) as info:
+        connections.create("godaddy", {"label": "nopat", "auth_mode": "pat"})
+    assert info.value.field == "api_token"
+
+
+def test_godaddy_auth_mode_explicit_wins_over_inference(vault):
+    """An explicit auth_mode is trusted even if it doesn't match which secret ended up stored (the
+    check at create() already enforced consistency; this only proves the reader doesn't re-derive
+    once auth_mode is set)."""
+    view = connections.create("godaddy", GODADDY)
+    assert connections.godaddy_auth_mode(view) == "classic"
 
 
 # --- wordpress -------------------------------------------------------------------------
@@ -226,6 +264,7 @@ def test_create_wordpress_missing_client_secret_raises(vault):
 def test_registrar_and_wordpress_connections_never_leak_secrets(vault):
     connections.create("namecheap", {**NAMECHEAP, "registrant_contact": REGISTRANT_CONTACT})
     connections.create("godaddy", GODADDY)
+    connections.create("godaddy", GODADDY_PAT)
     connections.create("wordpress", {**WORDPRESS, "access_token": WORDPRESS_TOKEN})
     for view in connections.list_connections():
         _assert_no_secret(json.dumps(view.config))
@@ -239,6 +278,7 @@ def test_registrar_and_wordpress_connections_never_leak_secrets(vault):
 def test_materialize_emits_nothing_for_namecheap_godaddy_wordpress(vault):
     connections.create("namecheap", NAMECHEAP)
     connections.create("godaddy", GODADDY)
+    connections.create("godaddy", GODADDY_PAT)
     connections.create("wordpress", WORDPRESS)
     assert connections.materialize() == {}
 
@@ -249,6 +289,7 @@ def test_materialize_emits_nothing_for_namecheap_godaddy_wordpress(vault):
         "NAMECHEAP_PROD_API_KEY",
         "GODADDY_PROD_API_KEY",
         "GODADDY_PROD_API_SECRET",
+        "GODADDY_PATACCT_API_TOKEN",
         "WORDPRESS_BLOG_CLIENT_SECRET",
     ],
 )

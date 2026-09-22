@@ -354,6 +354,9 @@ def create_godaddy(client: Recorder, label: str = "gdwork") -> httpx.Response:
         json={
             "kind": "godaddy",
             "label": label,
+            # classic (the legacy sso-key pair), exercised here; pat mode (the current
+            # developer.godaddy.com default) is covered at the connections/router unit level.
+            "auth_mode": "classic",
             "api_key": GODADDY_API_KEY,
             "api_secret": GODADDY_API_SECRET,
             "registrant_contact": REGISTRANT_CONTACT_JSON,

@@ -161,7 +161,8 @@ describe('ConnectionDialog fields', () => {
       slack: ['label', 'token'],
       gmail: ['label', 'client_id', 'client_secret', 'redirect_mode'],
       namecheap: ['label', 'api_user', 'username', 'client_ip', 'api_key', 'sandbox', 'registrant_contact'],
-      godaddy: ['label', 'api_key', 'api_secret', 'environment', 'registrant_contact'],
+      // godaddy defaults to pat mode on create, which hides api_key/api_secret.
+      godaddy: ['label', 'api_token', 'environment', 'registrant_contact'],
       wordpress: ['label', 'client_id', 'client_secret', 'redirect_mode'],
     }
     for (const [kind, names] of Object.entries(expected)) {
@@ -389,13 +390,12 @@ describe('ConnectionDialog submit', () => {
     })
   })
 
-  it('create sends the registrant_contact JSON and the godaddy environment default', async () => {
+  it('create sends the registrant_contact JSON and the godaddy environment default (pat mode, the default)', async () => {
     stubApi((call) => (call.method === 'POST' ? connection({ id: 'godaddy_acme', kind: 'godaddy' }) : undefined))
     await mountDialog({ mode: 'create' })
     await click('kind-godaddy')
     await type('label', 'acme')
-    await type('api_key', SECRET)
-    await type('api_secret', OTHER_SECRET)
+    await type('api_token', SECRET)
     const contact = JSON.stringify({ first_name: 'Jamie' })
     await type('registrant_contact', contact)
     await submit()
@@ -403,11 +403,33 @@ describe('ConnectionDialog submit', () => {
     expect(calls.find((call) => call.method === 'POST')?.body).toEqual({
       kind: 'godaddy',
       label: 'acme',
+      api_token: SECRET,
+      environment: 'production',
+      auth_mode: 'pat',
+      registrant_contact: contact,
+    })
+  })
+
+  it('create sends api_key/api_secret in classic mode, never api_token', async () => {
+    stubApi((call) => (call.method === 'POST' ? connection({ id: 'godaddy_acme', kind: 'godaddy' }) : undefined))
+    await mountDialog({ mode: 'create' })
+    await click('kind-godaddy')
+    await click('godaddy-auth-classic')
+    await type('label', 'acme')
+    await type('api_key', SECRET)
+    await type('api_secret', OTHER_SECRET)
+    await submit()
+
+    const sentBody = calls.find((call) => call.method === 'POST')?.body as Record<string, unknown>
+    expect(sentBody).toEqual({
+      kind: 'godaddy',
+      label: 'acme',
       api_key: SECRET,
       api_secret: OTHER_SECRET,
       environment: 'production',
-      registrant_contact: contact,
+      auth_mode: 'classic',
     })
+    expect(sentBody.api_token).toBeUndefined()
   })
 
   it('validates registrant_contact as JSON and as an object, not an array, before it can be submitted', async () => {
@@ -415,8 +437,7 @@ describe('ConnectionDialog submit', () => {
     await mountDialog({ mode: 'create' })
     await click('kind-godaddy')
     await type('label', 'acme')
-    await type('api_key', SECRET)
-    await type('api_secret', OTHER_SECRET)
+    await type('api_token', SECRET)
 
     await type('registrant_contact', 'not json')
     await submit()

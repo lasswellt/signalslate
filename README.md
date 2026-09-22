@@ -453,9 +453,16 @@ flow first.
 
 Any account with **at least one domain** gets the Domains API (list, detail, DNS, purchase).
 **Availability checks** are a separate, stricter tier: **50 or more domains**, or **average monthly
-spend of $20 or more**. Generate an API key/secret at developer.godaddy.com. GoDaddy also runs a
-test environment, **OTE** (`api.ote-godaddy.com`), with its own account — test purchases there
-before using a production key.
+spend of $20 or more**.
+
+GoDaddy has two credential systems. **developer.godaddy.com** (the current portal) issues a single
+**Personal Access Token** — paste it into the connection's "Personal Access Token" field, the
+default auth mode. The older key/secret pair (`sso-key`) comes from a separate, deprecated portal,
+**classic-developer.godaddy.com**; use it only if that's what you already have, by switching the
+connection's auth mode to "Classic key + secret". Both work with this app's GoDaddy calls.
+
+GoDaddy also runs a test environment, **OTE** (`api.ote-godaddy.com`), with its own account — test
+purchases there before using a production credential.
 
 ### WordPress.com
 
