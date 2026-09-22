@@ -42,7 +42,7 @@ export interface DigestConfig {
 }
 
 export type ConnectionKind = 'm365' | 'zoom' | 'slack' | 'gmail' | 'namecheap' | 'godaddy' | 'wordpress'
-export type OAuthProvider = 'google' | 'microsoft'
+export type OAuthProvider = 'google' | 'microsoft' | 'wordpress'
 export type OAuthMode = 'paste_back' | 'callback'
 
 // Create payloads mirror api/routers/connections.py. Secrets are write-only: they appear here and
@@ -187,7 +187,8 @@ export interface SystemInfo {
   store_active: boolean
   public_base_url_configured: boolean
   web_origins: string[]
-  oauth: Record<OAuthProvider, { modes: OAuthMode[] }>
+  // Partial: existing fixtures (tests, older servers) may not list every provider.
+  oauth: Partial<Record<OAuthProvider, { modes: OAuthMode[] }>>
 }
 
 export interface CollectorAttempt {

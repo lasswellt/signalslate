@@ -13,6 +13,10 @@
           token after 7 days.
         </q-banner>
 
+        <q-banner v-if="provider === 'wordpress'" dense class="bg-grey-3" data-testid="oauth-wordpress-note">
+          Uses an undocumented WordPress.com endpoint; if listing breaks, import a CSV instead.
+        </q-banner>
+
         <q-banner v-if="stage === 'connected'" class="bg-positive text-white" data-testid="oauth-connected">
           Connected<template v-if="account"> as {{ account }}</template>
         </q-banner>
@@ -182,7 +186,17 @@ const RETRYABLE = new Set(['invalid_pasted_url', 'nonce_mismatch'])
 
 type Stage = 'choose' | 'waiting' | 'connected'
 
-const provider = computed<OAuthProvider>(() => (props.connection?.kind === 'm365' ? 'microsoft' : 'google'))
+// Every kind this dialog can sign in (connections.vue gates the button); explicit so an
+// unrecognised kind fails loudly instead of silently falling back to google.
+const KIND_PROVIDER: Record<'m365' | 'gmail' | 'wordpress', OAuthProvider> = {
+  m365: 'microsoft',
+  gmail: 'google',
+  wordpress: 'wordpress',
+}
+const provider = computed<OAuthProvider>(() => {
+  const kind = props.connection?.kind
+  return kind && kind in KIND_PROVIDER ? KIND_PROVIDER[kind as keyof typeof KIND_PROVIDER] : 'google'
+})
 const availableModes = computed<OAuthMode[]>(() => props.system?.oauth?.[provider.value]?.modes ?? [])
 const modeOptions = computed(() => {
   const options = [{ label: 'Paste-back', value: 'paste_back', attrs: { 'data-testid': 'mode-paste_back' } }]

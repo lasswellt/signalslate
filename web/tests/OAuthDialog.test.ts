@@ -50,6 +50,13 @@ function connection(overrides: Partial<ConnectionView> = {}): ConnectionView {
 
 const GMAIL = connection()
 const M365 = connection({ id: 'm365_corp', kind: 'm365', label: 'corp', config: { tenant_id: 't', client_id: 'c' }, secrets_set: [] })
+const WORDPRESS = connection({
+  id: 'wordpress_blog',
+  kind: 'wordpress',
+  label: 'blog',
+  config: { client_id: 'cid-2', redirect_mode: 'paste_back' },
+  secrets_set: ['client_secret'],
+})
 
 interface Call {
   method: string
@@ -191,10 +198,10 @@ afterEach(() => {
 })
 
 describe('sign-in button', () => {
-  it('shows for gmail and m365 only, and only when secrets can be stored', async () => {
-    list = [GMAIL, M365, connection({ id: 'slack_acme', kind: 'slack', label: 'acme', secrets_set: ['token'] })]
+  it('shows for gmail, m365 and wordpress only, and only when secrets can be stored', async () => {
+    list = [GMAIL, M365, WORDPRESS, connection({ id: 'slack_acme', kind: 'slack', label: 'acme', secrets_set: ['token'] })]
     await mountPage()
-    expect(body.querySelectorAll('[data-testid="conn-signin"]')).toHaveLength(2)
+    expect(body.querySelectorAll('[data-testid="conn-signin"]')).toHaveLength(3)
   })
 
   it('is hidden without a secret key', async () => {
@@ -233,6 +240,14 @@ describe('mode availability', () => {
     await click('oauth-start')
     expect($('oauth-ms-warning')?.textContent).toContain('about a minute')
   })
+
+  it('shows the wordpress undocumented-endpoint banner and no other provider banner', async () => {
+    await mountDialog(WORDPRESS)
+    expect($('oauth-wordpress-note')?.textContent).toContain('undocumented WordPress.com endpoint')
+    expect($('oauth-wordpress-note')?.textContent).toContain('import a CSV instead')
+    expect($('oauth-gmail-note')).toBeNull()
+    expect($('oauth-ms-warning')).toBeNull()
+  })
 })
 
 describe('start', () => {
@@ -256,6 +271,12 @@ describe('start', () => {
     await mountDialog(M365)
     await click('oauth-start')
     expect(startCalls()[0]?.path).toBe('/api/oauth/microsoft/start')
+  })
+
+  it('maps a wordpress connection to the wordpress provider', async () => {
+    await mountDialog(WORDPRESS)
+    await click('oauth-start')
+    expect(startCalls()[0]?.path).toBe('/api/oauth/wordpress/start')
   })
 
   it.each(['http://accounts.example.com/auth', 'javascript:alert(1)', '//accounts.example.com/auth', 'data:text/html,x'])(

@@ -101,7 +101,7 @@
             @click="openEdit(conn)"
           />
           <q-btn
-            v-if="system?.secret_key_configured && (conn.kind === 'gmail' || conn.kind === 'm365')"
+            v-if="system?.secret_key_configured && (conn.kind === 'gmail' || conn.kind === 'm365' || conn.kind === 'wordpress')"
             flat
             color="primary"
             icon="login"
