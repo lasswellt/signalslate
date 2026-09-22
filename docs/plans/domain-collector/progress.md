@@ -77,3 +77,4 @@ Ruling: accept — e2e written after round-1 resume (first pass spent budget rea
 ## 2026-09-22T02:03:29Z verify T-029 ok=true
 ## 2026-09-22T02:03:29Z build T-030 start (attempt 1)
 ## 2026-09-22T02:05:07Z verify T-030 ok=true
+## 2026-09-22T02:05:53Z build complete 30/30 done — py 2232, web 233, nuxt typecheck ok, pyright 54 (baseline, 0 in new code); not pushed (branch carries management-ui PR #3)
