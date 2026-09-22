@@ -21,3 +21,6 @@ Ruling: defer — report endpoint 1-month window not clamped; window is SUMMARY_
 ## 2026-09-22T00:07:13Z verify T-007 ok=true (round 1 resume after ECONNRESET; no attempt consumed)
 ## 2026-09-22T00:07:13Z build T-008 start (attempt 1)
 ## 2026-09-22T00:10:53Z verify T-008 ok=true
+## 2026-09-22T00:10:53Z build T-009 start (attempt 1)
+## 2026-09-22T00:30:06Z verify T-009 ok=true
+Ruling: scope — T-010 widened to api/routers/status.py, web/composables/useApi.ts, tests/test_api_startup.py: /api/system oauth map needs a zoom entry and OAuthProvider needs 'zoom'; public URL still never echoed (T-010, pre-dispatch)

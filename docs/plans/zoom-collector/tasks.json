@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "zoom-collector",
-  "updated": "2026-09-22T00:10:53Z",
+  "updated": "2026-09-22T00:30:06Z",
   "tasks": [
     {
       "id": "T-001",
@@ -635,11 +635,53 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T00:30:06Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'auth_mode' web/components/ConnectionDialog.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:29:59Z"
+          },
+          {
+            "cmd": "grep -qE 'include_transcripts' web/components/ConnectionDialog.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:29:59Z"
+          },
+          {
+            "cmd": "grep -qE 'oauth/callback/zoom' web/components/ConnectionDialog.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:30:00Z"
+          },
+          {
+            "cmd": "cd web && npm run typecheck",
+            "exit": 0,
+            "duration_ms": 2959,
+            "tail": "\n> typecheck\n> nuxt typecheck",
+            "recorded_at": "2026-09-22T00:30:02Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/ConnectionDialog.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3617,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate-zoom-collector/web\n\nstdout | tests/ConnectionDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·····························\n\n Test Files  1 passed (1)\n      Tests  29 passed (29)\n   Start at  20:30:04\n   Duration  2.36s (transform 45%, tests 37%, environment 9%, import 8%, setup 1%)",
+            "recorded_at": "2026-09-22T00:30:06Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Codebase finding 5: KIND_FIELDS.zoom (ConnectionDialog.vue:145-149) is S2S-only. Add an auth-mode choice ('Sign in with Zoom' default / 'Server-to-Server'). oauth: client_id + write-only client_secret + read-only redirect URL {PUBLIC_BASE_URL}/api/oauth/callback/zoom to paste into the Zoom app (show a note when no public base URL is configured). s2s: current three fields. include_transcripts toggle, ON by default, with a hint that transcripts need Zoom cloud recording. refresh_token is never an input."
     },
@@ -684,7 +726,7 @@
       "attempts": 0,
       "last_verify": null,
       "origin": "plan",
-      "notes": "Codebase finding 5: Sign-in button gated to gmail||m365 (connections.vue:104-111); OAuthDialog provider is a binary ternary (OAuthDialog.vue:174) and ready/signedIn ternaries at :268,:322. Replace with a kind->provider lookup; zoom -> 'zoom', uses the refresh_token-in-secrets_set branch like google. Show Sign in for zoom only when auth_mode === 'oauth'. Zoom offers callback mode only; hide the paste-back option and explain when PUBLIC_BASE_URL is missing."
+      "notes": "Codebase finding 5: Sign-in button gated to gmail||m365 (connections.vue:104-111); OAuthDialog provider is a binary ternary (OAuthDialog.vue:174) and ready/signedIn ternaries at :268,:322. Replace with a kind->provider lookup; zoom -> 'zoom', uses the refresh_token-in-secrets_set branch like google. Show Sign in for zoom only when auth_mode === 'oauth'. Zoom offers callback mode only; hide the paste-back option and explain when PUBLIC_BASE_URL is missing. scope+api/routers/status.py scope+web/composables/useApi.ts scope+tests/test_api_startup.py (main-thread ruling: /api/system oauth map needs a zoom entry {modes: [\"callback\"] if PUBLIC_BASE_URL https else []} and OAuthProvider must include 'zoom'; the system endpoint must still never echo the public URL)"
     },
     {
       "id": "T-011",
