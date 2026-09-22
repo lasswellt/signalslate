@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-22T02:03:29Z",
+  "updated": "2026-09-22T02:05:07Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2330,11 +2330,46 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T02:05:07Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^DOMAINS_PURCHASE_ENABLED=false' .env.example",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T02:05:07Z"
+          },
+          {
+            "cmd": "grep -qE '^DOMAINS_MAX_PRICE=' .env.example",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T02:05:07Z"
+          },
+          {
+            "cmd": "grep -qiE '^## Domains' README.md",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T02:05:07Z"
+          },
+          {
+            "cmd": "grep -qE '20 domains' README.md",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T02:05:07Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Public repo: generic only (no personal domains, IPs or hostnames; host specifics go in gitignored docs/local/). Cover: Namecheap eligibility (20 domains / $50 balance / $50 in 2y) + IPv4 whitelist; GoDaddy tiers (>=1 domain API, >=50 or $20/mo for availability) + OTE; WordPress.com undocumented endpoint + CSV fallback; guardrail keys; sandbox-first testing caveat."
     }

@@ -75,3 +75,5 @@ Ruling: accept — dev hit 50-turn cap after typecheck + tests passed; main thre
 ## 2026-09-22T01:52:37Z build T-029 start (attempt 1)
 Ruling: accept — e2e written after round-1 resume (first pass spent budget reading); secret sweep covers responses + collecteditem, not DB file bytes (secrets are vault-encrypted there by crypto.py) (T-029, round 1)
 ## 2026-09-22T02:03:29Z verify T-029 ok=true
+## 2026-09-22T02:03:29Z build T-030 start (attempt 1)
+## 2026-09-22T02:05:07Z verify T-030 ok=true
