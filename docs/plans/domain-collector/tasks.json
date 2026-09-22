@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-22T01:33:35Z",
+  "updated": "2026-09-22T01:37:42Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2068,11 +2068,39 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T01:37:42Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'data-testid=\"purchase-confirm-name\"' web/components/DomainPurchaseDialog.vue",
+            "exit": 0,
+            "duration_ms": 6,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:37:39Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/DomainPurchaseDialog.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:37:39Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/DomainPurchaseDialog.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3382,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/DomainPurchaseDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n····stderr | tests/DomainPurchaseDialog.test.ts > quote display > computes the total from years using price + (years - 1) * renewal\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n·········\n\n Test Files  1 passed (1)\n      Tests  13 passed (13)\n   Start at  21:37:40\n   Duration  2.06s (transform 46%, tests 32%, environment 10%, import 10%, setup 2%)",
+            "recorded_at": "2026-09-22T01:37:42Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Shows registrar, first-year and renewal price, premium badge, remaining daily cap, quote countdown. Buy button disabled until typed name matches and settings enabled; disabled-state explains DOMAINS_PURCHASE_ENABLED. Single in-flight submit; refusal codes rendered as readable text; 'unknown' outcome explains it will be reconciled on next sync."
     },
