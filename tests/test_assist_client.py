@@ -180,14 +180,12 @@ def test_claim_missing_application_raises(client):
     assert excinfo.value.code == "application_not_found"
 
 
-def test_claim_response_omits_session_id(client):
-    """Documents a gap in api/routers/job_apply.py's ApplicationOut (out of this task's scope, see
-    concerns[]): claim() returns whatever the server sends, and the server's response model does
-    not carry assist_session_id even though the row gets one. report_progress() tests below set
-    assist_session_id up directly on the row instead of reading it from claim()'s response."""
+def test_claim_response_includes_session_id(client):
+    """ApplicationOut carries assist_session_id (fixed alongside this task) so the runner can learn
+    its session id from claim()'s response instead of needing a second lookup."""
     _posting, application = _posting_with_application(status="ready", assist_state="queued")
     result = client.claim(application.id)
-    assert "assist_session_id" not in result
+    assert result["assist_session_id"]
 
 
 # --- fetch_application ---------------------------------------------------------------------------

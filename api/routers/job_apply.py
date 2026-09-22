@@ -421,6 +421,7 @@ class ApplicationOut(BaseModel):
     cover_letter_path: Optional[str]
     resume_path: Optional[str]
     assist_state: str
+    assist_session_id: Optional[str]
     created_at: Optional[str]
     submitted_at: Optional[str]
 
@@ -435,6 +436,7 @@ def _application_out(row: JobApplication) -> ApplicationOut:
         cover_letter_path=row.cover_letter_path,
         resume_path=row.resume_path,
         assist_state=row.assist_state,
+        assist_session_id=row.assist_session_id,
         created_at=iso_z(row.created_at),
         submitted_at=iso_z(row.submitted_at),
     )
