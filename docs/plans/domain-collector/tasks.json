@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-22T00:36:31Z",
+  "updated": "2026-09-22T00:50:51Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1389,11 +1389,60 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T00:50:51Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def create_quote' pipeline/domains/purchase.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:50:50Z"
+          },
+          {
+            "cmd": "grep -qE '^def execute_purchase' pipeline/domains/purchase.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:50:50Z"
+          },
+          {
+            "cmd": "grep -qE '^def reconcile_unknown' pipeline/domains/purchase.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:50:50Z"
+          },
+          {
+            "cmd": "grep -qE 'DOMAINS_PURCHASE_ENABLED|purchase_enabled' pipeline/domains/purchase.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:50:50Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/domains/purchase.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:50:50Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_domain_purchase.py -q",
+            "exit": 0,
+            "duration_ms": 954,
+            "tail": ".........................                                                [100%]\n25 passed in 0.60s",
+            "recorded_at": "2026-09-22T00:50:51Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Q6, Implementation Step 4. create_quote(name, connection_id) -> registrar.check -> DomainQuote (TTL 5 min). execute_purchase(quote_id, confirm_name, years=1) refuses (typed PurchaseRefused(reason)) unless: purchase enabled, quote unexpired, confirm_name == quote.name, available, not premium unless DOMAINS_ALLOW_PREMIUM, price <= max_price, today's succeeded+pending+unknown total + price <= daily_cap, registrant_contact present. Insert DomainPurchase(pending) BEFORE registrar call (unique quote_id => second call refused); timeout/unknown -> status unknown, never auto-retry. On success add Domain(owned). reconcile_unknown() marks unknown as succeeded when sync_all shows the domain. Tests: every refusal path, double submit, registrar timeout -> unknown, success creates Domain."
     },

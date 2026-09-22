@@ -41,3 +41,6 @@ Ruling: scope+tests — 'domains' always in known_sources() by design; 12 expect
 ## 2026-09-22T00:28:24Z verify T-015 ok=true
 ## 2026-09-22T00:28:24Z build T-016 start (attempt 1)
 ## 2026-09-22T00:36:31Z verify T-016 ok=true
+## 2026-09-22T00:36:31Z build T-017 start (attempt 1)
+Ruling: fix — main-thread review of purchase.py found years bypassing caps, daily-cap race across quotes, and 'unknown' on registrar construction failure; all fixed with tests in round 1 (T-017)
+## 2026-09-22T00:50:51Z verify T-017 ok=true
