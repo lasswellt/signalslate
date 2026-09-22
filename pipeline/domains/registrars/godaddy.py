@@ -52,6 +52,7 @@ from typing import Any, Optional
 import requests
 
 from pipeline import connections
+from pipeline.domains.registrars._egress import current_egress_ip
 from pipeline.domains.registrars import (
     AuthFailed,
     Contact,
@@ -93,10 +94,6 @@ _PRICE_MICRO_UNITS = Decimal("1000000")
 # Fallback only: used when an availability entry has no currency of its own.
 _ACCOUNT_CURRENCY = "USD"
 
-# Reports the app's own egress IPv4 as purchase()'s consent.agreedBy value, mirroring
-# namecheap.py's IP lookup for its whitelist message.
-_IPIFY_URL = "https://api.ipify.org"
-
 
 @dataclass(frozen=True)
 class _Config:
@@ -136,16 +133,6 @@ def _auth_headers(config: _Config) -> dict[str, str]:
     if config.auth_mode == "classic":
         return {"Authorization": f"sso-key {config.api_key}:{config.api_secret}"}
     return {"Authorization": f"Bearer {config.api_token}"}
-
-
-def _current_egress_ip() -> str:
-    """Best-effort current public IPv4, for purchase()'s consent.agreedBy. Never raises."""
-    try:
-        response = requests.get(_IPIFY_URL, params={"format": "text"}, timeout=_TIMEOUT)
-        response.raise_for_status()
-        return response.text.strip()
-    except requests.RequestException:
-        return "unknown"
 
 
 def _iso_now() -> str:
@@ -333,7 +320,7 @@ class GoDaddyClient:
         body = {
             "consent": {
                 "agreedAt": _iso_now(),
-                "agreedBy": _current_egress_ip(),
+                "agreedBy": current_egress_ip(),
                 "agreementKeys": agreement_keys,
             },
             "contactAdmin": contact_payload,

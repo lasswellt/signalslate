@@ -164,6 +164,16 @@ def test_create_godaddy_with_registrant_contact_is_write_only(client):
     assert_clean(resp)
 
 
+def test_create_namecheap_without_api_user_defaults_to_username(client):
+    """A fresh Namecheap account only ever gets the API key from Namecheap's own settings page."""
+    fields = {k: v for k, v in NAMECHEAP.items() if k != "api_user"}
+    resp = client.post("/api/connections", json=fields)
+
+    assert resp.status_code == 201
+    assert resp.json()["config"]["api_user"] == "ncuser"
+    assert_clean(resp)
+
+
 def test_create_godaddy_pat_mode_defaults_and_works(client):
     """auth_mode omitted defaults to "pat" (developer.godaddy.com's current signup); a single
     api_token is enough, and the classic api_key/api_secret pair must not be required."""

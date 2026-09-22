@@ -160,7 +160,9 @@ describe('ConnectionDialog fields', () => {
       zoom: ['client_id', 'client_secret'],
       slack: ['label', 'token'],
       gmail: ['label', 'client_id', 'client_secret', 'redirect_mode'],
-      namecheap: ['label', 'api_user', 'username', 'client_ip', 'api_key', 'sandbox', 'registrant_contact'],
+      // api_user is not asked for: the server defaults it to username (Namecheap only issues one
+      // credential, the API key).
+      namecheap: ['label', 'username', 'client_ip', 'api_key', 'sandbox', 'registrant_contact'],
       // godaddy defaults to pat mode on create, which hides api_key/api_secret.
       godaddy: ['label', 'api_token', 'environment', 'registrant_contact'],
       wordpress: ['label', 'client_id', 'client_secret', 'redirect_mode'],
@@ -366,14 +368,14 @@ describe('ConnectionDialog submit', () => {
     })
   })
 
-  it('create sends the registrar defaults and omits a blank registrant_contact', async () => {
+  it('create sends the registrar defaults and omits a blank registrant_contact, with no api_user field', async () => {
     stubApi((call) => (call.method === 'POST' ? connection({ id: 'namecheap_acme', kind: 'namecheap' }) : undefined))
     await mountDialog({ mode: 'create' })
     await click('kind-namecheap')
-    expect(body.textContent).toContain('public IPv4 of this server')
+    expect(body.textContent).toContain('this server’s public IPv4')
+    expect($('field-api_user')).toBeNull()
 
     await type('label', 'acme')
-    await type('api_user', 'acmeuser')
     await type('username', 'acmeuser')
     await type('client_ip', '203.0.113.5')
     await type('api_key', SECRET)
@@ -382,12 +384,32 @@ describe('ConnectionDialog submit', () => {
     expect(calls.find((call) => call.method === 'POST')?.body).toEqual({
       kind: 'namecheap',
       label: 'acme',
-      api_user: 'acmeuser',
       username: 'acmeuser',
       client_ip: '203.0.113.5',
       api_key: SECRET,
       sandbox: 'false',
     })
+  })
+
+  it('detects the client IP and fills the field, or shows an error and leaves it alone', async () => {
+    let egressIpResult: { ip: string } | Error = { ip: '198.51.100.7' }
+    stubApi((call) => {
+      if (call.method === 'GET' && call.path === '/api/domains/egress-ip') {
+        return egressIpResult instanceof Error ? egressIpResult : (egressIpResult as unknown as ConnectionView)
+      }
+      return undefined
+    })
+    await mountDialog({ mode: 'create' })
+    await click('kind-namecheap')
+
+    await click('detect-client-ip')
+    expect(($('field-client_ip') as HTMLInputElement).value).toBe('198.51.100.7')
+
+    egressIpResult = Object.assign(new Error('fetch failed'), { status: 0 })
+    await click('detect-client-ip')
+    expect(body.textContent).toContain('Could not detect')
+    // A failed detect must not clobber the value a previous successful detect (or manual entry) set.
+    expect(($('field-client_ip') as HTMLInputElement).value).toBe('198.51.100.7')
   })
 
   it('create sends the registrant_contact JSON and the godaddy environment default (pat mode, the default)', async () => {

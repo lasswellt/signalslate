@@ -105,10 +105,12 @@ class GmailCreate(_CreateBase):
 class NamecheapCreate(_CreateBase):
     kind: Literal["namecheap"]
     label: str
-    api_user: str
     username: str
     client_ip: str
     api_key: SecretStr
+    # Optional: pipeline.connections.create() defaults it to username (see that KINDS entry's
+    # comment) — a fresh Namecheap account only ever issues one credential, the API key.
+    api_user: Optional[str] = None
     sandbox: Optional[str] = None
     registrant_contact: Optional[SecretStr] = None
 

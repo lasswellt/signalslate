@@ -38,6 +38,7 @@ from pipeline.db import Domain, DomainSnapshot
 from pipeline.domains import inventory, normalize_domain
 from pipeline.domains import intel as domain_intel
 from pipeline.domains import snapshot as domain_snapshot
+from pipeline.domains.registrars._egress import current_egress_ip
 
 router = APIRouter(tags=["domains"])
 
@@ -98,6 +99,12 @@ class RejectedRow(BaseModel):
 class ImportOut(BaseModel):
     added: list[str]
     rejected: list[RejectedRow]
+
+
+class EgressIpOut(BaseModel):
+    # "unknown" (never null) on lookup failure, matching current_egress_ip()'s own contract; the
+    # connection form treats it as "could not detect" and leaves the field for the user to fill in.
+    ip: str
 
 
 class SyncStatusOut(BaseModel):
@@ -180,6 +187,22 @@ def list_domains(ownership: Optional[str] = None, source: Optional[str] = None) 
             statement = statement.where(Domain.source == source)
         rows = session.exec(statement.order_by(col(Domain.name))).all()
     return [_domain_out(row) for row in rows]
+
+
+@router.get("/domains/egress-ip", response_model=EgressIpOut)
+def get_egress_ip() -> EgressIpOut:
+    """
+    This server's current public IPv4, for prefilling a Namecheap connection's client_ip field —
+    Namecheap gates its API by an IP allowlist the caller configures on both sides (this field, and
+    Namecheap's own whitelist panel), and that address is not something Namecheap hands out, so the
+    UI offers to detect it instead of leaving the user to find it themselves.
+
+    Registered ahead of GET /domains/{name} (api/main.py's router order already matters here, see
+    its own comment): a route named exactly "egress-ip" would otherwise be looked up as a domain
+    name by that catch-all — the same class of bug the router-order fix a few commits back exists
+    to prevent, so this one is placed correctly from the start rather than by luck.
+    """
+    return EgressIpOut(ip=current_egress_ip())
 
 
 @router.get("/domains/{name}", response_model=DomainDetailOut)

@@ -66,10 +66,30 @@
 
       <q-tab-panels v-model="tab" animated>
       <q-tab-panel name="portfolio" data-testid="panel-portfolio">
-        <div v-if="ownedDomains.length === 0" class="text-grey-8" data-testid="portfolio-empty">
+        <div v-if="allOwnedDomains.length > 0" class="row items-center q-gutter-sm q-mb-sm">
+          <q-toggle v-model="hideExpired" label="Hide expired domains" data-testid="hide-expired-toggle" />
+          <div v-if="expiredOwnedCount > 0" class="text-grey-8 text-caption" data-testid="expired-count">
+            {{ expiredOwnedCount }} expired domain{{ expiredOwnedCount === 1 ? '' : 's' }}
+            {{ hideExpired ? 'hidden' : 'shown' }}
+          </div>
+        </div>
+
+        <div v-if="allOwnedDomains.length === 0" class="text-grey-8" data-testid="portfolio-empty">
           No owned domains yet.
           <NuxtLink to="/connections" data-testid="portfolio-empty-link">Connect a registrar</NuxtLink>
           to sync your portfolio, or add one above.
+        </div>
+        <div v-else-if="ownedDomains.length === 0" class="text-grey-8" data-testid="portfolio-all-expired">
+          All {{ expiredOwnedCount }} owned domain{{ expiredOwnedCount === 1 ? ' is' : 's are' }} expired and hidden.
+          <q-btn
+            flat
+            no-caps
+            dense
+            color="primary"
+            label="Show expired"
+            data-testid="show-expired-link"
+            @click="hideExpired = false"
+          />
         </div>
         <div v-else style="overflow-x: auto">
           <q-table
@@ -346,7 +366,18 @@ const loading = ref(true)
 const loadError = ref<string | null>(null)
 const syncing = ref(false)
 
-const ownedDomains = computed(() => domains.value.filter((d) => d.ownership === 'owned'))
+// Hidden by default: an owned portfolio easily accumulates long-lapsed domains (GoDaddy in
+// particular has been seen returning "expires" dates years in the past for domains still listed
+// in the account), and those otherwise bury the ones that still matter. Scoped to Portfolio only
+// (not Watchlist): a watched domain going past its expiry is often exactly the event being
+// watched for — auto-hiding it there would hide the interesting case, not the noise.
+const hideExpired = ref(true)
+
+const allOwnedDomains = computed(() => domains.value.filter((d) => d.ownership === 'owned'))
+const expiredOwnedCount = computed(() => allOwnedDomains.value.filter((d) => isExpired(d.expires_at)).length)
+const ownedDomains = computed(() =>
+  hideExpired.value ? allOwnedDomains.value.filter((d) => !isExpired(d.expires_at)) : allOwnedDomains.value,
+)
 const watchedDomains = computed(() => domains.value.filter((d) => d.ownership === 'watched'))
 
 // NS provider and mail posture are not returned by GET /api/domains (api/routers/domains.py
@@ -398,6 +429,13 @@ function daysUntil(value: string | null): number | null {
   const target = parseUtc(value).getTime()
   if (Number.isNaN(target)) return null
   return Math.ceil((target - Date.now()) / 86_400_000)
+}
+
+// No expires_at (null) is "unknown", never "expired": a domain the registrar reports no date for
+// must not vanish behind the hide-expired filter.
+function isExpired(value: string | null): boolean {
+  const days = daysUntil(value)
+  return days !== null && days < 0
 }
 
 function expiryClass(value: string | null): string {

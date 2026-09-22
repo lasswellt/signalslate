@@ -161,11 +161,24 @@
               autocomplete="off"
               :disable="busy"
               :rules="[(value: string) => checkConfig(field, value)]"
-              :error="!!fieldErrors[field.name]"
-              :error-message="fieldErrors[field.name]"
+              :error="!!fieldErrors[field.name] || (field.name === 'client_ip' && !!detectIpError)"
+              :error-message="field.name === 'client_ip' && detectIpError ? detectIpError : fieldErrors[field.name]"
               :data-testid="`field-${field.name}`"
               @update:model-value="(value: string | number | null) => onConfigInput(field.name, String(value ?? ''))"
-            />
+            >
+              <template v-if="field.name === 'client_ip'" #append>
+                <q-btn
+                  flat
+                  dense
+                  no-caps
+                  label="Detect"
+                  :loading="detectingIp"
+                  :disable="busy"
+                  data-testid="detect-client-ip"
+                  @click="detectClientIp"
+                />
+              </template>
+            </q-input>
           </template>
 
           <template v-if="kind === 'zoom'">
@@ -206,6 +219,7 @@
 <script setup lang="ts">
 import { ApiError } from '~/composables/useApi'
 import type { ConnectionCreate, ConnectionKind, ConnectionUpdate, ConnectionView, SystemInfo } from '~/composables/useApi'
+import { useDomainsApi } from '~/composables/useDomainsApi'
 
 interface FieldDef {
   name: string
@@ -256,9 +270,11 @@ const KIND_FIELDS: Record<ConnectionKind, FieldDef[]> = {
   ],
   namecheap: [
     { name: 'label', label: 'Label', isLabel: true, hint: 'Lowercase letters and digits (max 32)' },
-    { name: 'api_user', label: 'API user' },
-    { name: 'username', label: 'Username' },
-    { name: 'client_ip', label: 'Client IP', hint: 'public IPv4 of this server' },
+    // api_user is not a field here: Namecheap only ever issues one credential, the API key
+    // (Business & Dev Tools > Namecheap API Access), and the server defaults api_user to
+    // username, which is what every account but a reseller needs anyway.
+    { name: 'username', label: 'Username', hint: 'your Namecheap account username' },
+    { name: 'client_ip', label: 'Client IP', hint: 'this server’s public IPv4 — also add it in Namecheap’s own API whitelist' },
     { name: 'api_key', label: 'API key', secret: true },
     {
       name: 'sandbox',
@@ -353,6 +369,7 @@ const emit = defineEmits<{
 }>()
 
 const api = useApi()
+const domainsApi = useDomainsApi()
 
 const isEdit = computed(() => props.mode === 'edit')
 const kind = ref<ConnectionKind>('slack')
@@ -375,6 +392,14 @@ const zoomTranscriptsTouched = ref(false)
 // `values`/`touched` for the same reason zoom's auth_mode does.
 const godaddyAuthMode = ref<'pat' | 'classic'>('pat')
 const godaddyAuthModeTouched = ref(false)
+// namecheap's client_ip: not something Namecheap hands out (unlike the API key), so this is the
+// one remaining field a Detect button meaningfully helps with. Best-effort: a failed lookup just
+// leaves the field for the user to fill in by hand, same as before this button existed. Declared
+// here (not next to detectClientIp() below) because reset() — called synchronously by the
+// immediate watch(props.modelValue) further down — touches detectIpError before setup finishes
+// running top to bottom; a later `const` here would be a temporal-dead-zone ReferenceError.
+const detectingIp = ref(false)
+const detectIpError = ref<string | null>(null)
 // The API deliberately never returns the public URL itself (SystemInfo.public_base_url_configured
 // is a bool); fetched once so the redirect-URL note can warn when it is not set.
 const systemInfo = ref<SystemInfo | null>(null)
@@ -409,6 +434,7 @@ function reset(forKind: ConnectionKind) {
   touched.value = new Set()
   fieldErrors.value = {}
   formError.value = null
+  detectIpError.value = null
   const initial = defaultValues(forKind)
   if (isEdit.value && props.connection) {
     for (const name of Object.keys(initial)) initial[name] = props.connection.config[name] ?? initial[name] ?? ''
@@ -477,6 +503,25 @@ function onZoomAuthModeInput(value: string) {
 function onGodaddyAuthModeInput(value: string) {
   godaddyAuthMode.value = value as 'pat' | 'classic'
   godaddyAuthModeTouched.value = true
+}
+
+async function detectClientIp() {
+  detectingIp.value = true
+  detectIpError.value = null
+  try {
+    const result = await domainsApi.getEgressIp()
+    if (!result.ip || result.ip === 'unknown') {
+      detectIpError.value = 'Could not detect this server’s public IP. Enter it manually.'
+      return
+    }
+    values.value.client_ip = result.ip
+    touched.value.add('client_ip')
+    delete fieldErrors.value.client_ip
+  } catch {
+    detectIpError.value = 'Could not detect this server’s public IP. Enter it manually.'
+  } finally {
+    detectingIp.value = false
+  }
 }
 
 function onZoomTranscriptsInput(value: boolean) {

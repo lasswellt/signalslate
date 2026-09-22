@@ -442,12 +442,17 @@ Registrar connections are added in the **Connections** page like every other sou
 ### Namecheap
 
 The API is off for new accounts until the account qualifies: **20 domains**, a **$50 balance**, or
-**$50 spent in the last 2 years** (whichever comes first). Once qualified, generate an API key
-under Profile > Tools > API Access, then whitelist the server's public **IPv4** address — Namecheap
-accepts IPv4 only, and calls silently fail if the whitelist and the server's actual egress address
-drift apart (common on a home connection with a dynamic IP). There is a sandbox
-(`sandbox.namecheap.com`) with its own account and test-registry data; use it to test the purchase
-flow first.
+**$50 spent in the last 2 years** (whichever comes first). Once qualified, enable it under Profile >
+Tools > API Access — this page issues **only one credential, the API key**; the connection form's
+other fields are not things Namecheap hands you: "Username" is just your existing Namecheap account
+username (the form fills the API's separate `ApiUser` parameter with the same value automatically;
+only a reseller acting on another account's behalf ever needs those to differ), and "Client IP" is
+the server's own public **IPv4** address, which you must *also* add to Namecheap's whitelist on that
+same page — the connection dialog's Detect button fills the field for you, but the whitelist entry
+on Namecheap's side is a separate, manual step. Calls silently fail if the whitelist and the
+server's actual egress address drift apart (common on a home connection with a dynamic IP).
+Namecheap accepts IPv4 only. There is a sandbox (`sandbox.namecheap.com`) with its own account and
+test-registry data; use it to test the purchase flow first.
 
 ### GoDaddy
 

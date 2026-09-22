@@ -42,6 +42,7 @@ from defusedxml import ElementTree as ET
 from defusedxml.common import DefusedXmlException
 
 from pipeline import connections
+from pipeline.domains.registrars._egress import current_egress_ip
 from pipeline.domains.registrars import (
     AuthFailed,
     Contact,
@@ -113,11 +114,6 @@ _CONTACT_FIELDS: tuple[tuple[str, str], ...] = (
     ("EmailAddress", "email"),
 )
 
-# Reports the app's own egress IPv4 in check_connection()'s detail / IpNotWhitelisted message, so
-# the UI can say "whitelist X" (Namecheap has no API to edit its own IP whitelist).
-_IPIFY_URL = "https://api.ipify.org"
-
-
 @dataclass(frozen=True)
 class _Config:
     api_user: str
@@ -182,16 +178,6 @@ def _raise_for_errors(root: Any) -> None:
     if "apikey" in lowered.replace(" ", "") or "api key" in lowered or "authentication" in lowered or "invalid username" in lowered:
         raise AuthFailed("Namecheap rejected the API credentials")
     raise RegistrarError("Namecheap API request failed")
-
-
-def _current_egress_ip() -> str:
-    """Best-effort current public IPv4, for the "whitelist X" message. Never raises."""
-    try:
-        response = requests.get(_IPIFY_URL, params={"format": "text"}, timeout=_TIMEOUT)
-        response.raise_for_status()
-        return response.text.strip()
-    except requests.RequestException:
-        return "unknown"
 
 
 def _parse_domain(entry: Any) -> RegistrarDomain:
@@ -404,7 +390,7 @@ class NamecheapClient:
         always reports the app's current egress IPv4 so the UI can say "whitelist X" — on success
         (confirms the right IP is whitelisted) and, via the IpNotWhitelisted message below, on failure.
         """
-        egress_ip = _current_egress_ip()
+        egress_ip = current_egress_ip()
         try:
             root = self._call(_CMD_GET_BALANCES)
         except IpNotWhitelisted:
