@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-22T00:03:25Z",
+  "updated": "2026-09-22T00:28:24Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1217,11 +1217,53 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T00:28:24Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def collect_domains' pipeline/collectors/domains.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:28:22Z"
+          },
+          {
+            "cmd": "grep -qE 'source == \"domains\"' pipeline/collectors/__init__.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:28:22Z"
+          },
+          {
+            "cmd": "grep -qE 'def check_domains' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:28:22Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/domains.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:28:22Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collector_domains.py tests/test_collectors.py tests/test_runner.py -q",
+            "exit": 0,
+            "duration_ms": 1387,
+            "tail": "........................................................................ [ 30%]\n........................................................................ [ 60%]\n........................................................................ [ 90%]\n......................                                                   [100%]\n238 passed in 1.12s",
+            "recorded_at": "2026-09-22T00:28:24Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Finding 1 PROPOSAL, Implementation Step 5. 4 files (soft-warn band): known_sources() + check_all_configured() in health.py must both learn 'domains' because runner.py:304-311 only collects healthy sources. check_domains is local (DB count), ok even with 0 domains. collect_domains(since, until) returns Item(item_type='domain_alert', external_id=f'{name}:{kind}:{snapshot_id}') for diffs of snapshots taken in [since, until) plus expiry_soon computed at until. No network in the collector."
     },
