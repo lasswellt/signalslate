@@ -1,6 +1,6 @@
 """
-Browser sign-in routes for Gmail (provider google) and Microsoft 365 (provider microsoft)
-(docs/_research/2026-09-21_management-ui.md section 6, RFC 9700).
+Browser sign-in routes for Gmail (provider google), Microsoft 365 (provider microsoft) and
+WordPress.com (provider wordpress) (docs/_research/2026-09-21_management-ui.md section 6, RFC 9700).
 
 Design decisions:
 
@@ -46,7 +46,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from api.routers.connections import ConnectionOut, _out_for
 from api.security import normalize_origin
 from api.serialize import iso_z
-from pipeline import connections, health, oauth_gmail, oauth_m365
+from pipeline import connections, health, oauth_gmail, oauth_m365, oauth_wordpress
 from pipeline.clock import utcnow
 from pipeline.crypto import SecretDecryptError, SecretKeyMissing
 from pipeline.oauth_flows import (
@@ -73,7 +73,7 @@ COOKIE_PATH = "/api/oauth"
 _NO_STORE = {"Cache-Control": "no-store"}
 
 # The connection kind each provider path signs in.
-_KIND_FOR_PROVIDER = {"google": "gmail", "microsoft": "m365"}
+_KIND_FOR_PROVIDER = {"google": "gmail", "microsoft": "m365", "wordpress": "wordpress"}
 
 # Bound on what one callback will read from the query string; the provider modules only compare
 # `error` to a constant and hand `code` to the token endpoint.
@@ -133,8 +133,8 @@ def _coded(status_code: int, code: str, message: str) -> HTTPException:
     return HTTPException(status_code, {"code": code, "message": message})
 
 
-# Order matters: a subclass is listed before its base. Microsoft's errors subclass the Gmail ones,
-# so matching the Gmail class covers both providers.
+# Order matters: a subclass is listed before its base. Microsoft's and WordPress.com's errors subclass
+# the Gmail ones, so matching the Gmail class covers all three providers.
 _FLOW_ERRORS: tuple[tuple[type[FlowError], int, str], ...] = (
     (InvalidPastedUrl, 400, "invalid_pasted_url"),
     (UnknownFlow, 404, "unknown_flow"),
@@ -181,6 +181,8 @@ def _start(provider: str, connection_id: str, mode: str) -> oauth_gmail.StartRes
     base = health.public_base_url()
     if provider == "google":
         return oauth_gmail.start(connection_id, mode, store=FLOWS, public_base_url=base)
+    if provider == "wordpress":
+        return oauth_wordpress.start(connection_id, mode, store=FLOWS, public_base_url=base)
     return oauth_m365.start(connection_id, mode, store=FLOWS, public_base_url=base)
 
 
@@ -189,6 +191,8 @@ def _finish_paste(
 ) -> Union[connections.ConnectionView, oauth_m365.FinishResult]:
     if provider == "google":
         return oauth_gmail.finish_paste(FLOWS, flow_id, url, nonce)
+    if provider == "wordpress":
+        return oauth_wordpress.finish_paste(FLOWS, flow_id, url, nonce)
     return oauth_m365.finish_paste(FLOWS, flow_id, url, nonce)
 
 
@@ -197,6 +201,8 @@ def _finish_callback(
 ) -> object:
     if provider == "google":
         return oauth_gmail.finish_callback(FLOWS, state, code, nonce, error)
+    if provider == "wordpress":
+        return oauth_wordpress.finish_callback(FLOWS, state, code, nonce, error)
     return oauth_m365.finish_callback(FLOWS, state, code, nonce, error)
 
 
