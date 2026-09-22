@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Acme Corp - Apply</title>
+</head>
+<body>
+<h1>Apply to Acme Corp</h1>
+<form id="application-form">
+  <fieldset>
+    <legend>Contact Information</legend>
+
+    <label for="full_name">Full Name</label>
+    <input type="text" id="full_name" name="full_name" required>
+
+    <input type="email" name="email" aria-label="Email Address" required>
+
+    Phone Number
+    <input type="tel" id="phone" name="phone">
+  </fieldset>
+
+  <fieldset>
+    <legend>Application Questions</legend>
+
+    <label for="source">How did you hear about us?</label>
+    <select id="source" name="source">
+      <option value="">Select one</option>
+      <option value="linkedin">LinkedIn</option>
+      <option value="referral">Referral</option>
+      <option value="job_board">Job Board</option>
+    </select>
+
+    <label for="cover_note">Why do you want to work here?</label>
+    <textarea id="cover_note" name="cover_note"></textarea>
+
+    <label>
+      <input type="checkbox" id="agree" name="agree" required>
+      I agree to the terms and privacy policy
+    </label>
+  </fieldset>
+</form>
+
+<h2>Additional Info (embedded)</h2>
+<iframe id="embed" srcdoc='<label for="referral_name">Referral Name</label><input type="text" id="referral_name" name="referral_name">'></iframe>
+</body>
+</html>
