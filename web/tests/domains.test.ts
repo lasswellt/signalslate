@@ -280,6 +280,61 @@ describe('domains page', () => {
     expect(wrapper.find('[data-testid="expired-count"]').exists()).toBe(false)
   })
 
+  it('hides missing owned domains by default, unhides on toggle', async () => {
+    stubApi({
+      domains: [
+        domain({ name: 'gone.com', missing_since: '2026-09-22T00:00:00Z' }),
+        domain({ name: 'alive.com', missing_since: null }),
+      ],
+    })
+    const wrapper = await mountPage()
+
+    expect($<HTMLInputElement>('hide-missing-toggle')?.getAttribute('aria-checked')).toBe('true')
+    expect(wrapper.find('[data-testid="domain-row-gone.com"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="domain-row-alive.com"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="missing-count"]').text()).toContain('1 missing domain hidden')
+
+    await click('hide-missing-toggle')
+
+    expect(wrapper.find('[data-testid="domain-row-gone.com"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="domain-row-alive.com"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="missing-count"]').text()).toContain('1 missing domain shown')
+  })
+
+  it('hides missing watched domains by default, unhides on toggle, independently of the Portfolio toggle instance', async () => {
+    stubApi({
+      domains: [
+        domain({ name: 'watched-gone.com', ownership: 'watched', missing_since: '2026-09-22T00:00:00Z' }),
+        domain({ name: 'watched-alive.com', ownership: 'watched', missing_since: null }),
+      ],
+    })
+    const wrapper = await mountPage()
+    await click('tab-watchlist')
+
+    expect(wrapper.find('[data-testid="domain-row-watched-gone.com"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="domain-row-watched-alive.com"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="watchlist-missing-count"]').text()).toContain('1 missing domain hidden')
+
+    await click('watchlist-hide-missing-toggle')
+
+    expect(wrapper.find('[data-testid="domain-row-watched-gone.com"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="watchlist-missing-count"]').text()).toContain('1 missing domain shown')
+  })
+
+  it('shows an all-missing Watchlist message distinct from the empty-watchlist state', async () => {
+    stubApi({ domains: [domain({ name: 'watched-gone.com', ownership: 'watched', missing_since: '2026-09-22T00:00:00Z' })] })
+    const wrapper = await mountPage()
+    await click('tab-watchlist')
+
+    expect(wrapper.find('[data-testid="watchlist-empty"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="watchlist-all-missing"]').text()).toContain('All 1 watched domain is missing and hidden')
+
+    await click('show-missing-watchlist-link')
+
+    expect(wrapper.find('[data-testid="watchlist-all-missing"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="domain-row-watched-gone.com"]').exists()).toBe(true)
+  })
+
   it('shows an all-expired message with a way to reveal them, distinct from the connect-a-registrar empty state', async () => {
     stubApi({
       domains: [
@@ -297,6 +352,29 @@ describe('domains page', () => {
     expect(wrapper.find('[data-testid="portfolio-all-expired"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="domain-row-dead-one.com"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="domain-row-dead-two.com"]').exists()).toBe(true)
+  })
+
+  it('shows an all-missing Portfolio message when every owned domain is missing (not expired)', async () => {
+    stubApi({ domains: [domain({ name: 'gone.com', missing_since: '2026-09-22T00:00:00Z' })] })
+    const wrapper = await mountPage()
+    expect(wrapper.get('[data-testid="portfolio-all-expired"]').text()).toContain('All 1 owned domain is missing and hidden')
+  })
+
+  it('shows a combined expired-or-missing message when both kinds of hiding apply', async () => {
+    stubApi({
+      domains: [
+        domain({ name: 'dead.com', expires_at: new Date(Date.now() - 10 * 86_400_000).toISOString() }),
+        domain({ name: 'gone.com', missing_since: '2026-09-22T00:00:00Z' }),
+      ],
+    })
+    const wrapper = await mountPage()
+    expect(wrapper.get('[data-testid="portfolio-all-expired"]').text()).toContain('All 2 owned domains are expired or missing and hidden')
+
+    await click('show-expired-link')
+
+    expect(wrapper.find('[data-testid="portfolio-all-expired"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="domain-row-dead.com"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="domain-row-gone.com"]').exists()).toBe(true)
   })
 
   it('does not apply the hide-expired filter to the Watchlist tab', async () => {
