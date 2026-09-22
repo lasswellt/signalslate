@@ -11,7 +11,7 @@ const SYSTEM: SystemInfo = {
   store_active: true,
   public_base_url_configured: false,
   web_origins: [],
-  oauth: { google: { modes: ['paste_back'] }, microsoft: { modes: ['paste_back'] } },
+  oauth: { google: { modes: ['paste_back'] }, microsoft: { modes: ['paste_back'] }, zoom: { modes: ['callback'] } },
 }
 
 function connection(overrides: Partial<ConnectionView> = {}): ConnectionView {
@@ -271,5 +271,19 @@ describe('connections page', () => {
     expect(toggle().attributes('aria-checked')).toBe('true')
     expect(wrapper.get('[data-testid="toggle-error"]').text()).toBe('active_sources: unknown source')
     await vi.waitFor(() => expect(document.body.textContent).toContain('active_sources: unknown source'))
+  })
+
+  it('shows Sign in for an oauth-mode zoom connection, and hides it for a server-to-server one', async () => {
+    stubApi({
+      connections: [
+        connection({ id: 'zoom', kind: 'zoom', label: 'zoom', config: { auth_mode: 'oauth' } }),
+        connection({ id: 'zoom_s2s', kind: 'zoom', label: 'zoom_s2s', config: { account_id: 'acct-1' } }),
+      ],
+    })
+    const wrapper = await mountPage()
+
+    const cards = wrapper.findAll('[data-testid="connection"]')
+    expect(cards[0]?.find('[data-testid="conn-signin"]').exists()).toBe(true)
+    expect(cards[1]?.find('[data-testid="conn-signin"]').exists()).toBe(false)
   })
 })

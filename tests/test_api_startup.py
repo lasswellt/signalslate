@@ -167,7 +167,11 @@ def test_system_reports_callback_only_for_an_https_public_url(home, monkeypatch)
     with running_app() as client:
         plain = client.get("/api/system").json()
         assert plain["public_base_url_configured"] is False
-        assert plain["oauth"] == {"google": {"modes": ["paste_back"]}, "microsoft": {"modes": ["paste_back"]}}
+        assert plain["oauth"] == {
+            "google": {"modes": ["paste_back"]},
+            "microsoft": {"modes": ["paste_back"]},
+            "zoom": {"modes": []},
+        }
         assert plain["web_origins"] == ["http://localhost:3000"]
 
         monkeypatch.setenv("PUBLIC_BASE_URL", "http://insecure.example.com")
@@ -180,6 +184,7 @@ def test_system_reports_callback_only_for_an_https_public_url(home, monkeypatch)
         assert body["public_base_url_configured"] is True
         assert body["oauth"]["google"]["modes"] == ["paste_back", "callback"]
         assert body["oauth"]["microsoft"]["modes"] == ["paste_back", "callback"]
+        assert body["oauth"]["zoom"]["modes"] == ["callback"]
         assert body["web_origins"] == ["https://app.example.com", "https://ui.example.org"]
         # The URL itself is config, not something the UI needs echoed.
         assert "insecure.example.com" not in https.text

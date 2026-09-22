@@ -18,23 +18,34 @@
         </q-banner>
 
         <template v-else-if="stage === 'choose'">
-          <q-btn-toggle
-            v-model="mode"
-            no-caps
-            unelevated
-            toggle-color="primary"
-            :options="modeOptions"
-            :disable="busy"
-            data-testid="oauth-mode"
-          />
-          <div v-if="mode === 'paste_back'" class="text-body2" data-testid="oauth-mode-help">
-            Works anywhere. You approve in a new tab, that tab ends on a page that fails to load, and you paste
-            its address back here.
-          </div>
-          <div v-else class="text-body2" data-testid="oauth-mode-help">
-            You approve in a new tab and the provider sends that tab back to this app. This page notices the
-            sign-in by itself.
-          </div>
+          <template v-if="isZoom">
+            <q-banner v-if="!callbackAvailable" dense class="bg-warning text-black" data-testid="oauth-callback-unavailable">
+              Automatic callback needs an https PUBLIC_BASE_URL. Set it in .env, then try again.
+            </q-banner>
+            <div v-else class="text-body2" data-testid="oauth-mode-help">
+              You approve in a new tab and Zoom sends that tab back to this app. This page notices the sign-in by
+              itself.
+            </div>
+          </template>
+          <template v-else>
+            <q-btn-toggle
+              v-model="mode"
+              no-caps
+              unelevated
+              toggle-color="primary"
+              :options="modeOptions"
+              :disable="busy"
+              data-testid="oauth-mode"
+            />
+            <div v-if="mode === 'paste_back'" class="text-body2" data-testid="oauth-mode-help">
+              Works anywhere. You approve in a new tab, that tab ends on a page that fails to load, and you paste
+              its address back here.
+            </div>
+            <div v-else class="text-body2" data-testid="oauth-mode-help">
+              You approve in a new tab and the provider sends that tab back to this app. This page notices the
+              sign-in by itself.
+            </div>
+          </template>
         </template>
 
         <template v-else-if="mode === 'paste_back'">
@@ -107,6 +118,7 @@
           no-caps
           label="Start"
           :loading="busy"
+          :disable="isZoom && !callbackAvailable"
           data-testid="oauth-start"
           @click="onStart"
         />
@@ -117,7 +129,7 @@
 </template>
 
 <script setup lang="ts">
-import { ApiError, parseUtc } from '~/composables/useApi'
+import { ApiError, PROVIDER_FOR_KIND, parseUtc } from '~/composables/useApi'
 import type { ConnectionView, OAuthMode, OAuthProvider, SystemInfo } from '~/composables/useApi'
 
 const props = defineProps<{
@@ -171,8 +183,10 @@ const RETRYABLE = new Set(['invalid_pasted_url', 'nonce_mismatch'])
 
 type Stage = 'choose' | 'waiting' | 'connected'
 
-const provider = computed<OAuthProvider>(() => (props.connection?.kind === 'm365' ? 'microsoft' : 'google'))
+const provider = computed<OAuthProvider>(() => (props.connection ? PROVIDER_FOR_KIND[props.connection.kind] ?? 'google' : 'google'))
+const isZoom = computed(() => provider.value === 'zoom')
 const availableModes = computed<OAuthMode[]>(() => props.system?.oauth?.[provider.value]?.modes ?? [])
+const callbackAvailable = computed(() => availableModes.value.includes('callback'))
 const modeOptions = computed(() => {
   const options = [{ label: 'Paste-back', value: 'paste_back', attrs: { 'data-testid': 'mode-paste_back' } }]
   if (availableModes.value.includes('callback')) {
@@ -218,7 +232,8 @@ function reset() {
   session += 1
   stopTimers()
   stage.value = 'choose'
-  mode.value = 'paste_back'
+  // Zoom offers callback mode only: it has no paste-back fallback to default to.
+  mode.value = isZoom.value ? 'callback' : 'paste_back'
   busy.value = false
   errorText.value = null
   pollWarning.value = null
@@ -264,8 +279,14 @@ function tick() {
   if (stage.value === 'waiting' && now.value >= expiresAt.value) expire()
 }
 
+// Google and Zoom report sign-in through a stored refresh token; Microsoft (client-credentials-free,
+// delegated auth) through a passing health check instead.
+function isReady(conn: ConnectionView): boolean {
+  return provider.value === 'microsoft' ? conn.health?.status === 'ok' : conn.secrets_set.includes('refresh_token')
+}
+
 function isSignedIn(conn: ConnectionView): boolean {
-  const ready = provider.value === 'google' ? conn.secrets_set.includes('refresh_token') : conn.health?.status === 'ok'
+  const ready = isReady(conn)
   if (!ready) return false
   // A connection that was already signed in looks signed in before the flow ends: only a fresh health
   // check tells the two apart.
@@ -319,7 +340,7 @@ async function onStart() {
     expiresAt.value = expiry
     now.value = Date.now()
     baseline = {
-      signedIn: provider.value === 'google' ? conn.secrets_set.includes('refresh_token') : conn.health?.status === 'ok',
+      signedIn: isReady(conn),
       checkedAt: conn.health?.checked_at ?? null,
     }
     stage.value = 'waiting'

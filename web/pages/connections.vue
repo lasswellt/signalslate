@@ -101,7 +101,7 @@
             @click="openEdit(conn)"
           />
           <q-btn
-            v-if="system?.secret_key_configured && (conn.kind === 'gmail' || conn.kind === 'm365')"
+            v-if="system?.secret_key_configured && showSignIn(conn)"
             flat
             color="primary"
             icon="login"
@@ -160,7 +160,7 @@
 
 <script setup lang="ts">
 import { useQuasar } from 'quasar'
-import { ApiError, parseUtc } from '~/composables/useApi'
+import { ApiError, PROVIDER_FOR_KIND, parseUtc, zoomAuthMode } from '~/composables/useApi'
 import type { ConnectionCheck, ConnectionView, SystemInfo } from '~/composables/useApi'
 
 const api = useApi()
@@ -286,6 +286,14 @@ async function onSaved(saved: ConnectionView, mode: 'create' | 'edit') {
       : { type: 'positive', message: `Saved ${saved.id}` },
   )
   await load(true)
+}
+
+// gmail and m365 always sign in through OAuth; zoom only when its effective auth_mode is "oauth"
+// (a Server-to-Server zoom connection has no browser sign-in step).
+function showSignIn(conn: ConnectionView): boolean {
+  const provider = PROVIDER_FOR_KIND[conn.kind]
+  if (!provider) return false
+  return provider !== 'zoom' || zoomAuthMode(conn) === 'oauth'
 }
 
 const signInOpen = ref(false)
