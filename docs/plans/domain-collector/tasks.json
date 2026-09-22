@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-22T00:28:24Z",
+  "updated": "2026-09-22T00:36:31Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1301,11 +1301,53 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T00:36:31Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def generate_candidates' pipeline/domains/ideas.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:36:30Z"
+          },
+          {
+            "cmd": "grep -qE '^def prefilter' pipeline/domains/ideas.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:36:30Z"
+          },
+          {
+            "cmd": "grep -qE '^def llm_ideas' pipeline/domains/ideas.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:36:30Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/domains/ideas.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:36:30Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_domain_ideas.py -q",
+            "exit": 0,
+            "duration_ms": 711,
+            "tail": ".......................                                                  [100%]\n23 passed in 0.48s",
+            "recorded_at": "2026-09-22T00:36:31Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Q5, Finding 6. generate_candidates(seeds, tlds, affixes, max_len, allow_hyphen) deterministic, capped (<=500), normalized via normalize_domain. llm_ideas(brief, n) reuses pipeline/triage.py make_client()/llm_settings (anthropic already pinned), structured JSON output, model output treated as untrusted (normalize + drop invalid), degrades to [] with a reason when LLM unconfigured. prefilter(names) = DNS NXDOMAIN + RDAP not_found -> 'likely_available'; any record -> 'taken'; unsupported -> 'unknown'. Never calls a registrar or third-party search site (front-running)."
     },

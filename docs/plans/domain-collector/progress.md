@@ -39,3 +39,5 @@ Ruling: accept — dev died on API connection error after tests passed; main thr
 Ruling: defer push — branch feat/management-ui carries both plans; pushing publishes domain-collector into PR #3, left to the user (T-015)
 Ruling: scope+tests — 'domains' always in known_sources() by design; 12 expected-value lines in 7 test files appended 'domains', no assertion weakened (T-015, round 1)
 ## 2026-09-22T00:28:24Z verify T-015 ok=true
+## 2026-09-22T00:28:24Z build T-016 start (attempt 1)
+## 2026-09-22T00:36:31Z verify T-016 ok=true
