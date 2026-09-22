@@ -60,3 +60,6 @@ Ruling: scope+api/routers/status.py,tests/test_api_startup.py — wordpress mode
 ## 2026-09-22T01:23:26Z build T-023 start (attempt 1)
 Ruling: accept — useApi.ts OAuthProvider += wordpress, SystemInfo.oauth Partial<Record> (dialog already guards ?.modes ?? []) (T-023)
 ## 2026-09-22T01:26:16Z verify T-023 ok=true
+## 2026-09-22T01:26:16Z build T-024 start (attempt 1)
+Ruling: accept-with-followup — useDomainsApi.ts duplicates useApi.ts request()/toApiError(); check --fix should export and reuse (T-024)
+## 2026-09-22T01:28:29Z verify T-024 ok=true

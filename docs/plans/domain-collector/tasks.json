@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-22T01:26:16Z",
+  "updated": "2026-09-22T01:28:29Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1939,11 +1939,46 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T01:28:29Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'export function useDomainsApi' web/composables/useDomainsApi.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:28:26Z"
+          },
+          {
+            "cmd": "grep -qE '/api/domains/purchases' web/composables/useDomainsApi.ts",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:28:26Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/composables/useDomainsApi.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:28:26Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/useDomainsApi.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3090,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/useDomainsApi.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n················\n\n Test Files  1 passed (1)\n      Tests  16 passed (16)\n   Start at  21:28:27\n   Duration  1.89s (tests 84%, environment 10%, transform 3%, setup 2%, import 1%)",
+            "recorded_at": "2026-09-22T01:28:29Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Separate composable to keep useApi.ts from growing (392 lines). Reuse useApi's request helper (X-Requested-With header, error shape). Interfaces mirror api/routers/domains.py and domain_buy.py responses."
     },
