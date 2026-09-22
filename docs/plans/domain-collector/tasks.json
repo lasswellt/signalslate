@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-22T01:04:36Z",
+  "updated": "2026-09-22T01:11:36Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1651,11 +1651,53 @@
           "timeout": 240
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T01:11:36Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'kind: Literal\\[\"namecheap\"\\]' api/routers/connections.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:11:34Z"
+          },
+          {
+            "cmd": "grep -qE 'kind: Literal\\[\"godaddy\"\\]' api/routers/connections.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:11:34Z"
+          },
+          {
+            "cmd": "grep -qE 'kind: Literal\\[\"wordpress\"\\]' api/routers/connections.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:11:34Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/connections.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:11:34Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_connections_registrars.py tests/test_api_connections.py -q",
+            "exit": 0,
+            "duration_ms": 2213,
+            "tail": "........................................................................ [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n72 passed, 1 warning in 1.84s",
+            "recorded_at": "2026-09-22T01:11:36Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Follow the existing Literal-discriminated union (connections.py router lines 61-102) and the per-kind health dispatch near line 309: registrar kinds call inventory.registrar_for(id).check_connection() and map NotEligible / IpNotWhitelisted / AuthFailed to a readable detail (Namecheap: include egress IP to whitelist). Secrets never echoed; test that registrant_contact and api_key never appear in any response."
     },

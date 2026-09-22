@@ -49,3 +49,6 @@ Ruling: fix — main-thread review of purchase.py found years bypassing caps, da
 ## 2026-09-22T00:56:26Z build T-019 start (attempt 1)
 Ruling: accept-with-followup — domain_buy.py duplicates purchase._DAILY_CAP_STATUSES for remaining_today; candidate for check to expose a public spent_today() from purchase.py (T-019)
 ## 2026-09-22T01:04:36Z verify T-019 ok=true
+## 2026-09-22T01:04:36Z build T-020 start (attempt 1)
+Ruling: accept — registrar kinds bypass create_connection's known_sources/store_inactive gate (they are not digest sources); tested (T-020)
+## 2026-09-22T01:11:36Z verify T-020 ok=true
