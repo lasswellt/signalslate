@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-22T01:11:36Z",
+  "updated": "2026-09-22T01:19:26Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1726,11 +1726,39 @@
           "timeout": 240
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T01:19:26Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '\"wordpress\": \"wordpress\"' api/routers/oauth.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:19:24Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/oauth.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:19:24Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_oauth_wordpress.py tests/test_api_oauth.py -q",
+            "exit": 0,
+            "duration_ms": 2241,
+            "tail": "........................................................................ [ 98%]\n.                                                                        [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n73 passed, 1 warning in 1.96s",
+            "recorded_at": "2026-09-22T01:19:26Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Add to _KIND_FOR_PROVIDER (oauth.py:68), _start dispatch and error-code mapping; callback path for provider wordpress; system info advertises wordpress modes like google/microsoft. Unknown-provider behavior unchanged."
     },

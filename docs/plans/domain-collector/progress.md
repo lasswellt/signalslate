@@ -52,3 +52,6 @@ Ruling: accept-with-followup — domain_buy.py duplicates purchase._DAILY_CAP_ST
 ## 2026-09-22T01:04:36Z build T-020 start (attempt 1)
 Ruling: accept — registrar kinds bypass create_connection's known_sources/store_inactive gate (they are not digest sources); tested (T-020)
 ## 2026-09-22T01:11:36Z verify T-020 ok=true
+## 2026-09-22T01:11:36Z build T-021 start (attempt 1)
+Ruling: scope+api/routers/status.py,tests/test_api_startup.py — wordpress modes advertised in /api/system so OAuthDialog can start sign-in; one exact-equality expectation extended (T-021, round 1)
+## 2026-09-22T01:19:26Z verify T-021 ok=true
