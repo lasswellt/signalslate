@@ -225,6 +225,62 @@ describe('domains page', () => {
     expect(laterRow.html()).not.toContain('text-negative')
   })
 
+  it('hides expired owned domains by default, unhides on toggle', async () => {
+    stubApi({
+      domains: [
+        domain({ name: 'dead.com', expires_at: new Date(Date.now() - 400 * 86_400_000).toISOString() }),
+        domain({ name: 'alive.com', expires_at: new Date(Date.now() + 400 * 86_400_000).toISOString() }),
+      ],
+    })
+    const wrapper = await mountPage()
+
+    expect($<HTMLInputElement>('hide-expired-toggle')?.getAttribute('aria-checked')).toBe('true')
+    expect(wrapper.find('[data-testid="domain-row-dead.com"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="domain-row-alive.com"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="expired-count"]').text()).toContain('1 expired domain hidden')
+
+    await click('hide-expired-toggle')
+
+    expect(wrapper.find('[data-testid="domain-row-dead.com"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="domain-row-alive.com"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="expired-count"]').text()).toContain('1 expired domain shown')
+  })
+
+  it('never treats a missing expires_at as expired', async () => {
+    stubApi({ domains: [domain({ name: 'unknown-expiry.com', expires_at: null })] })
+    const wrapper = await mountPage()
+    expect(wrapper.find('[data-testid="domain-row-unknown-expiry.com"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="expired-count"]').exists()).toBe(false)
+  })
+
+  it('shows an all-expired message with a way to reveal them, distinct from the connect-a-registrar empty state', async () => {
+    stubApi({
+      domains: [
+        domain({ name: 'dead-one.com', expires_at: new Date(Date.now() - 10 * 86_400_000).toISOString() }),
+        domain({ name: 'dead-two.com', expires_at: new Date(Date.now() - 20 * 86_400_000).toISOString() }),
+      ],
+    })
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('[data-testid="portfolio-empty"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="portfolio-all-expired"]').text()).toContain('All 2 owned domains are expired and hidden')
+
+    await click('show-expired-link')
+
+    expect(wrapper.find('[data-testid="portfolio-all-expired"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="domain-row-dead-one.com"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="domain-row-dead-two.com"]').exists()).toBe(true)
+  })
+
+  it('does not apply the hide-expired filter to the Watchlist tab', async () => {
+    stubApi({
+      domains: [domain({ name: 'watched-expired.com', ownership: 'watched', expires_at: new Date(Date.now() - 10 * 86_400_000).toISOString() })],
+    })
+    const wrapper = await mountPage()
+    await click('tab-watchlist')
+    expect(wrapper.find('[data-testid="domain-row-watched-expired.com"]').exists()).toBe(true)
+  })
+
   it('renders watched domains in the Watchlist tab', async () => {
     stubApi({ domains: [domain({ name: 'idea.com', ownership: 'watched', connection_id: null, source: 'manual' })] })
     const wrapper = await mountPage()
