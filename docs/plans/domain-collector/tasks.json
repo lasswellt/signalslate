@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-22T01:37:42Z",
+  "updated": "2026-09-22T01:44:25Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2129,11 +2129,39 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T01:44:25Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'data-testid=\"ideas-generate\"' web/components/DomainIdeasPanel.vue",
+            "exit": 0,
+            "duration_ms": 14,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:44:21Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/DomainIdeasPanel.vue",
+            "exit": 0,
+            "duration_ms": 6,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:44:21Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/DomainIdeasPanel.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3340,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/DomainIdeasPanel.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n··stderr | tests/DomainIdeasPanel.test.ts > checking with a registrar > checks selected candidates and shows price and premium from the quote\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\nstderr | tests/DomainIdeasPanel.test.ts > checking with a registrar > shows a readable note inline when the registrar responds not_eligible\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n·····stderr | tests/DomainIdeasPanel.test.ts > buy > opens the purchase dialog for the selected registrar connection\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n····\n\n Test Files  1 passed (1)\n      Tests  11 passed (11)\n   Start at  21:44:23\n   Duration  2.09s (transform 46%, tests 32%, environment 10%, import 10%, setup 2%)",
+            "recorded_at": "2026-09-22T01:44:25Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Seeds + TLD chips + optional brief with 'use Claude' toggle; results table with local status; select up to N -> 'check with registrar' (not_eligible shown inline); 'watch' adds as watched domain; 'buy' opens DomainPurchaseDialog."
     },

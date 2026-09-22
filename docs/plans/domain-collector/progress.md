@@ -67,3 +67,5 @@ Ruling: accept-with-followup — useDomainsApi.ts duplicates useApi.ts request()
 ## 2026-09-22T01:33:35Z verify T-025 ok=true
 ## 2026-09-22T01:33:35Z build T-026 start (attempt 1)
 ## 2026-09-22T01:37:42Z verify T-026 ok=true
+## 2026-09-22T01:37:43Z build T-027 start (attempt 1)
+## 2026-09-22T01:44:25Z verify T-027 ok=true
