@@ -72,6 +72,11 @@
             {{ expiredOwnedCount }} expired domain{{ expiredOwnedCount === 1 ? '' : 's' }}
             {{ hideExpired ? 'hidden' : 'shown' }}
           </div>
+          <q-toggle v-model="hideMissing" label="Hide missing domains" data-testid="hide-missing-toggle" />
+          <div v-if="missingOwnedCount > 0" class="text-grey-8 text-caption" data-testid="missing-count">
+            {{ missingOwnedCount }} missing domain{{ missingOwnedCount === 1 ? '' : 's' }}
+            {{ hideMissing ? 'hidden' : 'shown' }}
+          </div>
         </div>
 
         <div v-if="allOwnedDomains.length === 0" class="text-grey-8" data-testid="portfolio-empty">
@@ -80,15 +85,23 @@
           to sync your portfolio, or add one above.
         </div>
         <div v-else-if="ownedDomains.length === 0" class="text-grey-8" data-testid="portfolio-all-expired">
-          All {{ expiredOwnedCount }} owned domain{{ expiredOwnedCount === 1 ? ' is' : 's are' }} expired and hidden.
+          <template v-if="missingOwnedCount === 0">
+            All {{ expiredOwnedCount }} owned domain{{ expiredOwnedCount === 1 ? ' is' : 's are' }} expired and hidden.
+          </template>
+          <template v-else-if="expiredOwnedCount === 0">
+            All {{ missingOwnedCount }} owned domain{{ missingOwnedCount === 1 ? ' is' : 's are' }} missing and hidden.
+          </template>
+          <template v-else>
+            All {{ allOwnedDomains.length }} owned domains are expired or missing and hidden.
+          </template>
           <q-btn
             flat
             no-caps
             dense
             color="primary"
-            label="Show expired"
+            label="Show all"
             data-testid="show-expired-link"
-            @click="hideExpired = false"
+            @click="hideExpired = false; hideMissing = false"
           />
         </div>
         <div v-else style="overflow-x: auto">
@@ -152,8 +165,20 @@
       </q-tab-panel>
 
       <q-tab-panel name="watchlist" data-testid="panel-watchlist">
-        <div v-if="watchedDomains.length === 0" class="text-grey-8" data-testid="watchlist-empty">
+        <div v-if="allWatchedDomains.length > 0" class="row items-center q-gutter-sm q-mb-sm">
+          <q-toggle v-model="hideMissing" label="Hide missing domains" data-testid="watchlist-hide-missing-toggle" />
+          <div v-if="missingWatchedCount > 0" class="text-grey-8 text-caption" data-testid="watchlist-missing-count">
+            {{ missingWatchedCount }} missing domain{{ missingWatchedCount === 1 ? '' : 's' }}
+            {{ hideMissing ? 'hidden' : 'shown' }}
+          </div>
+        </div>
+
+        <div v-if="allWatchedDomains.length === 0" class="text-grey-8" data-testid="watchlist-empty">
           No watched domains yet. Add one above or generate ideas to watch.
+        </div>
+        <div v-else-if="watchedDomains.length === 0" class="text-grey-8" data-testid="watchlist-all-missing">
+          All {{ missingWatchedCount }} watched domain{{ missingWatchedCount === 1 ? ' is' : 's are' }} missing and hidden.
+          <q-btn flat no-caps dense color="primary" label="Show missing" data-testid="show-missing-watchlist-link" @click="hideMissing = false" />
         </div>
         <div v-else style="overflow-x: auto">
           <q-table
@@ -394,13 +419,27 @@ const syncing = ref(false)
 // (not Watchlist): a watched domain going past its expiry is often exactly the event being
 // watched for — auto-hiding it there would hide the interesting case, not the noise.
 const hideExpired = ref(true)
+// A "missing" domain (missing_since set) is a sync artifact, not a status the account chose — a
+// registrar/connection stopped reporting it (dropped, transferred, or, as with WordPress.com's
+// free *.wordpress.com subdomains, never a real domain the sync should have added in the first
+// place). Defaults hidden in both tabs, unlike hideExpired: there's no "this is the interesting
+// event" case for missing the way an about-to-expire watched domain has one.
+const hideMissing = ref(true)
 
 const allOwnedDomains = computed(() => domains.value.filter((d) => d.ownership === 'owned'))
 const expiredOwnedCount = computed(() => allOwnedDomains.value.filter((d) => isExpired(d.expires_at)).length)
-const ownedDomains = computed(() =>
-  hideExpired.value ? allOwnedDomains.value.filter((d) => !isExpired(d.expires_at)) : allOwnedDomains.value,
+const missingOwnedCount = computed(() => allOwnedDomains.value.filter((d) => d.missing_since !== null).length)
+const ownedDomains = computed(() => {
+  let list = allOwnedDomains.value
+  if (hideExpired.value) list = list.filter((d) => !isExpired(d.expires_at))
+  if (hideMissing.value) list = list.filter((d) => d.missing_since === null)
+  return list
+})
+const allWatchedDomains = computed(() => domains.value.filter((d) => d.ownership === 'watched'))
+const missingWatchedCount = computed(() => allWatchedDomains.value.filter((d) => d.missing_since !== null).length)
+const watchedDomains = computed(() =>
+  hideMissing.value ? allWatchedDomains.value.filter((d) => d.missing_since === null) : allWatchedDomains.value,
 )
-const watchedDomains = computed(() => domains.value.filter((d) => d.ownership === 'watched'))
 
 // NS provider is not returned by GET /api/domains (api/routers/domains.py DomainOut): it lives on
 // a per-domain snapshot with no compact summary field, so that column still points at the detail
