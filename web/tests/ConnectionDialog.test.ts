@@ -13,7 +13,7 @@ const SYSTEM: SystemInfo = {
   store_active: true,
   public_base_url_configured: false,
   web_origins: [],
-  oauth: { google: { modes: ['paste_back'] }, microsoft: { modes: ['paste_back'] } },
+  oauth: { google: { modes: ['paste_back'] }, microsoft: { modes: ['paste_back'] }, zoom: { modes: [] } },
 }
 
 // An invented value that must never be found anywhere it should not be.
