@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-22T01:28:29Z",
+  "updated": "2026-09-22T01:33:35Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2007,11 +2007,39 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T01:33:35Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'data-testid=\"domain-mail-posture\"' web/components/DomainDetailDialog.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:33:32Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/DomainDetailDialog.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:33:32Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/DomainDetailDialog.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3130,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/DomainDetailDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n············\n\n Test Files  1 passed (1)\n      Tests  12 passed (12)\n   Start at  21:33:33\n   Duration  1.90s (transform 48%, tests 30%, environment 11%, import 10%, setup 2%)",
+            "recorded_at": "2026-09-22T01:33:35Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Loading / error / unsupported states per part (RDAP unsupported TLD, crt.sh unavailable). 'Load subdomains & URLs' button triggers inspect with intel=true (on demand). Works for owned and ad-hoc names."
     },

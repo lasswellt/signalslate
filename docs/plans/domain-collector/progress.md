@@ -63,3 +63,5 @@ Ruling: accept — useApi.ts OAuthProvider += wordpress, SystemInfo.oauth Partia
 ## 2026-09-22T01:26:16Z build T-024 start (attempt 1)
 Ruling: accept-with-followup — useDomainsApi.ts duplicates useApi.ts request()/toApiError(); check --fix should export and reuse (T-024)
 ## 2026-09-22T01:28:29Z verify T-024 ok=true
+## 2026-09-22T01:28:29Z build T-025 start (attempt 1)
+## 2026-09-22T01:33:35Z verify T-025 ok=true
