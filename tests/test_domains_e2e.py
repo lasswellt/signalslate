@@ -413,3 +413,36 @@ def test_purchase_refused_by_default(env):
         assert resp.status_code == 422
         assert resp.json()["detail"]["code"] == "purchase_disabled"
     env.capture.assert_clean()
+
+
+# --- scenario: purchase enabled: quote -> purchase once, resubmit refused --------------------------
+
+
+def test_purchase_enabled_succeeds_once_then_refuses_resubmission(env):
+    env.nc_state.check_available["nc-newbuy.com"] = True
+    enable_purchasing(env)
+    with env.app() as client:
+        assert create_namecheap(client).status_code == 201
+
+        quoted = client.post("/api/domains/quotes", json={"name": "nc-newbuy.com", "connection_id": "namecheap_ncwork"})
+        assert quoted.status_code == 201
+        quote_body = quoted.json()
+        assert quote_body["price"] == "10.98"
+        quote_id = quote_body["id"]
+
+        bought = client.post(
+            "/api/domains/purchases", json={"quote_id": quote_id, "confirm_name": "nc-newbuy.com", "years": 1}
+        )
+        assert bought.status_code == 201, bought.text
+        assert bought.json()["status"] == "succeeded"
+        assert env.nc_state.create_calls == ["nc-newbuy.com"]
+
+        again = client.post(
+            "/api/domains/purchases", json={"quote_id": quote_id, "confirm_name": "nc-newbuy.com", "years": 1}
+        )
+        assert again.status_code == 422
+        assert again.json()["detail"]["code"] == "already_submitted"
+        # No second call reached the registrar: the unique quote_id insert refused it first.
+        assert env.nc_state.create_calls == ["nc-newbuy.com"]
+    env.capture.assert_clean()
+    env.capture.assert_items_clean()
