@@ -4,7 +4,7 @@ from urllib.parse import urlsplit
 
 from fastapi import FastAPI
 
-from api.routers import collectors, config, connections as connections_router, oauth, runs, status
+from api.routers import collectors, config, connections as connections_router, domains, oauth, runs, status
 from api.scheduler import start_scheduler
 from api.security import install_host_guard, install_security, normalize_host, normalize_origin
 from pipeline import connections, health
@@ -102,6 +102,7 @@ app.include_router(config.router, prefix="/api")
 # GET /collectors/dry-run/{job_id} must stay ahead of anything shaped /collectors/{source}/...:
 # routes match in registration order, and inside the collectors router it is declared first.
 app.include_router(connections_router.router, prefix="/api")
+app.include_router(domains.router, prefix="/api")
 app.include_router(collectors.router, prefix="/api")
 app.include_router(oauth.router, prefix="/api")
 
