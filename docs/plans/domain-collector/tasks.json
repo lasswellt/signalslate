@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-22T00:50:51Z",
+  "updated": "2026-09-22T00:56:26Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1481,11 +1481,53 @@
           "timeout": 240
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T00:56:26Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '@router\\.get\\(\"/domains\"' api/routers/domains.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:56:24Z"
+          },
+          {
+            "cmd": "grep -qE '@router\\.post\\(\"/domains/inspect\"' api/routers/domains.py",
+            "exit": 0,
+            "duration_ms": 6,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:56:24Z"
+          },
+          {
+            "cmd": "grep -qE 'domains\\.router' api/main.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:56:24Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/domains.py",
+            "exit": 0,
+            "duration_ms": 6,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:56:24Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_domains.py tests/test_api_security.py -q",
+            "exit": 0,
+            "duration_ms": 1167,
+            "tail": "........................................................................ [ 93%]\n.....                                                                    [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n77 passed, 1 warning in 0.86s",
+            "recorded_at": "2026-09-22T00:56:26Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Finding 8. Plain def handlers (blocking network, connections.py router pattern). GET /domains (filter owned|watched, source), GET /domains/{name} (latest snapshot + last 30 snapshots summary), POST /domains (manual add), DELETE /domains/{name} (manual/watched only), POST /domains/import (CSV text body, size-capped), POST /domains/sync (sync_all + refresh), POST /domains/inspect {name, intel: bool} for any domain without persisting. Errors are generic {code,message}; no registrar response bodies echoed. Mutations inherit CSRF header check (api/security.py:36) — test that a POST without X-Requested-With is 403."
     },
