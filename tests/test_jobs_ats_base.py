@@ -6,9 +6,10 @@ No network: requests is stubbed at the module's own import site (monkeypatch.set
 "get", fake), following tests/test_domain_intel.py's route() convention). _sleep is stubbed the
 same way so retries/backoff never actually wait.
 
-None of the 11 per-ATS adapter modules (T-005..T-010) exist yet, so get_adapter()/match_any_url()
-are exercised against that "not landed yet" state plus a fake module injected into sys.modules for
-the "adapter exists" path.
+The 11 per-ATS adapter modules land one at a time (T-005..T-010); get_adapter()/match_any_url()'s
+"module not landed yet" path is exercised by forcing importlib.import_module to raise
+ModuleNotFoundError rather than picking a currently-unimplemented kind by name, plus a fake module
+injected into sys.modules for the "adapter exists" path.
 """
 import sys
 import types
@@ -120,8 +121,15 @@ def test_get_adapter_rejects_unknown_kind():
         ats.get_adapter("not_a_real_ats")
 
 
-def test_get_adapter_raises_module_not_found_for_unimplemented_kind():
-    # None of the 11 per-kind modules exist yet in this codebase state.
+def test_get_adapter_raises_module_not_found_for_unimplemented_kind(monkeypatch):
+    # A valid ADAPTER_KINDS entry whose module hasn't landed (or has been removed) still surfaces
+    # ModuleNotFoundError rather than being swallowed. Forced via importlib rather than picking a
+    # currently-unimplemented kind by name, since T-005..T-010 land the real modules one at a time
+    # and a hardcoded kind here would go stale as each one ships.
+    def fake_import(name):
+        raise ModuleNotFoundError(name)
+
+    monkeypatch.setattr(ats.importlib, "import_module", fake_import)
     with pytest.raises(ModuleNotFoundError):
         ats.get_adapter("greenhouse")
 
@@ -133,8 +141,13 @@ def test_get_adapter_returns_module_adapter_when_present(monkeypatch):
     assert ats.get_adapter("greenhouse") is fake_module.adapter
 
 
-def test_match_any_url_skips_unimplemented_kinds_and_returns_none():
-    # No adapter modules exist; must not raise ImportError/ModuleNotFoundError to the caller.
+def test_match_any_url_skips_unimplemented_kinds_and_returns_none(monkeypatch):
+    # Forced via importlib (see test_get_adapter_raises_module_not_found_for_unimplemented_kind)
+    # so this doesn't go stale as T-005..T-010 land real adapter modules.
+    def fake_import(name):
+        raise ModuleNotFoundError(name)
+
+    monkeypatch.setattr(ats.importlib, "import_module", fake_import)
     assert ats.match_any_url("https://boards.greenhouse.io/acme") is None
 
 
