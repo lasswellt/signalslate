@@ -122,7 +122,7 @@ def test_only_none_still_collects_every_active_source(temp_db, declared, monkeyp
 
     run = runner.execute_run()
 
-    assert collected == ["zoom", "slack_alpha"]  # zoom is always declared; beta is off
+    assert collected == ["zoom", "slack_alpha", "domains"]  # zoom/domains are always declared; beta is off
     assert run.trigger == "manual"
 
 
@@ -227,10 +227,10 @@ def test_store_change_between_health_and_collect_is_not_observed(temp_db, declar
 
     runner.execute_run(only="slack_gamma")
 
-    assert seen["sources"] == ["zoom", "slack_gamma"]
+    assert seen["sources"] == ["zoom", "slack_gamma", "domains"]
     assert seen["gamma"] == "xoxp-old"
     # The change really happened; only the run was shielded from it.
-    assert health.known_sources() == ["zoom", "slack_delta", "slack_gamma"]
+    assert health.known_sources() == ["zoom", "slack_delta", "slack_gamma", "domains"]
     assert health.slack_workspaces()["gamma"] == "xoxp-new"
 
 
