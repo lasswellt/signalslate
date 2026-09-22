@@ -102,8 +102,11 @@ app.include_router(config.router, prefix="/api")
 # GET /collectors/dry-run/{job_id} must stay ahead of anything shaped /collectors/{source}/...:
 # routes match in registration order, and inside the collectors router it is declared first.
 app.include_router(connections_router.router, prefix="/api")
-app.include_router(domains.router, prefix="/api")
+# domain_buy ahead of domains: routes match in registration order, and domains.py declares
+# GET /domains/{name} (a catch-all), which would otherwise shadow domain_buy's static
+# GET /domains/purchases and GET /domains/purchase-settings, 404ing them as "no such domain".
 app.include_router(domain_buy.router, prefix="/api")
+app.include_router(domains.router, prefix="/api")
 app.include_router(collectors.router, prefix="/api")
 app.include_router(oauth.router, prefix="/api")
 
