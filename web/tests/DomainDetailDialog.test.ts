@@ -56,6 +56,7 @@ function detail(overrides: Partial<DomainDetailOut> = {}): DomainDetailOut {
     first_seen: '2026-01-01T00:00:00Z',
     last_seen: '2026-09-20T00:00:00Z',
     missing_since: null,
+    mail: { status: 'ok', spf: true, dmarc_policy: 'reject', dkim: true, mta_sts: true, bimi: false },
     latest: baseLatest(),
     latest_taken_at: '2026-09-20T00:00:00Z',
     history: [{ taken_at: '2026-09-20T00:00:00Z', data_hash: 'abcdef1234567890' }],

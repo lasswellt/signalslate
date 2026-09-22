@@ -135,7 +135,11 @@ beforeEach(() => {
   connectionsResult = () => [connection()]
   ideasResult = () => ({ candidates: candidates(), llm_reason: null })
   checkResult = () => [quote()]
-  addDomainResult = () => ({ name: 'acmehq.com', ownership: 'watched', source: 'ui', connection_id: null, expires_at: null, auto_renew: null, locked: null, privacy: null, first_seen: null, last_seen: null, missing_since: null })
+  addDomainResult = () => ({
+    name: 'acmehq.com', ownership: 'watched', source: 'ui', connection_id: null, expires_at: null,
+    auto_renew: null, locked: null, privacy: null, first_seen: null, last_seen: null, missing_since: null,
+    mail: { status: 'unavailable', spf: false, dmarc_policy: null, dkim: false, mta_sts: false, bimi: false },
+  })
   settingsResult = () => ({ enabled: true, max_price: '500.00', daily_cap: '1000.00', allow_premium: false, remaining_today: '850.00' })
   purchaseQuoteResult = () => ({ id: 'quote-1', name: 'acmehq.com', connection_id: 'godaddy:main', price: '12.00', renewal_price: '15.00', currency: 'USD', premium: false, expires_at: new Date(Date.now() + 5 * 60_000).toISOString() })
   stubApi()
