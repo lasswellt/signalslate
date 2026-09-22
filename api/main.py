@@ -4,7 +4,7 @@ from urllib.parse import urlsplit
 
 from fastapi import FastAPI
 
-from api.routers import collectors, config, connections as connections_router, domain_buy, domains, oauth, runs, status
+from api.routers import collectors, config, connections as connections_router, domain_buy, domains, jobs, oauth, runs, status
 from api.scheduler import start_scheduler
 from api.security import install_host_guard, install_security, normalize_host, normalize_origin
 from pipeline import connections, health
@@ -109,6 +109,8 @@ app.include_router(domain_buy.router, prefix="/api")
 app.include_router(domains.router, prefix="/api")
 app.include_router(collectors.router, prefix="/api")
 app.include_router(oauth.router, prefix="/api")
+# No shadowing conflict with any router registered above: none of them declare a /jobs* path.
+app.include_router(jobs.router, prefix="/api")
 
 
 @app.get("/api/health")
