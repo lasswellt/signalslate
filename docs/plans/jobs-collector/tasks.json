@@ -1,0 +1,3211 @@
+{
+  "$schema": "blitz-tasks/1.0",
+  "plan": "jobs-collector",
+  "updated": "2026-09-22T08:05:12Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Pin fpdf2 (server) and playwright in requirements-assist.txt (desktop runner only)",
+      "role": "infra",
+      "files": [
+        "requirements.txt",
+        "requirements-assist.txt"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qE '^fpdf2==' requirements.txt",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^playwright==' requirements-assist.txt",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -qE '^playwright' requirements.txt",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -c 'import fpdf, playwright.sync_api'",
+          "timeout": 30
+        },
+        {
+          "cmd": "venv/bin/python -c 'from playwright.sync_api import sync_playwright; p=sync_playwright().start(); b=p.chromium.launch(); b.close(); p.stop()'",
+          "timeout": 120
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T04:52:41Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^fpdf2==' requirements.txt",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T04:52:41Z"
+          },
+          {
+            "cmd": "grep -qE '^playwright==' requirements-assist.txt",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T04:52:41Z"
+          },
+          {
+            "cmd": "! grep -qE '^playwright' requirements.txt",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T04:52:41Z"
+          },
+          {
+            "cmd": "venv/bin/python -c 'import fpdf, playwright.sync_api'",
+            "exit": 0,
+            "duration_ms": 223,
+            "tail": "",
+            "recorded_at": "2026-09-22T04:52:41Z"
+          },
+          {
+            "cmd": "venv/bin/python -c 'from playwright.sync_api import sync_playwright; p=sync_playwright().start(); b=p.chromium.launch(); b.close(); p.stop()'",
+            "exit": 0,
+            "duration_ms": 320,
+            "tail": "",
+            "recorded_at": "2026-09-22T04:52:41Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Apply Assist (Cover letter; Where it runs). requirements-assist.txt starts with '-r requirements.txt'. Install both into venv and run 'venv/bin/python -m playwright install chromium'. Playwright must NOT enter requirements.txt: api/Dockerfile installs requirements.txt and the server stays headless/slim. fpdf2 is pure Python (no system libs in python:3.12-slim)."
+    },
+    {
+      "id": "T-002",
+      "title": "pipeline/db.py: JobCompany, JobBoard, JobPosting tables",
+      "role": "backend",
+      "files": [
+        "pipeline/db.py",
+        "tests/test_job_tables.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qE 'class JobCompany\\(SQLModel, table=True\\)' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'class JobBoard\\(SQLModel, table=True\\)' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'class JobPosting\\(SQLModel, table=True\\)' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_job_tables.py tests/test_domain_tables.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T04:54:30Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'class JobCompany\\(SQLModel, table=True\\)' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T04:54:30Z"
+          },
+          {
+            "cmd": "grep -qE 'class JobBoard\\(SQLModel, table=True\\)' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T04:54:30Z"
+          },
+          {
+            "cmd": "grep -qE 'class JobPosting\\(SQLModel, table=True\\)' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T04:54:30Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T04:54:30Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_job_tables.py tests/test_domain_tables.py -q",
+            "exit": 0,
+            "duration_ms": 535,
+            "tail": "...........                                                              [100%]\n11 passed in 0.30s",
+            "recorded_at": "2026-09-22T04:54:30Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Implementation Sketch Step 1. Mirror Domain (pipeline/db.py:119) state-row lifecycle. UNIQUE(ats_kind, board_id) on JobBoard; UNIQUE(board_id, external_id) on JobPosting; JobBoard carries resolved_by, confidence, verified_at, last_polled_at, last_error; JobPosting carries content_hash, first_seen, last_seen, closed_at, missed_polls, fit_score, fit_reason, apply_url. JobCompany.domain indexed, status active|muted, source watchlist|yc|hn|email|manual. Tests assert both unique constraints reject duplicates."
+    },
+    {
+      "id": "T-003",
+      "title": "pipeline/jobs package: jobs_settings, slug candidates, title/city normalize, content_hash",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/__init__.py",
+        "tests/conftest.py",
+        "tests/test_jobs_base.py"
+      ],
+      "depends_on": [
+        "T-002"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^def jobs_settings' pipeline/jobs/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^def slug_candidates' pipeline/jobs/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^def content_hash' pipeline/jobs/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '\"JOBS_\"' tests/conftest.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_jobs_base.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T04:58:03Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def jobs_settings' pipeline/jobs/__init__.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T04:58:02Z"
+          },
+          {
+            "cmd": "grep -qE '^def slug_candidates' pipeline/jobs/__init__.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T04:58:02Z"
+          },
+          {
+            "cmd": "grep -qE '^def content_hash' pipeline/jobs/__init__.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T04:58:02Z"
+          },
+          {
+            "cmd": "grep -qE '\"JOBS_\"' tests/conftest.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T04:58:02Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/__init__.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T04:58:02Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_jobs_base.py -q",
+            "exit": 0,
+            "duration_ms": 431,
+            "tail": ".....................                                                    [100%]\n21 passed in 0.24s",
+            "recorded_at": "2026-09-22T04:58:03Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Dedup / change detection, §Resolution step 2. Follow pipeline/domains/__init__.py domain_settings() (reads health._env()): JOBS_REFRESH_CRON (default daily), JOBS_SCORE_THRESHOLD, JOBS_MISSED_POLLS_TO_CLOSE (default 3), JOBS_MAX_LLM_RESOLVES_PER_RUN, JOBS_MAX_SCORE_PER_RUN. content_hash excludes description whitespace and tracking query params. slug_candidates(name, domain) -> ordered, deduped, max 3 (e.g. acme, acmeinc, domain SLD). Add 'JOBS_' to CONFIG_PREFIXES in tests/conftest.py so the autouse env isolation strips it."
+    },
+    {
+      "id": "T-004",
+      "title": "pipeline/jobs/ats: adapter protocol, RawPosting/BoardInfo, polite HTTP helper, lazy registry",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/ats/__init__.py",
+        "tests/test_jobs_ats_base.py"
+      ],
+      "depends_on": [
+        "T-003"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^def get_adapter' pipeline/jobs/ats/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^def match_any_url' pipeline/jobs/ats/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^class RawPosting' pipeline/jobs/ats/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'Retry-After' pipeline/jobs/ats/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_jobs_ats_base.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T05:01:49Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def get_adapter' pipeline/jobs/ats/__init__.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:01:48Z"
+          },
+          {
+            "cmd": "grep -qE '^def match_any_url' pipeline/jobs/ats/__init__.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:01:48Z"
+          },
+          {
+            "cmd": "grep -qE '^class RawPosting' pipeline/jobs/ats/__init__.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:01:48Z"
+          },
+          {
+            "cmd": "grep -qE 'Retry-After' pipeline/jobs/ats/__init__.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:01:48Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/__init__.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:01:48Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_jobs_ats_base.py -q",
+            "exit": 0,
+            "duration_ms": 445,
+            "tail": "..................                                                       [100%]\n18 passed in 0.24s",
+            "recorded_at": "2026-09-22T05:01:49Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Implementation Sketch Step 2. AtsAdapter protocol: kind, apply_mode (hosted_form|account_per_tenant), match_url(url)->board_id|None, probe(slug)->BoardInfo|None (None on 404), list_postings(board_id)->list[RawPosting]. ADAPTER_KINDS tuple of all 11 kinds (greenhouse, lever, ashby, workable, workday, smartrecruiters, rippling, bamboohr, recruitee, personio, jsonld); get_adapter imports pipeline.jobs.ats.<kind> lazily via importlib so adapter tasks never edit this file. HTTP via requests with descriptive User-Agent, _sleep indirection + _RETRYABLE_STATUS as pipeline/domains/intel.py:39-50, honor Retry-After. Stub requests at the module import site in tests."
+    },
+    {
+      "id": "T-005",
+      "title": "ATS adapters: Greenhouse and Lever (list, probe, URL match)",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/ats/greenhouse.py",
+        "pipeline/jobs/ats/lever.py",
+        "tests/test_ats_greenhouse_lever.py"
+      ],
+      "depends_on": [
+        "T-004"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'boards-api.greenhouse.io/v1/boards' pipeline/jobs/ats/greenhouse.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'api.lever.co/v0/postings' pipeline/jobs/ats/lever.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/greenhouse.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/lever.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_ats_greenhouse_lever.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T05:06:19Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'boards-api.greenhouse.io/v1/boards' pipeline/jobs/ats/greenhouse.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:06:19Z"
+          },
+          {
+            "cmd": "grep -qE 'api.lever.co/v0/postings' pipeline/jobs/ats/lever.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:06:19Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/greenhouse.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:06:19Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/lever.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:06:19Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_ats_greenhouse_lever.py -q",
+            "exit": 0,
+            "duration_ms": 427,
+            "tail": "........................                                                 [100%]\n24 passed in 0.24s",
+            "recorded_at": "2026-09-22T05:06:19Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §ATS endpoints (live-verified 2026-09-22). Greenhouse GET /v1/boards/{token}/jobs?content=true; URL match boards.greenhouse.io/{t}, job-boards.greenhouse.io/{t}, embed ?for={t}. Lever GET /v0/postings/{site}?mode=json (EU host api.eu.lever.co); match jobs.lever.co/{site}. Unknown slug returns 404 on both (verified). Fixtures: small synthetic JSON in tests, shaped like the live probes."
+    },
+    {
+      "id": "T-006",
+      "title": "ATS adapters: Ashby and Workable",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/ats/ashby.py",
+        "pipeline/jobs/ats/workable.py",
+        "tests/test_ats_ashby_workable.py"
+      ],
+      "depends_on": [
+        "T-004"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'api.ashbyhq.com/posting-api/job-board' pipeline/jobs/ats/ashby.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'apply.workable.com/api/v1/widget/accounts' pipeline/jobs/ats/workable.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/ashby.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/workable.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_ats_ashby_workable.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T05:08:55Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'api.ashbyhq.com/posting-api/job-board' pipeline/jobs/ats/ashby.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:08:55Z"
+          },
+          {
+            "cmd": "grep -qE 'apply.workable.com/api/v1/widget/accounts' pipeline/jobs/ats/workable.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:08:55Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/ashby.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:08:55Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/workable.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:08:55Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_ats_ashby_workable.py -q",
+            "exit": 0,
+            "duration_ms": 419,
+            "tail": "........................                                                 [100%]\n24 passed in 0.23s",
+            "recorded_at": "2026-09-22T05:08:55Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §ATS endpoints. Ashby GET posting-api/job-board/{name}?includeCompensation=true (map comp to comp_text); match jobs.ashbyhq.com/{name}. Workable widget JSON is undocumented; match apply.workable.com/{account}. Both 404 on unknown slug (verified)."
+    },
+    {
+      "id": "T-007",
+      "title": "ATS adapter: Workday CXS (POST paging, tenant|wdN|site board id)",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/ats/workday.py",
+        "tests/test_ats_workday.py"
+      ],
+      "depends_on": [
+        "T-004"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '/wday/cxs/' pipeline/jobs/ats/workday.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'appliedFacets' pipeline/jobs/ats/workday.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'apply_mode = \"account_per_tenant\"' pipeline/jobs/ats/workday.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/workday.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_ats_workday.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T05:13:32Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '/wday/cxs/' pipeline/jobs/ats/workday.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:13:32Z"
+          },
+          {
+            "cmd": "grep -qE 'appliedFacets' pipeline/jobs/ats/workday.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:13:32Z"
+          },
+          {
+            "cmd": "grep -qE 'apply_mode = \"account_per_tenant\"' pipeline/jobs/ats/workday.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:13:32Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/workday.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:13:32Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_ats_workday.py -q",
+            "exit": 0,
+            "duration_ms": 417,
+            "tail": "...............                                                          [100%]\n15 passed in 0.23s",
+            "recorded_at": "2026-09-22T05:13:32Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §ATS endpoints + Risks. POST {tenant}.wd{N}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs body {appliedFacets:{},limit:20,offset,searchText:''}; page by offset until total; hard page cap constant (undocumented endpoint, total observed capped at 2000). board_id format 'tenant|wdN|site'; match_url parses careers URLs. probe() returns None: slug guessing cannot find tenant+wdN+site. postedOn is relative text ('Posted Today') so first_seen comes from our clock."
+    },
+    {
+      "id": "T-008",
+      "title": "ATS adapters: SmartRecruiters and Rippling",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/ats/smartrecruiters.py",
+        "pipeline/jobs/ats/rippling.py",
+        "tests/test_ats_smartrecruiters_rippling.py"
+      ],
+      "depends_on": [
+        "T-004"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'api.smartrecruiters.com/v1/companies' pipeline/jobs/ats/smartrecruiters.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'ats.rippling.com/api/v2/board' pipeline/jobs/ats/rippling.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/smartrecruiters.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/rippling.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_ats_smartrecruiters_rippling.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T05:16:51Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'api.smartrecruiters.com/v1/companies' pipeline/jobs/ats/smartrecruiters.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:16:50Z"
+          },
+          {
+            "cmd": "grep -qE 'ats.rippling.com/api/v2/board' pipeline/jobs/ats/rippling.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:16:50Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/smartrecruiters.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:16:50Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/rippling.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:16:50Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_ats_smartrecruiters_rippling.py -q",
+            "exit": 0,
+            "duration_ms": 386,
+            "tail": ".......................                                                  [100%]\n23 passed in 0.22s",
+            "recorded_at": "2026-09-22T05:16:51Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §ATS endpoints. SmartRecruiters is officially documented; an unknown company returns 200 totalFound:0 (not 404), so probe() treats totalFound==0 as miss. Rippling v2 list returns items{id,name,url,department,locations}; description may need a per-job fetch (open question: implement if the detail endpoint is found, else leave description empty and note it in the adapter docstring)."
+    },
+    {
+      "id": "T-009",
+      "title": "ATS adapters: BambooHR and Recruitee",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/ats/bamboohr.py",
+        "pipeline/jobs/ats/recruitee.py",
+        "tests/test_ats_bamboohr_recruitee.py"
+      ],
+      "depends_on": [
+        "T-004"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '/careers/list' pipeline/jobs/ats/bamboohr.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '/api/offers/' pipeline/jobs/ats/recruitee.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/bamboohr.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/recruitee.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_ats_bamboohr_recruitee.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T05:20:13Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '/careers/list' pipeline/jobs/ats/bamboohr.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:20:13Z"
+          },
+          {
+            "cmd": "grep -qE '/api/offers/' pipeline/jobs/ats/recruitee.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:20:13Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/bamboohr.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:20:13Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/recruitee.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:20:13Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_ats_bamboohr_recruitee.py -q",
+            "exit": 0,
+            "duration_ms": 390,
+            "tail": "..........................                                               [100%]\n26 passed in 0.22s",
+            "recorded_at": "2026-09-22T05:20:13Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §ATS endpoints. BambooHR GET {co}.bamboohr.com/careers/list with Accept: application/json -> {meta,result} (undocumented). Recruitee GET {co}.recruitee.com/api/offers/ -> {offers:[...careers_apply_url...]}. Unknown-slug behavior was not probed for these; treat non-200 or non-JSON as miss."
+    },
+    {
+      "id": "T-010",
+      "title": "ATS adapters: Personio XML feed and generic schema.org JobPosting (JSON-LD)",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/ats/personio.py",
+        "pipeline/jobs/ats/jsonld.py",
+        "tests/test_ats_personio_jsonld.py"
+      ],
+      "depends_on": [
+        "T-004"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'defusedxml' pipeline/jobs/ats/personio.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '\"JobPosting\"' pipeline/jobs/ats/jsonld.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/personio.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/jsonld.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_ats_personio_jsonld.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T05:25:42Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'defusedxml' pipeline/jobs/ats/personio.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:25:42Z"
+          },
+          {
+            "cmd": "grep -qE '\"JobPosting\"' pipeline/jobs/ats/jsonld.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:25:42Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/personio.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:25:42Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/ats/jsonld.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:25:42Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_ats_personio_jsonld.py -q",
+            "exit": 0,
+            "duration_ms": 395,
+            "tail": ".........................                                                [100%]\n25 passed in 0.22s",
+            "recorded_at": "2026-09-22T05:25:42Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §ATS endpoints, §Resolution step 5. Personio GET {co}.jobs.personio.de/xml (<workzag-jobs><position>), parsed with defusedxml (already pinned). jsonld: board_id is a careers-page URL; list_postings fetches it and extracts <script type=application/ld+json> blocks with @type JobPosting (also inside @graph and lists) using stdlib html.parser + json; no new dependency. JS-rendered pages yield nothing (documented limitation)."
+    },
+    {
+      "id": "T-011",
+      "title": "pipeline/jobs/resolve.py: URL-pattern match, verified slug probe, HTML careers fingerprint",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/resolve.py",
+        "tests/test_jobs_resolve.py"
+      ],
+      "depends_on": [
+        "T-005",
+        "T-006",
+        "T-007",
+        "T-008",
+        "T-009",
+        "T-010"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^def resolve_company' pipeline/jobs/resolve.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^def probe_slugs' pipeline/jobs/resolve.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^def fingerprint_html' pipeline/jobs/resolve.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/resolve.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_jobs_resolve.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T05:30:17Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def resolve_company' pipeline/jobs/resolve.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:30:16Z"
+          },
+          {
+            "cmd": "grep -qE '^def probe_slugs' pipeline/jobs/resolve.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:30:16Z"
+          },
+          {
+            "cmd": "grep -qE '^def fingerprint_html' pipeline/jobs/resolve.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:30:17Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/resolve.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:30:17Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_jobs_resolve.py -q",
+            "exit": 0,
+            "duration_ms": 407,
+            "tail": "........................                                                 [100%]\n24 passed in 0.23s",
+            "recorded_at": "2026-09-22T05:30:17Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Resolution steps 1-3 + Risks (slug false positive). Ladder: match_any_url over known URLs (careers hint, seed links) -> probe_slugs over slug_candidates on greenhouse/lever/ashby/rippling/workable/smartrecruiters (max 5 kinds x 3 slugs) and accept a hit only when the board's company name/website matches the company name/domain -> fingerprint_html (homepage, then careers|jobs link; scan hrefs, iframes, script src, redirects for ATS hosts incl. myworkdayjobs.com) -> jsonld board if a JobPosting block exists. Returns ResolveResult(ats_kind, board_id, resolved_by, confidence) or None. LLM step is T-012, wired in T-015."
+    },
+    {
+      "id": "T-012",
+      "title": "pipeline/jobs/research.py: Claude web_search + web_fetch careers-page research for resolver misses",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/research.py",
+        "tests/test_jobs_research.py"
+      ],
+      "depends_on": [
+        "T-003"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^def llm_resolve' pipeline/jobs/research.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'web_search' pipeline/jobs/research.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'web_fetch' pipeline/jobs/research.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'make_client' pipeline/jobs/research.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/research.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_jobs_research.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T05:35:35Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def llm_resolve' pipeline/jobs/research.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:35:35Z"
+          },
+          {
+            "cmd": "grep -qE 'web_search' pipeline/jobs/research.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:35:35Z"
+          },
+          {
+            "cmd": "grep -qE 'web_fetch' pipeline/jobs/research.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:35:35Z"
+          },
+          {
+            "cmd": "grep -qE 'make_client' pipeline/jobs/research.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:35:35Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/research.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:35:35Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_jobs_research.py -q",
+            "exit": 0,
+            "duration_ms": 727,
+            "tail": "...................                                                      [100%]\n19 passed in 0.51s",
+            "recorded_at": "2026-09-22T05:35:35Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Resolution step 4 + Claude web tools citations. Reuse pipeline.triage.make_client()/health.llm_settings() like pipeline/domains/ideas.py. Server tools web_search ($10/1k + tokens) and web_fetch (tokens only, no JS) with max_uses<=3 and max_content_tokens cap; return structured {careers_url, ats_kind, board_id, confidence}. The model's answer is untrusted: the result must be re-checked by T-011's match_url/probe before storing (only a URL, never actions). Missing API key -> returns None with a reason, never raises. Tests use a fake client object (Anthropic is a true external)."
+    },
+    {
+      "id": "T-013",
+      "title": "pipeline/jobs/seeds.py: watchlist add/CSV import, yc-oss hiring import, HN Who-is-hiring import",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/seeds.py",
+        "tests/test_jobs_seeds.py"
+      ],
+      "depends_on": [
+        "T-002",
+        "T-003"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^def add_company' pipeline/jobs/seeds.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^def import_csv' pipeline/jobs/seeds.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'yc-oss.github.io/api/companies/hiring.json' pipeline/jobs/seeds.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'hn.algolia.com/api/v1' pipeline/jobs/seeds.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/seeds.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_jobs_seeds.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T05:39:53Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def add_company' pipeline/jobs/seeds.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:39:53Z"
+          },
+          {
+            "cmd": "grep -qE '^def import_csv' pipeline/jobs/seeds.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:39:53Z"
+          },
+          {
+            "cmd": "grep -qE 'yc-oss.github.io/api/companies/hiring.json' pipeline/jobs/seeds.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:39:53Z"
+          },
+          {
+            "cmd": "grep -qE 'hn.algolia.com/api/v1' pipeline/jobs/seeds.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:39:53Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/seeds.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:39:53Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_jobs_seeds.py -q",
+            "exit": 0,
+            "duration_ms": 466,
+            "tail": "..................                                                       [100%]\n18 passed in 0.29s",
+            "recorded_at": "2026-09-22T05:39:53Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Company discovery sources. Upsert JobCompany by domain (else normalized name); never duplicate. import_yc(filters) reads the static hiring.json (name, website); import_hn() finds the latest whoishiring 'Who is hiring' story via Algolia, reads its comments, extracts company names and any ATS URLs (kept as resolver hints). Both importers are opt-in calls (API/UI), never automatic, and capped per call."
+    },
+    {
+      "id": "T-014",
+      "title": "pipeline/jobs/inbox_seed.py: companies and roles from job-alert emails already in collecteditem",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/inbox_seed.py",
+        "tests/test_jobs_inbox_seed.py"
+      ],
+      "depends_on": [
+        "T-013"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^def seed_from_inbox' pipeline/jobs/inbox_seed.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'CollectedItem' pipeline/jobs/inbox_seed.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/inbox_seed.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_jobs_inbox_seed.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T05:45:14Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def seed_from_inbox' pipeline/jobs/inbox_seed.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:45:13Z"
+          },
+          {
+            "cmd": "grep -qE 'CollectedItem' pipeline/jobs/inbox_seed.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:45:13Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/inbox_seed.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:45:13Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_jobs_inbox_seed.py -q",
+            "exit": 0,
+            "duration_ms": 837,
+            "tail": ".................                                                        [100%]\n17 passed in 0.58s",
+            "recorded_at": "2026-09-22T05:45:14Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Company discovery sources (own inbox). Select mail CollectedItems (gmail/m365 sources) from known job-alert sender domains (constant tuple, e.g. linkedin.com, indeed.com, glassdoor.com, wellfound.com) in a window; extract (company, title, link) with Claude structured output via make_client (batched), then add_company(source='email') with any employer/ATS link as a resolver hint. Never fetches LinkedIn pages. Payload text passes through triage sanitize helpers before the model."
+    },
+    {
+      "id": "T-015",
+      "title": "pipeline/jobs/inventory.py: resolve_pending and poll_all (upsert, close after N misses, per-board errors)",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/inventory.py",
+        "tests/test_jobs_inventory.py"
+      ],
+      "depends_on": [
+        "T-011",
+        "T-012"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^def resolve_pending' pipeline/jobs/inventory.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^def poll_all' pipeline/jobs/inventory.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'missed_polls' pipeline/jobs/inventory.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/inventory.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_jobs_inventory.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T05:50:27Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def resolve_pending' pipeline/jobs/inventory.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:50:26Z"
+          },
+          {
+            "cmd": "grep -qE '^def poll_all' pipeline/jobs/inventory.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:50:26Z"
+          },
+          {
+            "cmd": "grep -qE 'missed_polls' pipeline/jobs/inventory.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:50:26Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/inventory.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:50:26Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_jobs_inventory.py -q",
+            "exit": 0,
+            "duration_ms": 872,
+            "tail": "................                                                         [100%]\n16 passed in 0.62s",
+            "recorded_at": "2026-09-22T05:50:27Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Dedup + Risks, template pipeline/domains/inventory.py. resolve_pending: companies with no board -> resolve_company, then llm_resolve (capped by JOBS_MAX_LLM_RESOLVES_PER_RUN) re-verified via match_url/probe; store JobBoard with resolved_by/confidence. poll_all: serial per host; upsert JobPosting keyed (board_id, external_id); update last_seen/content_hash; missed_polls++ for absent postings and set closed_at at JOBS_MISSED_POLLS_TO_CLOSE; reopen if seen again. One board failing sets last_error and continues."
+    },
+    {
+      "id": "T-016",
+      "title": "pipeline/db.py: JobsProfile, AnswerBank, JobApplication (state, packet, assist session fields)",
+      "role": "backend",
+      "files": [
+        "pipeline/db.py",
+        "tests/test_job_apply_tables.py"
+      ],
+      "depends_on": [
+        "T-002"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'class JobsProfile\\(SQLModel, table=True\\)' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'class AnswerBank\\(SQLModel, table=True\\)' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'class JobApplication\\(SQLModel, table=True\\)' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_job_apply_tables.py tests/test_job_tables.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T05:52:48Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'class JobsProfile\\(SQLModel, table=True\\)' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:52:47Z"
+          },
+          {
+            "cmd": "grep -qE 'class AnswerBank\\(SQLModel, table=True\\)' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:52:47Z"
+          },
+          {
+            "cmd": "grep -qE 'class JobApplication\\(SQLModel, table=True\\)' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:52:47Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:52:47Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_job_apply_tables.py tests/test_job_tables.py -q",
+            "exit": 0,
+            "duration_ms": 519,
+            "tail": "...........                                                              [100%]\n11 passed in 0.31s",
+            "recorded_at": "2026-09-22T05:52:48Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Apply Assist Data model additions; template DomainPurchase (pipeline/db.py:173). JobsProfile singleton: contact, links, work auth/sponsorship, relocation, start date, salary policy, EEO answers (default decline), target roles/locations/remote/salary floor/exclusions, resume file paths, cover-letter tone. AnswerBank(question_norm unique, question_raw, answer, source_application_id, updated_at). JobApplication: posting_id UNIQUE, status, packet JSON, cover_letter_path, resume_path, assist_state (idle|queued|claimed|running|paused|done|failed), assist_session_id, assist_log JSON, submitted_at."
+    },
+    {
+      "id": "T-017",
+      "title": "pipeline/jobs/scoring.py: keyword prefilter + batched Claude JobFit scoring of new postings",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/scoring.py",
+        "tests/test_jobs_scoring.py"
+      ],
+      "depends_on": [
+        "T-003",
+        "T-016"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^def score_new' pipeline/jobs/scoring.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^class JobFit' pipeline/jobs/scoring.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'make_client' pipeline/jobs/scoring.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/scoring.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_jobs_scoring.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T05:59:33Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def score_new' pipeline/jobs/scoring.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:59:32Z"
+          },
+          {
+            "cmd": "grep -qE '^class JobFit' pipeline/jobs/scoring.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:59:32Z"
+          },
+          {
+            "cmd": "grep -qE 'make_client' pipeline/jobs/scoring.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:59:32Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/scoring.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T05:59:32Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_jobs_scoring.py -q",
+            "exit": 0,
+            "duration_ms": 890,
+            "tail": "......................                                                   [100%]\n22 passed in 0.64s",
+            "recorded_at": "2026-09-22T05:59:33Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Step 4 + Risks (LLM cost). Unscored open postings -> prefilter by profile target roles/locations/exclusions (non-matching get fit_score=0, reason 'filtered', no model call) -> batches of 20 (triage.py:35) via messages.parse with Pydantic JobFit {score 0-100, reason}; aliases hide DB ids as triage does; cap JOBS_MAX_SCORE_PER_RUN. No key -> skip scoring with a logged reason. Fake client in tests."
+    },
+    {
+      "id": "T-018",
+      "title": "api/scheduler.py: jobs_refresh job (resolve_pending, poll_all, score_new) on JOBS_REFRESH_CRON",
+      "role": "backend",
+      "files": [
+        "api/scheduler.py",
+        "tests/test_scheduler_jobs.py"
+      ],
+      "depends_on": [
+        "T-015",
+        "T-017"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'JOBS_JOB_ID = \"jobs_refresh\"' api/scheduler.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def _run_jobs_scheduled' api/scheduler.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def reschedule_jobs' api/scheduler.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/scheduler.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_scheduler_jobs.py tests/test_scheduler_domains.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T06:03:23Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'JOBS_JOB_ID = \"jobs_refresh\"' api/scheduler.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:03:22Z"
+          },
+          {
+            "cmd": "grep -qE 'def _run_jobs_scheduled' api/scheduler.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:03:22Z"
+          },
+          {
+            "cmd": "grep -qE 'def reschedule_jobs' api/scheduler.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:03:22Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/scheduler.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:03:22Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_scheduler_jobs.py tests/test_scheduler_domains.py -q",
+            "exit": 0,
+            "duration_ms": 866,
+            "tail": "...............                                                          [100%]\n15 passed in 0.60s",
+            "recorded_at": "2026-09-22T06:03:23Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Template api/scheduler.py:52,64,101 (DOMAINS_JOB_ID, _run_domains_scheduled, reschedule_domains) verbatim: cron from jobs_settings(), invalid cron falls back to default, exceptions logged never raised. Order: resolve_pending -> poll_all -> score_new."
+    },
+    {
+      "id": "T-019",
+      "title": "Digest: 'jobs' source emitting high-fit new postings, closures and application updates in the window",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/jobs.py",
+        "pipeline/collectors/__init__.py",
+        "pipeline/health.py",
+        "tests/test_collector_jobs.py"
+      ],
+      "depends_on": [
+        "T-016",
+        "T-017"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^def collect_jobs' pipeline/collectors/jobs.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'source == \"jobs\"' pipeline/collectors/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def check_jobs' pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/jobs.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collector_jobs.py tests/test_collectors.py tests/test_runner.py tests/test_health.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T06:11:43Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def collect_jobs' pipeline/collectors/jobs.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:11:41Z"
+          },
+          {
+            "cmd": "grep -qE 'source == \"jobs\"' pipeline/collectors/__init__.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:11:41Z"
+          },
+          {
+            "cmd": "grep -qE 'def check_jobs' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:11:41Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/jobs.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:11:41Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collector_jobs.py tests/test_collectors.py tests/test_runner.py tests/test_health.py -q",
+            "exit": 0,
+            "duration_ms": 2249,
+            "tail": "........................................................................ [ 21%]\n........................................................................ [ 43%]\n........................................................................ [ 65%]\n........................................................................ [ 87%]\n........................................                                 [100%]\n328 passed in 1.93s",
+            "recorded_at": "2026-09-22T06:11:43Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Codebase fit. Template pipeline/collectors/domains.py (no network; reads stored state) + health.check_domains (pipeline/health.py:727) and the 'domains' entry in the source list (:752-774). Items: job_new (first_seen in window and fit_score >= JOBS_SCORE_THRESHOLD), job_closed (closed_at in window for postings with an application), application_update (status changes in window). external_id stable per event so runner dedup works. 4 files: soft-warn accepted, mirrors domain T-015."
+    },
+    {
+      "id": "T-020",
+      "title": "api/routers/jobs.py: companies, CSV/seed imports, boards override, postings list/filter, rescan",
+      "role": "backend",
+      "files": [
+        "api/routers/jobs.py",
+        "api/main.py",
+        "tests/test_api_jobs.py"
+      ],
+      "depends_on": [
+        "T-013",
+        "T-014",
+        "T-015"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '@router\\.get\\(\"/jobs/postings\"' api/routers/jobs.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '@router\\.post\\(\"/jobs/companies\"' api/routers/jobs.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '@router\\.put\\(\"/jobs/boards/' api/routers/jobs.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'jobs\\.router' api/main.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/jobs.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_api_jobs.py tests/test_api_security.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T06:20:43Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '@router\\.get\\(\"/jobs/postings\"' api/routers/jobs.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:20:40Z"
+          },
+          {
+            "cmd": "grep -qE '@router\\.post\\(\"/jobs/companies\"' api/routers/jobs.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:20:40Z"
+          },
+          {
+            "cmd": "grep -qE '@router\\.put\\(\"/jobs/boards/' api/routers/jobs.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:20:40Z"
+          },
+          {
+            "cmd": "grep -qE 'jobs\\.router' api/main.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:20:40Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/jobs.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:20:40Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_jobs.py tests/test_api_security.py -q",
+            "exit": 0,
+            "duration_ms": 2204,
+            "tail": "........................................................................ [ 92%]\n......                                                                   [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n78 passed, 1 warning in 1.24s",
+            "recorded_at": "2026-09-22T06:20:43Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Template api/routers/domains.py. Declare static paths before any /{id} catch-all (see api/main.py:105-107 shadowing lesson). JSON bodies only (api/security.py); CSV import is a JSON body with csv text. Postings filter: min_score, status open|closed, company, text, remote. Rescan runs resolve/poll for one company synchronously with a timeout. Board PUT is the manual override (resolved_by=manual, confidence=1)."
+    },
+    {
+      "id": "T-021",
+      "title": "pipeline/jobs/apply.py: per-ATS apply playbooks and guarded application state machine",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/apply.py",
+        "tests/test_jobs_apply.py"
+      ],
+      "depends_on": [
+        "T-016"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^PLAYBOOKS' pipeline/jobs/apply.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^def transition' pipeline/jobs/apply.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'account_per_tenant' pipeline/jobs/apply.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/apply.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_jobs_apply.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T06:25:07Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^PLAYBOOKS' pipeline/jobs/apply.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:25:06Z"
+          },
+          {
+            "cmd": "grep -qE '^def transition' pipeline/jobs/apply.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:25:06Z"
+          },
+          {
+            "cmd": "grep -qE 'account_per_tenant' pipeline/jobs/apply.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:25:06Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/apply.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:25:06Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_jobs_apply.py -q",
+            "exit": 0,
+            "duration_ms": 420,
+            "tail": "..................................                                       [100%]\n34 passed in 0.24s",
+            "recorded_at": "2026-09-22T06:25:07Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Recommendation phase 2, §Apply Assist Checklist overlay. PLAYBOOKS[ats_kind] = ordered steps {id, title, kind: auth|form|upload|questions|disclosures|review, user_only: bool}; Workday: sign-in/create-account -> verify email -> My Information -> My Experience -> Application Questions -> Voluntary Disclosures -> Self Identify -> Review. Generic playbook = one form step per page + review. States saved -> preparing -> ready -> submitted -> interviewing|rejected|closed (+ withdrawn); transition() refuses illegal moves; 'submitted' only by explicit user action (API), never by the runner."
+    },
+    {
+      "id": "T-022",
+      "title": "pipeline/jobs/packet.py: Claude cover letter + screening-answer drafts, fpdf2 PDF per application",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/packet.py",
+        "tests/test_jobs_packet.py"
+      ],
+      "depends_on": [
+        "T-001",
+        "T-021"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^def prepare_packet' pipeline/jobs/packet.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^def render_cover_letter_pdf' pipeline/jobs/packet.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'FPDF' pipeline/jobs/packet.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/packet.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_jobs_packet.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T06:28:05Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def prepare_packet' pipeline/jobs/packet.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:28:04Z"
+          },
+          {
+            "cmd": "grep -qE '^def render_cover_letter_pdf' pipeline/jobs/packet.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:28:04Z"
+          },
+          {
+            "cmd": "grep -qE 'FPDF' pipeline/jobs/packet.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:28:04Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/packet.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:28:04Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_jobs_packet.py -q",
+            "exit": 0,
+            "duration_ms": 1011,
+            "tail": "..........                                                               [100%]\n10 passed in 0.69s",
+            "recorded_at": "2026-09-22T06:28:05Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Apply Assist Cover letter and resume. Inputs: JobsProfile (resume text, tone), posting (title, description), company. Output packet JSON {cover_letter_text, screening_drafts[{question, answer, source}]} via make_client structured output; render_cover_letter_pdf writes data/jobs/applications/<id>/cover_letter.pdf (data/ is gitignored; path under DB_DIR convention). Editing the text re-renders. Test asserts a valid PDF header and that the text round-trips; fake Anthropic client."
+    },
+    {
+      "id": "T-023",
+      "title": "api/routers/job_apply.py: profile, resume upload, answer bank, applications, packet prepare/edit",
+      "role": "backend",
+      "files": [
+        "api/routers/job_apply.py",
+        "api/main.py",
+        "tests/test_api_job_apply.py"
+      ],
+      "depends_on": [
+        "T-020",
+        "T-022"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '\"/jobs/profile\"' api/routers/job_apply.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '\"/jobs/applications\"' api/routers/job_apply.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '\"/jobs/answers\"' api/routers/job_apply.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'job_apply\\.router' api/main.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/job_apply.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_api_job_apply.py tests/test_api_security.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T06:34:59Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '\"/jobs/profile\"' api/routers/job_apply.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:34:57Z"
+          },
+          {
+            "cmd": "grep -qE '\"/jobs/applications\"' api/routers/job_apply.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:34:57Z"
+          },
+          {
+            "cmd": "grep -qE '\"/jobs/answers\"' api/routers/job_apply.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:34:57Z"
+          },
+          {
+            "cmd": "grep -qE 'job_apply\\.router' api/main.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:34:57Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/job_apply.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:34:57Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_job_apply.py tests/test_api_security.py -q",
+            "exit": 0,
+            "duration_ms": 1815,
+            "tail": "........................................................................ [ 81%]\n................                                                         [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n88 passed, 1 warning in 1.47s",
+            "recorded_at": "2026-09-22T06:34:59Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Template api/routers/domain_buy.py. Include job_apply router BEFORE jobs router in api/main.py (static-path shadowing, main.py:105-107). Resume upload = JSON {filename, content_b64} (bodies are JSON only per api/security.py), PDF only, size cap 5 MB, stored under data/jobs/resumes/. Applications: create from posting, list, PATCH status via apply.transition, POST /jobs/applications/{id}/packet (prepare), PUT packet (edit, re-render PDF). Responses never include resume bytes."
+    },
+    {
+      "id": "T-024",
+      "title": "api/routers/job_apply.py: assist queue, claim, progress, and packet-file download for the desktop runner",
+      "role": "backend",
+      "files": [
+        "api/routers/job_apply.py",
+        "tests/test_api_job_assist.py"
+      ],
+      "depends_on": [
+        "T-023"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '\"/jobs/assist/queue\"' api/routers/job_apply.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '\"/jobs/assist/sessions/\\{session_id\\}\"' api/routers/job_apply.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '/files/' api/routers/job_apply.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/job_apply.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_api_job_assist.py tests/test_api_job_apply.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T06:40:35Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '\"/jobs/assist/queue\"' api/routers/job_apply.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:40:33Z"
+          },
+          {
+            "cmd": "grep -qE '\"/jobs/assist/sessions/\\{session_id\\}\"' api/routers/job_apply.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:40:33Z"
+          },
+          {
+            "cmd": "grep -qE '/files/' api/routers/job_apply.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:40:33Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/job_apply.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:40:33Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_job_assist.py tests/test_api_job_apply.py -q",
+            "exit": 0,
+            "duration_ms": 1998,
+            "tail": ".......................................................                  [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n55 passed, 1 warning in 1.63s",
+            "recorded_at": "2026-09-22T06:40:35Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Apply Assist Where it runs. POST /jobs/applications/{id}/assist -> assist_state=queued (only from ready). GET /jobs/assist/queue -> oldest queued. POST /jobs/assist/queue/{id}/claim -> atomic queued->claimed + new session_id (second claim gets 409). PATCH /jobs/assist/sessions/{session_id} -> step, state, filled-fields log appended to assist_log, answer-bank upserts for user-approved answers. GET /jobs/applications/{id}/files/{cover_letter|resume} streams the PDF. Runner cannot set status=submitted (only the user via T-023 PATCH)."
+    },
+    {
+      "id": "T-025",
+      "title": "pipeline/jobs/assist: runner package and AssistClient for the server API",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/assist/__init__.py",
+        "pipeline/jobs/assist/client.py",
+        "tests/test_assist_client.py"
+      ],
+      "depends_on": [
+        "T-024"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^class AssistClient' pipeline/jobs/assist/client.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'X-Requested-With' pipeline/jobs/assist/client.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'SIGNALSLATE_API_URL' pipeline/jobs/assist/client.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/assist/client.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_assist_client.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T06:48:19Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^class AssistClient' pipeline/jobs/assist/client.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:48:18Z"
+          },
+          {
+            "cmd": "grep -qE 'X-Requested-With' pipeline/jobs/assist/client.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:48:18Z"
+          },
+          {
+            "cmd": "grep -qE 'SIGNALSLATE_API_URL' pipeline/jobs/assist/client.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:48:18Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/assist/client.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:48:18Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_assist_client.py -q",
+            "exit": 0,
+            "duration_ms": 1315,
+            "tail": ".................                                                        [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n17 passed, 1 warning in 1.00s",
+            "recorded_at": "2026-09-22T06:48:19Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Desktop-side. requests.Session with X-Requested-With: signalslate (api/security.py:44-45 REQUIRED_HEADER); base URL from SIGNALSLATE_API_URL. Methods: next_queued, claim, fetch_application (posting, packet, profile subset, playbook), download_file, report_progress. Session injectable so tests drive the real FastAPI app through starlette TestClient (no mocks of src/). Package __init__ must not import playwright."
+    },
+    {
+      "id": "T-026",
+      "title": "pipeline/jobs/assist/extract: in-page field extractor (labels, aria, options, frames)",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/assist/extract.js",
+        "pipeline/jobs/assist/extract.py",
+        "tests/test_assist_extract.py",
+        "tests/fixtures/jobs_forms/greenhouse_form.html"
+      ],
+      "depends_on": [
+        "T-001",
+        "T-025"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^def extract_fields' pipeline/jobs/assist/extract.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'aria-labelledby' pipeline/jobs/assist/extract.js",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/assist/extract.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_assist_extract.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T06:53:17Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def extract_fields' pipeline/jobs/assist/extract.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:53:14Z"
+          },
+          {
+            "cmd": "grep -qE 'aria-labelledby' pipeline/jobs/assist/extract.js",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:53:14Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/assist/extract.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T06:53:14Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_assist_extract.py -q",
+            "exit": 0,
+            "duration_ms": 2689,
+            "tail": ".........                                                                [100%]\n9 passed in 2.50s",
+            "recorded_at": "2026-09-22T06:53:17Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Apply Assist Page reading step 1. extract.js returns [{field_id, label, type, required, options, current_value, section, selector}] from inputs/selects/textareas/file inputs; labels from <label for>, aria-label, aria-labelledby, nearest text. extract.py runs it in the main frame and every child frame (Greenhouse embeds are iframes) and namespaces field_id by frame. Test loads the synthetic fixture HTML in headless Chromium (real browser, no mocks). 4 files incl. fixture: soft-warn accepted, fixture dir is new and unshared."
+    },
+    {
+      "id": "T-027",
+      "title": "pipeline/jobs/assist/mapping.py: deterministic profile mapping + answer bank + Claude proposals for the rest",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/assist/mapping.py",
+        "tests/test_assist_mapping.py"
+      ],
+      "depends_on": [
+        "T-026",
+        "T-016"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^def propose_values' pipeline/jobs/assist/mapping.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^class FieldProposal' pipeline/jobs/assist/mapping.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'needs_user' pipeline/jobs/assist/mapping.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/assist/mapping.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_assist_mapping.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T07:00:38Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def propose_values' pipeline/jobs/assist/mapping.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:00:37Z"
+          },
+          {
+            "cmd": "grep -qE '^class FieldProposal' pipeline/jobs/assist/mapping.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:00:37Z"
+          },
+          {
+            "cmd": "grep -qE 'needs_user' pipeline/jobs/assist/mapping.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:00:37Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/assist/mapping.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:00:37Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_assist_mapping.py -q",
+            "exit": 0,
+            "duration_ms": 855,
+            "tail": "...................                                                      [100%]\n19 passed in 0.58s",
+            "recorded_at": "2026-09-22T07:00:38Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Apply Assist Page reading steps 2-3 + Guardrails (prompt injection). Runs SERVER-side (ANTHROPIC key never leaves the server); T-030 exposes it as POST /jobs/assist/sessions/{session_id}/propose for the runner. Order: per-ATS deterministic rules (name/email/phone/links/resume + cover letter upload, Workday data-automation-id hints) -> AnswerBank match on normalized question -> Claude structured output FieldProposal{field_id, value, confidence, source, needs_user} for leftovers. Proposals for field_ids not in the extracted set are dropped; the model never picks actions or URLs. Attestation/certify/signature and CAPTCHA-like fields are forced needs_user=True; EEO fields take profile answers (default decline). Module must not import playwright. Fake Anthropic client in tests."
+    },
+    {
+      "id": "T-028",
+      "title": "pipeline/jobs/assist/fill.py: apply proposals via Playwright, verify-after-fill, hard final-submit guard",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/assist/fill.py",
+        "tests/test_assist_fill.py",
+        "tests/fixtures/jobs_forms/multistep_form.html"
+      ],
+      "depends_on": [
+        "T-027"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^def apply_proposals' pipeline/jobs/assist/fill.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^def is_final_submit' pipeline/jobs/assist/fill.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^def guarded_click' pipeline/jobs/assist/fill.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'set_input_files' pipeline/jobs/assist/fill.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/assist/fill.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_assist_fill.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T07:06:39Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def apply_proposals' pipeline/jobs/assist/fill.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:06:36Z"
+          },
+          {
+            "cmd": "grep -qE '^def is_final_submit' pipeline/jobs/assist/fill.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:06:36Z"
+          },
+          {
+            "cmd": "grep -qE '^def guarded_click' pipeline/jobs/assist/fill.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:06:36Z"
+          },
+          {
+            "cmd": "grep -qE 'set_input_files' pipeline/jobs/assist/fill.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:06:36Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/assist/fill.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:06:36Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_assist_fill.py -q",
+            "exit": 0,
+            "duration_ms": 2972,
+            "tail": "..............                                                           [100%]\n14 passed in 2.76s",
+            "recorded_at": "2026-09-22T07:06:39Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Apply Assist Page reading steps 4-5 + Guardrails. fill/select_option/check/set_input_files with small human-ish delays; re-read each value after fill and fall back to type() for React-controlled inputs; report per-field ok/failed. is_final_submit(locator): per-playbook selectors + label heuristics (submit/send application/apply now on the review step, type=submit on single-page forms). guarded_click raises SubmitGuardError for any final-submit target; advance_step clicks only Next/Continue. Test (headless Chromium, fixture): fields filled, file attached, Next advances, clicking Submit via guarded_click raises and the fixture's submit handler never fires."
+    },
+    {
+      "id": "T-029",
+      "title": "pipeline/jobs/assist/overlay: shadow-DOM checklist panel with Fill / Next / Edit answer / Pause bridge",
+      "role": "frontend",
+      "files": [
+        "pipeline/jobs/assist/overlay.js",
+        "pipeline/jobs/assist/overlay.py",
+        "tests/test_assist_overlay.py"
+      ],
+      "depends_on": [
+        "T-026"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'attachShadow' pipeline/jobs/assist/overlay.js",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^def install_overlay' pipeline/jobs/assist/overlay.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'expose_function' pipeline/jobs/assist/overlay.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/assist/overlay.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_assist_overlay.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T07:13:21Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'attachShadow' pipeline/jobs/assist/overlay.js",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:13:18Z"
+          },
+          {
+            "cmd": "grep -qE '^def install_overlay' pipeline/jobs/assist/overlay.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:13:18Z"
+          },
+          {
+            "cmd": "grep -qE 'expose_function' pipeline/jobs/assist/overlay.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:13:18Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/assist/overlay.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:13:18Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_assist_overlay.py -q",
+            "exit": 0,
+            "duration_ms": 3103,
+            "tail": "..........                                                               [100%]\n10 passed in 2.92s",
+            "recorded_at": "2026-09-22T07:13:21Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Apply Assist Checklist overlay. Panel shows playbook steps (done/current/pending), per-field filled value + source + confidence, needs_user list (attestations, CAPTCHA, email verification, unanswered), and buttons wired via page.expose_function to Python callbacks. Low-confidence fields get an outline in the page. Re-installed on navigation (add_init_script). Must not intercept page events outside its host element. Test: headless page, panel renders steps, button click invokes the bridge callback."
+    },
+    {
+      "id": "T-030",
+      "title": "pipeline/jobs/assist/__main__.py: guided session in visible Chrome (persistent profile), watch mode",
+      "role": "backend",
+      "files": [
+        "pipeline/jobs/assist/__main__.py",
+        "api/routers/job_apply.py",
+        "tests/test_assist_session.py"
+      ],
+      "depends_on": [
+        "T-021",
+        "T-025",
+        "T-027",
+        "T-028",
+        "T-029"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^def run_session' pipeline/jobs/assist/__main__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^def watch' pipeline/jobs/assist/__main__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'launch_persistent_context' pipeline/jobs/assist/__main__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '/propose' api/routers/job_apply.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/assist/__main__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_assist_session.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T07:24:31Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^def run_session' pipeline/jobs/assist/__main__.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:24:25Z"
+          },
+          {
+            "cmd": "grep -qE '^def watch' pipeline/jobs/assist/__main__.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:24:25Z"
+          },
+          {
+            "cmd": "grep -qE 'launch_persistent_context' pipeline/jobs/assist/__main__.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:24:25Z"
+          },
+          {
+            "cmd": "grep -qE '/propose' api/routers/job_apply.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:24:25Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/jobs/assist/__main__.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:24:25Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_assist_session.py -q",
+            "exit": 0,
+            "duration_ms": 6135,
+            "tail": "...............                                                          [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n15 passed, 1 warning in 5.82s",
+            "recorded_at": "2026-09-22T07:24:31Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research: docs/_research/2026-09-21_jobs-collector.md §Apply Assist Browser choice + flow. 'python -m pipeline.jobs.assist <application_id>' runs one session; '--watch' polls the queue. launch_persistent_context(user_data_dir=~/.local/share/signalslate/apply-profile, channel='chrome' if available else bundled chromium, headless=False; SIGNALSLATE_ASSIST_HEADLESS=1 only for tests). Loop per step: extract -> POST /jobs/assist/sessions/{id}/propose (server runs mapping.propose_values; key stays server-side) -> fill -> overlay update -> report_progress -> wait for user (Next/Pause); CAPTCHA frames (recaptcha/hcaptcha iframes) pause the session. Ends at review with 'ready: review and click Submit'; never clicks final submit. No stealth plugins. Test: headless multistep fixture served locally + real FastAPI app via TestClient + fake Anthropic client; asserts fields filled across steps, progress logged, submit never fired."
+    },
+    {
+      "id": "T-031",
+      "title": "web/composables/useJobsApi.ts: typed fetchers for jobs, apply and assist routes",
+      "role": "frontend",
+      "files": [
+        "web/composables/useJobsApi.ts",
+        "web/tests/useJobsApi.test.ts"
+      ],
+      "depends_on": [
+        "T-020",
+        "T-024"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'export function useJobsApi' web/composables/useJobsApi.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '/api/jobs/postings' web/composables/useJobsApi.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '/api/jobs/applications' web/composables/useJobsApi.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/composables/useJobsApi.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/useJobsApi.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T07:29:04Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'export function useJobsApi' web/composables/useJobsApi.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:29:01Z"
+          },
+          {
+            "cmd": "grep -qE '/api/jobs/postings' web/composables/useJobsApi.ts",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:29:01Z"
+          },
+          {
+            "cmd": "grep -qE '/api/jobs/applications' web/composables/useJobsApi.ts",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:29:01Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/composables/useJobsApi.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:29:01Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/useJobsApi.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3239,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/useJobsApi.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·························\n\n Test Files  1 passed (1)\n      Tests  25 passed (25)\n   Start at  03:29:02\n   Duration  1.99s (tests 79%, environment 10%, transform 8%, setup 2%, import 1%)",
+            "recorded_at": "2026-09-22T07:29:04Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Template web/composables/useDomainsApi.ts (types + fetchers over useApi.ts)."
+    },
+    {
+      "id": "T-032",
+      "title": "web/components/JobDetailDialog.vue: posting detail, fit score/reason, start application",
+      "role": "frontend",
+      "files": [
+        "web/components/JobDetailDialog.vue",
+        "web/tests/JobDetailDialog.test.ts"
+      ],
+      "depends_on": [
+        "T-031"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'data-testid=\"job-fit-reason\"' web/components/JobDetailDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'data-testid=\"job-start-application\"' web/components/JobDetailDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/JobDetailDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/JobDetailDialog.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T07:31:59Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'data-testid=\"job-fit-reason\"' web/components/JobDetailDialog.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:31:55Z"
+          },
+          {
+            "cmd": "grep -qE 'data-testid=\"job-start-application\"' web/components/JobDetailDialog.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:31:55Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/JobDetailDialog.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:31:55Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/JobDetailDialog.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3618,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/JobDetailDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······\n\n Test Files  1 passed (1)\n      Tests  6 passed (6)\n   Start at  03:31:56\n   Duration  2.22s (transform 51%, tests 26%, environment 13%, import 7%, setup 2%)",
+            "recorded_at": "2026-09-22T07:31:59Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Template web/components/DomainDetailDialog.vue. Description HTML rendered sanitized (text or DOMPurify-equivalent already in deps; else plain text). Link to the posting's apply_url opens externally."
+    },
+    {
+      "id": "T-033",
+      "title": "web/components/JobApplyDialog.vue: packet review/edit, playbook checklist, start assist, runner status, mark submitted",
+      "role": "frontend",
+      "files": [
+        "web/components/JobApplyDialog.vue",
+        "web/tests/JobApplyDialog.test.ts"
+      ],
+      "depends_on": [
+        "T-031"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'data-testid=\"job-cover-letter\"' web/components/JobApplyDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'data-testid=\"job-start-assist\"' web/components/JobApplyDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'data-testid=\"job-mark-submitted\"' web/components/JobApplyDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/JobApplyDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/JobApplyDialog.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T07:37:17Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'data-testid=\"job-cover-letter\"' web/components/JobApplyDialog.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:37:14Z"
+          },
+          {
+            "cmd": "grep -qE 'data-testid=\"job-start-assist\"' web/components/JobApplyDialog.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:37:14Z"
+          },
+          {
+            "cmd": "grep -qE 'data-testid=\"job-mark-submitted\"' web/components/JobApplyDialog.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:37:14Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/JobApplyDialog.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:37:14Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/JobApplyDialog.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3178,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/JobApplyDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n············\n\n Test Files  1 passed (1)\n      Tests  12 passed (12)\n   Start at  03:37:15\n   Duration  1.93s (transform 46%, tests 34%, environment 10%, import 9%, setup 2%)",
+            "recorded_at": "2026-09-22T07:37:17Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Template web/components/DomainPurchaseDialog.vue. Prepare packet -> edit cover letter + screening drafts -> Save (re-renders PDF) -> Start assist (queues; shows 'run python -m pipeline.jobs.assist --watch on your desktop' hint when nothing claims within N s) -> live assist_state/step via polling -> Mark submitted (user action only, confirm dialog)."
+    },
+    {
+      "id": "T-034",
+      "title": "web/components/JobsProfilePanel.vue: profile form, resume upload, answer bank table",
+      "role": "frontend",
+      "files": [
+        "web/components/JobsProfilePanel.vue",
+        "web/tests/JobsProfilePanel.test.ts"
+      ],
+      "depends_on": [
+        "T-031"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'data-testid=\"jobs-resume-upload\"' web/components/JobsProfilePanel.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'data-testid=\"jobs-answer-bank\"' web/components/JobsProfilePanel.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/JobsProfilePanel.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/JobsProfilePanel.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T07:43:07Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'data-testid=\"jobs-resume-upload\"' web/components/JobsProfilePanel.vue",
+            "exit": 0,
+            "duration_ms": 6,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:43:04Z"
+          },
+          {
+            "cmd": "grep -qE 'data-testid=\"jobs-answer-bank\"' web/components/JobsProfilePanel.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:43:04Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/JobsProfilePanel.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:43:04Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/JobsProfilePanel.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3307,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/JobsProfilePanel.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·····\n\n Test Files  1 passed (1)\n      Tests  5 passed (5)\n   Start at  03:43:05\n   Duration  2.04s (transform 47%, tests 33%, environment 9%, import 8%, setup 2%)",
+            "recorded_at": "2026-09-22T07:43:07Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Resume read as base64 client-side and sent as JSON (API accepts JSON only). EEO answers default to 'Decline to answer'. Answer bank: search, edit, delete."
+    },
+    {
+      "id": "T-035",
+      "title": "web/components/JobCompaniesPanel.vue: watchlist add/CSV, seed imports, board status and override",
+      "role": "frontend",
+      "files": [
+        "web/components/JobCompaniesPanel.vue",
+        "web/tests/JobCompaniesPanel.test.ts"
+      ],
+      "depends_on": [
+        "T-031"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'data-testid=\"jobs-board-override\"' web/components/JobCompaniesPanel.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'data-testid=\"jobs-import-yc\"' web/components/JobCompaniesPanel.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/JobCompaniesPanel.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/JobCompaniesPanel.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T07:49:35Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'data-testid=\"jobs-board-override\"' web/components/JobCompaniesPanel.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:49:32Z"
+          },
+          {
+            "cmd": "grep -qE 'data-testid=\"jobs-import-yc\"' web/components/JobCompaniesPanel.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:49:32Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/JobCompaniesPanel.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:49:32Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/JobCompaniesPanel.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3469,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/JobCompaniesPanel.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n··········stderr | tests/JobCompaniesPanel.test.ts > board override > sends {ats_kind, board_id} to overrideBoard\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n···\n\n Test Files  1 passed (1)\n      Tests  13 passed (13)\n   Start at  03:49:33\n   Duration  2.11s (transform 48%, tests 33%, environment 9%, import 8%, setup 2%)",
+            "recorded_at": "2026-09-22T07:49:35Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Shows resolved ats_kind/board_id with resolved_by + confidence badge, last_error, unresolved companies; override = paste careers URL or pick kind + board id; Rescan per company; import buttons for YC, HN, inbox."
+    },
+    {
+      "id": "T-036",
+      "title": "web/pages/jobs.vue + nav tab: Postings / Applications / Companies / Profile",
+      "role": "frontend",
+      "files": [
+        "web/pages/jobs.vue",
+        "web/app.vue",
+        "web/tests/jobs.test.ts"
+      ],
+      "depends_on": [
+        "T-032",
+        "T-033",
+        "T-034",
+        "T-035"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'to=\"/jobs\"' web/app.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'JobDetailDialog' web/pages/jobs.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'JobApplyDialog' web/pages/jobs.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'JobCompaniesPanel' web/pages/jobs.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/pages/jobs.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/jobs.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T07:54:22Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'to=\"/jobs\"' web/app.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:54:18Z"
+          },
+          {
+            "cmd": "grep -qE 'JobDetailDialog' web/pages/jobs.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:54:19Z"
+          },
+          {
+            "cmd": "grep -qE 'JobApplyDialog' web/pages/jobs.vue",
+            "exit": 0,
+            "duration_ms": 3,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:54:19Z"
+          },
+          {
+            "cmd": "grep -qE 'JobCompaniesPanel' web/pages/jobs.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:54:19Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/pages/jobs.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T07:54:19Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/jobs.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3757,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/jobs.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······\n\n Test Files  1 passed (1)\n      Tests  6 passed (6)\n   Start at  03:54:20\n   Duration  2.48s (transform 54%, tests 29%, environment 8%, import 7%, setup 2%)",
+            "recorded_at": "2026-09-22T07:54:22Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Template web/pages/domains.vue. Postings table filterable by min score/status/remote/text, sorted by fit then first_seen."
+    },
+    {
+      "id": "T-037",
+      "title": "End-to-end: seed -> resolve -> poll -> score -> digest item -> application -> packet -> assist fills form, stops at submit",
+      "role": "test",
+      "files": [
+        "tests/test_jobs_e2e.py"
+      ],
+      "depends_on": [
+        "T-018",
+        "T-019",
+        "T-030"
+      ],
+      "verify": [
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_jobs_e2e.py -q",
+          "timeout": 300
+        },
+        {
+          "cmd": "venv/bin/python -m pytest -q",
+          "timeout": 900
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T08:03:12Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_jobs_e2e.py -q",
+            "exit": 0,
+            "duration_ms": 3635,
+            "tail": ".                                                                        [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 3.30s",
+            "recorded_at": "2026-09-22T08:02:39Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest -q",
+            "exit": 0,
+            "duration_ms": 32856,
+            "tail": "...................................................... [ 81%]\n........................................................................ [ 84%]\n........................................................................ [ 86%]\n........................................................................ [ 89%]\n........................................................................ [ 91%]\n........................................................................ [ 94%]\n........................................................................ [ 96%]\n........................................................................ [ 99%]\n......................                                                   [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions\n    warnings.warn(  # deprecated in 14.0 - 2024-11-09\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:16: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated\n    from websockets.server import WebSocketServerProtocol\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2902 passed, 3 warnings in 31.87s",
+            "recorded_at": "2026-09-22T08:03:12Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "test-only: the product is the e2e test; the full-suite run is the regression gate. Mock only true externals: ATS HTTP (requests stubbed at import site with synthetic payloads), Anthropic (fake client). Real DB (temp engine per tests/test_api_domain_buy.py:48-50), real FastAPI app, headless Chromium against the multistep fixture. Asserts: no resume/profile PII in logs or digest payloads; runner never sets status=submitted."
+    },
+    {
+      "id": "T-038",
+      "title": "Docs: Jobs feature, desktop assist runner setup, guardrails, .env keys",
+      "role": "infra",
+      "files": [
+        "README.md",
+        ".env.example"
+      ],
+      "depends_on": [
+        "T-030",
+        "T-036"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^JOBS_REFRESH_CRON=' .env.example",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^SIGNALSLATE_API_URL=' .env.example",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^## Jobs' README.md",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'requirements-assist.txt' README.md",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'python -m pipeline.jobs.assist' README.md",
+          "timeout": 10
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T08:05:12Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^JOBS_REFRESH_CRON=' .env.example",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T08:05:12Z"
+          },
+          {
+            "cmd": "grep -qE '^SIGNALSLATE_API_URL=' .env.example",
+            "exit": 0,
+            "duration_ms": 3,
+            "tail": "",
+            "recorded_at": "2026-09-22T08:05:12Z"
+          },
+          {
+            "cmd": "grep -qE '^## Jobs' README.md",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T08:05:12Z"
+          },
+          {
+            "cmd": "grep -qE 'requirements-assist.txt' README.md",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T08:05:12Z"
+          },
+          {
+            "cmd": "grep -qE 'python -m pipeline.jobs.assist' README.md",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T08:05:12Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Public repo: generic functionality only, no personal hosts, companies or profile data (memory: public-repo-no-personal-details). Cover: sources (ATS boards, YC, HN, inbox alerts), no LinkedIn scraping, resolver ladder, fit scoring cost controls, apply assist (visible browser, you click Submit, CAPTCHAs are yours), desktop setup (venv, pip install -r requirements-assist.txt, playwright install, SIGNALSLATE_API_URL, ALLOWED_HOSTS must include the host the runner uses)."
+    }
+  ]
+}
