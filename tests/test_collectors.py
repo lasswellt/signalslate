@@ -497,18 +497,26 @@ def test_uuid_single_encoded_otherwise():
 
 
 def zoom_endpoints(monkeypatch, *, mode="s2s", me=None, summaries=None, previous=None, joined=None,
-                    summary_bodies=None, participants=None):
-    """Stubs zoom_token/zoom_mode and every endpoint collect_zoom can call. Matches summary/
-    participant urls by re-encoding each given uuid the same way the collector does, so a uuid
-    needing double-encoding round-trips correctly."""
+                    summary_bodies=None, participants=None, include_transcripts=True,
+                    transcript_meta=None, transcript_bodies=None):
+    """Stubs zoom_token/zoom_mode/_include_transcripts and every endpoint collect_zoom can call.
+    Matches summary/participant/transcript urls by re-encoding each given uuid the same way the
+    collector does, so a uuid needing double-encoding round-trips correctly.
+
+    transcript_meta: uuid -> GET .../transcript response body (can_download, download_url, ...).
+    transcript_bodies: download_url -> raw WebVTT text served back by that exact url.
+    """
     monkeypatch.setattr(zoom, "zoom_token", lambda: "tok")
     monkeypatch.setattr(zoom, "zoom_mode", lambda: mode)
+    monkeypatch.setattr(zoom, "_include_transcripts", lambda: include_transcripts)
     me = me if me is not None else {"id": "u1", "email": "host@example.com"}
     summaries = summaries if summaries is not None else []
     previous = previous if previous is not None else []
     joined = joined if joined is not None else []
     summary_bodies = summary_bodies or {}
     participants = participants or {}
+    transcript_meta = transcript_meta or {}
+    transcript_bodies = transcript_bodies or {}
 
     def handler(url, params):
         if url.endswith("/users/me"):
@@ -529,6 +537,14 @@ def zoom_endpoints(monkeypatch, *, mode="s2s", me=None, summaries=None, previous
                 return FakeResponse({"participants": plist})
         if "/past_meetings/" in url and url.endswith("/participants"):
             return FakeResponse({"participants": []})
+        for uuid, meta in transcript_meta.items():
+            if url.endswith(f"/meetings/{zoom.encode_uuid(uuid)}/transcript"):
+                return FakeResponse(meta)
+        if "/meetings/" in url and url.endswith("/transcript"):
+            return FakeResponse({}, status_code=404)
+        for download_url, body in transcript_bodies.items():
+            if url == download_url:
+                return FakeResponse(None, text=body)
         return FakeResponse({}, status_code=404)
 
     return route(monkeypatch, zoom, handler)
@@ -686,6 +702,7 @@ def test_zoom_previous_meetings_failure_is_partial_and_keeps_summaries(monkeypat
 
     monkeypatch.setattr(zoom, "zoom_token", lambda: "tok")
     monkeypatch.setattr(zoom, "zoom_mode", lambda: "s2s")
+    monkeypatch.setattr(zoom, "_include_transcripts", lambda: False)
     route(monkeypatch, zoom, handler)
 
     result = zoom.collect_zoom(SINCE, UNTIL)
@@ -720,10 +737,132 @@ def test_zoom_participants_pagination(monkeypatch):
 
     monkeypatch.setattr(zoom, "zoom_token", lambda: "tok")
     monkeypatch.setattr(zoom, "zoom_mode", lambda: "s2s")
+    monkeypatch.setattr(zoom, "_include_transcripts", lambda: False)
     route(monkeypatch, zoom, handler)
 
     result = zoom.collect_zoom(SINCE, UNTIL)
     assert [p["name"] for p in result.items[0].payload["participants"]] == ["Alex", "Sam"]
+
+
+# --- Zoom transcripts ----------------------------------------------------------------
+
+
+def test_vtt_to_text_strips_header_cue_numbers_and_timing():
+    vtt = "WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.000\nAlex: hello\n\n2\n00:00:02.000 --> 00:00:04.000\nSam: hi\n"
+    assert zoom.vtt_to_text(vtt) == "Alex: hello\nSam: hi"
+
+
+def test_vtt_to_text_collapses_blank_lines():
+    vtt = "WEBVTT\n\n\n1\n00:00:00.000 --> 00:00:01.000\n\nAlex: hello\n\n\n"
+    assert zoom.vtt_to_text(vtt) == "Alex: hello"
+
+
+def test_zoom_transcript_available_converts_vtt(monkeypatch):
+    vtt = "WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.000\nAlex: hello\n\n2\n00:00:02.000 --> 00:00:04.000\nSam: hi\n"
+    calls = zoom_endpoints(
+        monkeypatch,
+        summaries=[{"meeting_uuid": "uuid-1", "meeting_start_time": "2026-09-12T15:00:00Z"}],
+        transcript_meta={"uuid-1": {"can_download": True, "download_url": "https://zoom.us/rec/download/abc"}},
+        transcript_bodies={"https://zoom.us/rec/download/abc": vtt},
+    )
+    result = zoom.collect_zoom(SINCE, UNTIL)
+    payload = result.items[0].payload
+    assert payload["transcript_available"] is True
+    assert payload["transcript_text"] == "Alex: hello\nSam: hi"
+    assert payload["transcript_truncated"] is False
+    assert any(c["url"] == "https://zoom.us/rec/download/abc" for c in calls)
+
+
+def test_zoom_transcript_truncated_at_cap(monkeypatch):
+    monkeypatch.setattr(zoom, "TRANSCRIPT_MAX", 5)
+    vtt = "WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.000\nAlex: hello world\n"
+    zoom_endpoints(
+        monkeypatch,
+        summaries=[{"meeting_uuid": "uuid-1", "meeting_start_time": "2026-09-12T15:00:00Z"}],
+        transcript_meta={"uuid-1": {"can_download": True, "download_url": "https://zoom.us/rec/download/abc"}},
+        transcript_bodies={"https://zoom.us/rec/download/abc": vtt},
+    )
+    result = zoom.collect_zoom(SINCE, UNTIL)
+    payload = result.items[0].payload
+    assert payload["transcript_truncated"] is True
+    assert len(payload["transcript_text"]) == 5
+
+
+def test_zoom_transcript_flag_off_makes_no_transcript_calls(monkeypatch):
+    calls = zoom_endpoints(
+        monkeypatch, include_transcripts=False,
+        summaries=[{"meeting_uuid": "uuid-1", "meeting_start_time": "2026-09-12T15:00:00Z"}],
+    )
+    result = zoom.collect_zoom(SINCE, UNTIL)
+    payload = result.items[0].payload
+    assert "transcript_available" not in payload
+    assert not any("/transcript" in c["url"] for c in calls)
+
+
+def test_zoom_transcript_404_is_not_found(monkeypatch):
+    zoom_endpoints(
+        monkeypatch,
+        summaries=[{"meeting_uuid": "uuid-1", "meeting_start_time": "2026-09-12T15:00:00Z"}],
+    )
+    result = zoom.collect_zoom(SINCE, UNTIL)
+    payload = result.items[0].payload
+    assert payload["transcript_available"] is False
+    assert payload["transcript_unavailable_reason"] == "not_found"
+    assert result.status == "ok"
+
+
+def test_zoom_transcript_can_download_false_reason_passed_through(monkeypatch):
+    zoom_endpoints(
+        monkeypatch,
+        summaries=[{"meeting_uuid": "uuid-1", "meeting_start_time": "2026-09-12T15:00:00Z"}],
+        transcript_meta={"uuid-1": {"can_download": False, "download_restriction_reason": "no_cloud_recording"}},
+    )
+    result = zoom.collect_zoom(SINCE, UNTIL)
+    payload = result.items[0].payload
+    assert payload["transcript_available"] is False
+    assert payload["transcript_unavailable_reason"] == "no_cloud_recording"
+
+
+def test_zoom_transcript_non_hosted_skips_call(monkeypatch):
+    calls = zoom_endpoints(
+        monkeypatch, me={"id": "u1", "email": "host@example.com"},
+        joined=[{
+            "uuid": "uuid-9", "topic": "Someone else's meeting", "start_time": "2026-09-12T15:00:00Z",
+            "host_id": "other-user", "user_email": "other@example.com",
+        }],
+    )
+    result = zoom.collect_zoom(SINCE, UNTIL)
+    payload = result.items[0].payload
+    assert payload["transcript_available"] is False
+    assert payload["transcript_unavailable_reason"] == "not_host"
+    assert not any("/transcript" in c["url"] for c in calls)
+
+
+def test_zoom_transcript_untrusted_host_sends_no_bearer(monkeypatch):
+    calls = zoom_endpoints(
+        monkeypatch,
+        summaries=[{"meeting_uuid": "uuid-1", "meeting_start_time": "2026-09-12T15:00:00Z"}],
+        transcript_meta={"uuid-1": {"can_download": True, "download_url": "https://evil.example.com/steal"}},
+    )
+    result = zoom.collect_zoom(SINCE, UNTIL)
+    payload = result.items[0].payload
+    assert payload["transcript_available"] is False
+    assert payload["transcript_unavailable_reason"] == "untrusted_download_host"
+    assert not any(c["url"] == "https://evil.example.com/steal" for c in calls)
+
+
+def test_zoom_transcript_download_failure_keeps_status_ok(monkeypatch):
+    zoom_endpoints(
+        monkeypatch,
+        summaries=[{"meeting_uuid": "uuid-1", "meeting_start_time": "2026-09-12T15:00:00Z"}],
+        transcript_meta={"uuid-1": {"can_download": True, "download_url": "https://zoom.us/rec/download/abc"}},
+        # no matching transcript_bodies entry -> download GET falls through to a 404
+    )
+    result = zoom.collect_zoom(SINCE, UNTIL)
+    payload = result.items[0].payload
+    assert payload["transcript_available"] is False
+    assert payload["transcript_unavailable_reason"] == "download_failed"
+    assert result.status == "ok"
 
 
 # --- dry-run CLI --------------------------------------------------------------------

@@ -27,15 +27,23 @@ Two behaviours worth knowing, both from docs/_research/2026-09-13_auth-approach.
   digest can say "no summary available" instead of silently under-reporting the day.
 - A meeting UUID starting with "/" or containing "//" must be double URL-encoded.
 
+Transcripts (Research Finding 6, owner decision 2026-09-21: on by default) are opt-out enrichment
+for hosted meetings only: GET /meetings/{uuid}/transcript returns can_download/download_url, and
+the body is downloaded separately (Bearer token, WebVTT) and converted to plain text, capped at
+TRANSCRIPT_MAX characters. A transcript that 404s, isn't downloadable, or fails to fetch is
+recorded with transcript_available=False plus a reason — never a run failure, since a transcript
+is optional enrichment the way a summary is not.
+
 Both endpoints are carried forward from the auth research and have not been exercised against a
 live account. Verify empirically before trusting this collector.
 """
 from datetime import datetime, timedelta
 from typing import Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import requests
 
+from pipeline import connections
 from pipeline.collectors import CollectionResult, Item, parse_iso
 from pipeline.health import ZoomAuthError, zoom_mode, zoom_token
 
@@ -46,6 +54,13 @@ MAX_PAGES = 10
 # Wider than the digest window: a meeting that ended late yesterday may only have had its summary
 # generated this morning.
 SUMMARY_LOOKBACK = timedelta(hours=48)
+# Cap on converted transcript text length (Research Finding 6). Plenty for a meeting-length
+# transcript; nothing downstream needs the unbounded verbatim record.
+TRANSCRIPT_MAX = 200_000
+# Backstop against an unbounded download body before conversion — not a streaming read (Zoom
+# transcripts are small in practice), just a hard slice so a pathological response can't be loaded
+# into memory in full before the TRANSCRIPT_MAX cap ever gets applied.
+_TRANSCRIPT_DOWNLOAD_BYTE_CAP = 5 * 1024 * 1024
 
 
 class ZoomError(RuntimeError):
@@ -161,6 +176,89 @@ def _participants(token: str, uuid: str) -> list[dict]:
     return out
 
 
+def _include_transcripts() -> bool:
+    """Whether the collector should also fetch transcripts. Mirrors zoom_mode()/zoom_token() in
+    pipeline.health: a pure .env setup (no stored connection view) defaults to on (owner decision
+    2026-09-21)."""
+    view = connections.get("zoom")
+    return connections.zoom_include_transcripts(view) if view is not None else True
+
+
+def vtt_to_text(vtt: str) -> str:
+    """
+    Converts a WebVTT transcript body to plain text: drops the "WEBVTT" header, cue-number lines,
+    and "HH:MM:SS.mmm --> HH:MM:SS.mmm" timing lines; keeps speaker lines ("Name: text") in
+    order; collapses blank lines.
+    """
+    lines: list[str] = []
+    for raw in vtt.splitlines():
+        line = raw.strip()
+        if not line or line == "WEBVTT":
+            continue
+        if line.isdigit():
+            continue
+        if "-->" in line:
+            continue
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _trusted_zoom_host(url: str) -> bool:
+    """True when url is https and its host is zoom.us or a zoom.us subdomain. The transcript
+    download step only sends the bearer token to a URL that passes this check."""
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    return parsed.scheme == "https" and (host == "zoom.us" or host.endswith(".zoom.us"))
+
+
+def _download_transcript(token: str, url: str) -> str:
+    """Downloads a WebVTT transcript body from a pre-validated zoom.us url and converts it to
+    plain text. Raises ZoomError on any request/HTTP failure — the caller turns that into
+    transcript_unavailable_reason="download_failed"."""
+    try:
+        resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=TIMEOUT)
+    except requests.RequestException as exc:
+        raise ZoomError(str(exc)) from exc
+    if resp.status_code >= 400:
+        raise ZoomError(f"HTTP {resp.status_code}")
+    body = resp.text or ""
+    if len(body) > _TRANSCRIPT_DOWNLOAD_BYTE_CAP:
+        body = body[:_TRANSCRIPT_DOWNLOAD_BYTE_CAP]
+    return vtt_to_text(body)
+
+
+def _transcript_fields(token: str, uuid: str) -> dict:
+    """Transcript payload fields for a hosted meeting (Research Finding 6): transcript_available,
+    plus transcript_text/transcript_truncated when available, or transcript_unavailable_reason
+    when not. Never raises — a transcript is optional enrichment, so a failure here is recorded,
+    not surfaced as a run failure the way a summary/participants failure is."""
+    try:
+        meta = _get(token, f"/meetings/{encode_uuid(uuid)}/transcript")
+    except ZoomError as exc:
+        reason = "not_found" if str(exc) == "404" else "download_failed"
+        return {"transcript_available": False, "transcript_unavailable_reason": reason}
+
+    if not meta.get("can_download", True):
+        reason = meta.get("download_restriction_reason") or "not_available"
+        return {"transcript_available": False, "transcript_unavailable_reason": reason}
+
+    download_url = meta.get("download_url") or ""
+    if not _trusted_zoom_host(download_url):
+        return {"transcript_available": False, "transcript_unavailable_reason": "untrusted_download_host"}
+
+    try:
+        text = _download_transcript(token, download_url)
+    except ZoomError:
+        return {"transcript_available": False, "transcript_unavailable_reason": "download_failed"}
+
+    truncated = len(text) > TRANSCRIPT_MAX
+    return {
+        "transcript_available": True,
+        "transcript_text": text[:TRANSCRIPT_MAX],
+        "transcript_truncated": truncated,
+    }
+
+
 def _hosted(entry: dict, from_summary: bool, me: dict) -> bool:
     """True when the meeting is host-only by construction (came from the summaries list) or its
     host id/email matches the signed-in user."""
@@ -240,6 +338,7 @@ def collect_zoom(since: datetime, until: datetime) -> CollectionResult:
         return CollectionResult("zoom", "error", f"could not resolve signed-in user: {exc}")
 
     mode = zoom_mode()
+    include_transcripts = _include_transcripts()
     # At least SUMMARY_LOOKBACK back so late-generated summaries are caught, but honour an earlier
     # `since` when the cursor says a longer window is outstanding — otherwise an outage longer than
     # 48h loses those meetings permanently, because the cursor still advances to now.
@@ -300,6 +399,8 @@ def collect_zoom(since: datetime, until: datetime) -> CollectionResult:
             payload["participants"] = []
             payload["summary_available"] = False
             payload["summary_unavailable_reason"] = "not_host"
+            payload["transcript_available"] = False
+            payload["transcript_unavailable_reason"] = "not_host"
             items.append(Item("meeting", uuid, occurred, payload))
             continue
 
@@ -328,6 +429,9 @@ def collect_zoom(since: datetime, until: datetime) -> CollectionResult:
             payload["participants"] = []
             if str(exc) != "404":
                 failures.append(f"{uuid} participants: {exc}")
+
+        if include_transcripts:
+            payload.update(_transcript_fields(token, uuid))
 
         items.append(Item("meeting", uuid, occurred, payload))
 
