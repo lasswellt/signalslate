@@ -488,3 +488,60 @@ the Namecheap sandbox or GoDaddy OTE connection before pointing it at a producti
 green sandbox/OTE run is necessary but not sufficient: each registrar's test environment has its
 own, different pool of "available" names, so it cannot confirm a specific production domain is
 purchasable — only that the flow itself works.
+
+## Jobs
+
+A **Jobs** page and daily job discover companies from a manual watchlist, YC's public "hiring now"
+list, HN's "Who is hiring" threads, and job-alert emails already flowing through your Gmail/M365
+collectors; resolve each company to a real ATS board (Greenhouse, Lever, Ashby, Workday,
+SmartRecruiters, Workable, Rippling, BambooHR, Recruitee, Personio, or a generic schema.org
+JSON-LD fallback); poll those boards daily; score new postings against your profile with Claude;
+and surface high-fit postings, closures and application updates in the morning digest.
+
+Company sources, targeting and your profile/answer bank are configured in the web UI, not in
+`.env`; `.env` only holds the refresh schedule and the two Anthropic API spend caps below.
+
+### No LinkedIn or Indeed scraping
+
+Neither site offers a public jobs API, and both actively enforce their Terms of Service against
+scraping — the same reason WordPress.com's domain lookup above calls an undocumented endpoint
+instead of a real one, except here there is no fallback: LinkedIn and Indeed postings simply are
+not a source.
+
+### The resolver ladder
+
+Turning a company into a pollable board is a ladder, cheapest step first: an exact URL pattern
+match against the company's known domain; a slug probe (a handful of guessed board slugs tried
+against each ATS's own URL scheme); an HTML careers-page fingerprint (looking for a known ATS's
+markup on the company's own careers page); Claude web research, only when the first three all
+miss, and capped per run; and finally a generic schema.org JSON-LD fallback for a careers page
+that publishes structured job data without matching any known ATS.
+
+### Cost controls
+
+Two settings cap the only two places a run can spend on the Anthropic API: `JOBS_MAX_LLM_RESOLVES_PER_RUN`
+caps how many companies per run may escalate to the resolver ladder's Claude web-research step, and
+`JOBS_MAX_SCORE_PER_RUN` caps how many postings per run Claude scores for fit. Postings that don't
+match your profile's targeting are filtered out before ever reaching the model, at no cost.
+
+### Apply assist
+
+Filling out and submitting an application is never fully automated. A separate desktop runner
+(`pipeline.jobs.assist`) opens a **visible** Chrome window on your own machine — never the server,
+which runs headless in Docker — walks a checklist filling in what it can from your profile and
+answer bank, and then stops for you. Three things it never does on your behalf: solve a CAPTCHA,
+confirm a legal attestation, or click the final Submit button. Those are yours, every time, by
+design.
+
+### Desktop runner setup
+
+1. Create a virtualenv for the runner (`python -m venv .venv-assist`), or reuse the server's own
+   venv if you run the assist tool on the same machine as the server.
+2. `pip install -r requirements-assist.txt` — this installs Playwright plus everything in
+   `requirements.txt`, separately from the server's own install.
+3. `python -m playwright install chromium`.
+4. Set `SIGNALSLATE_API_URL` in that machine's environment to the server's address (see
+   `.env.example`), and make sure the server's `ALLOWED_HOSTS` includes whatever host or IP the
+   runner will call from (see `ALLOWED_HOSTS` above) — restart the server after changing it.
+5. Run `python -m pipeline.jobs.assist <application_id>` to walk one application, or
+   `python -m pipeline.jobs.assist --watch` to keep polling the queue continuously.
