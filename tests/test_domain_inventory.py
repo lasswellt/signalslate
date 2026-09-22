@@ -102,7 +102,9 @@ def test_registrar_for_builds_namecheap(vault):
 
 
 def test_registrar_for_builds_godaddy(vault):
-    connections.create("godaddy", {"label": "main", "api_key": "gd-key", "api_secret": "gd-secret-Zz99"})
+    connections.create(
+        "godaddy", {"label": "main", "auth_mode": "classic", "api_key": "gd-key", "api_secret": "gd-secret-Zz99"}
+    )
     registrar = inventory.registrar_for("godaddy_main")
     assert isinstance(registrar, GoDaddyClient)
 

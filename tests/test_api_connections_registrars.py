@@ -63,6 +63,10 @@ NAMECHEAP = {
 GODADDY = {
     "kind": "godaddy",
     "label": "primary",
+    # auth_mode "classic": the legacy sso-key pair, exercised throughout this file. "pat" (a single
+    # Personal Access Token, what developer.godaddy.com now issues) is the default and covered in
+    # test_create_godaddy_pat_mode_defaults_and_works below.
+    "auth_mode": "classic",
     "api_key": GODADDY_KEY,
     "api_secret": GODADDY_SECRET,
 }
@@ -157,6 +161,29 @@ def test_create_godaddy_with_registrant_contact_is_write_only(client):
 
     assert resp.status_code == 201
     assert resp.json()["secrets_set"] == ["api_key", "api_secret", "registrant_contact"]
+    assert_clean(resp)
+
+
+def test_create_godaddy_pat_mode_defaults_and_works(client):
+    """auth_mode omitted defaults to "pat" (developer.godaddy.com's current signup); a single
+    api_token is enough, and the classic api_key/api_secret pair must not be required."""
+    resp = client.post(
+        "/api/connections",
+        json={"kind": "godaddy", "label": "patacct", "api_token": "gd-pat-Qw83RtNv56xLmE"},
+    )
+
+    assert resp.status_code == 201
+    assert resp.json()["secrets_set"] == ["api_token"]
+    assert_clean(resp)
+
+
+def test_create_godaddy_pat_mode_without_token_is_422(client):
+    resp = client.post("/api/connections", json={"kind": "godaddy", "label": "nopat"})
+
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == [
+        {"type": "value_error", "loc": ["body", "api_token"], "msg": resp.json()["detail"][0]["msg"]}
+    ]
     assert_clean(resp)
 
 

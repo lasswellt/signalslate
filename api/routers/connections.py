@@ -116,8 +116,14 @@ class NamecheapCreate(_CreateBase):
 class GodaddyCreate(_CreateBase):
     kind: Literal["godaddy"]
     label: str
-    api_key: SecretStr
-    api_secret: SecretStr
+    # api_token (pat, the developer.godaddy.com default) or api_key+api_secret (classic, the
+    # deprecated sso-key pair) — pipeline.connections._check_godaddy_credentials enforces exactly
+    # one shape, keyed by auth_mode; all three are optional here for the same reason ZoomCreate's
+    # account_id is.
+    api_token: Optional[SecretStr] = None
+    api_key: Optional[SecretStr] = None
+    api_secret: Optional[SecretStr] = None
+    auth_mode: Optional[str] = None
     environment: Optional[str] = None
     registrant_contact: Optional[SecretStr] = None
 

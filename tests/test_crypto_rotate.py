@@ -112,7 +112,9 @@ def _populate(vault: Vault) -> None:
             "registrant_contact": CONTACT,
         },
     )
-    connections.create("godaddy", {"label": "main", "api_key": GODADDY_KEY, "api_secret": GODADDY_SECRET})
+    connections.create(
+        "godaddy", {"label": "main", "auth_mode": "classic", "api_key": GODADDY_KEY, "api_secret": GODADDY_SECRET}
+    )
     connections.create(
         "wordpress",
         {

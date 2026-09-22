@@ -87,6 +87,7 @@ __all__ = [
     "materialize",
     "zoom_auth_mode",
     "zoom_include_transcripts",
+    "godaddy_auth_mode",
     "overlay_provider",
     "is_family_key",
     "FAMILY_KEY_PATTERNS",
@@ -172,10 +173,14 @@ KINDS: dict[str, _Kind] = {
     ),
     "godaddy": _Kind(
         "label",
-        ("label", "environment"),
-        ("api_key", "api_secret", "registrant_contact"),
-        ("api_key", "api_secret"),
-        optional_config=("environment",),
+        ("label", "environment", "auth_mode"),
+        # api_token: developer.godaddy.com's current signup flow, a single Personal Access Token
+        # (Bearer auth). api_key/api_secret: the classic sso-key pair from the older, deprecated
+        # classic-developer.godaddy.com portal. required_secrets is empty here on purpose —
+        # _check_godaddy_credentials enforces exactly one of the two shapes, keyed by auth_mode.
+        ("api_token", "api_key", "api_secret", "registrant_contact"),
+        (),
+        optional_config=("environment", "auth_mode"),
     ),
     "wordpress": _Kind(
         "label",
@@ -193,6 +198,8 @@ _DEFAULT_REDIRECT_MODE = "paste_back"
 # offer has no equivalent Zoom flow, so it is not one of the accepted values here.
 _ZOOM_REDIRECT_MODES = ("callback",)
 _ZOOM_AUTH_MODES = ("oauth", "s2s")
+_GODADDY_AUTH_MODES = ("pat", "classic")
+_DEFAULT_GODADDY_AUTH_MODE = "pat"
 _BOOL_VALUES = ("true", "false")
 _ENVIRONMENTS = ("production", "ote")
 _DEFAULT_ENVIRONMENT = "production"
@@ -343,8 +350,9 @@ def _validate_config_value(kind: str, name: str, value: object) -> str:
             raise InvalidField(name, f"must be one of {', '.join(allowed)}")
         return value
     if name == "auth_mode":
-        if value not in _ZOOM_AUTH_MODES:
-            raise InvalidField(name, f"must be one of {', '.join(_ZOOM_AUTH_MODES)}")
+        allowed = _ZOOM_AUTH_MODES if kind == "zoom" else _GODADDY_AUTH_MODES
+        if value not in allowed:
+            raise InvalidField(name, f"must be one of {', '.join(allowed)}")
         return value
     if name in ("sandbox", "include_transcripts"):
         if value not in _BOOL_VALUES:
@@ -436,6 +444,35 @@ def zoom_auth_mode(view: "ConnectionView") -> str:
     return "s2s" if view.config.get("account_id") else "oauth"
 
 
+def _check_godaddy_credentials(config: Mapping[str, str], secrets: Mapping[str, Any]) -> None:
+    """
+    developer.godaddy.com's current signup flow issues one Personal Access Token (Bearer auth);
+    the classic api_key/api_secret pair (sso-key) comes from a separate, deprecated portal
+    (classic-developer.godaddy.com) that most new accounts never see. auth_mode picks which shape
+    this connection needs; the default is "pat" since that is what a new signup gets. Checked only
+    at create() — like required_secrets, this is a creation-time integrity check, not re-verified
+    on every update()."""
+    mode = config.get("auth_mode") or _DEFAULT_GODADDY_AUTH_MODE
+    if mode == "classic":
+        for name in ("api_key", "api_secret"):
+            if name not in secrets:
+                raise MissingField(name, "required when auth_mode is classic")
+    elif "api_token" not in secrets:
+        raise MissingField("api_token", "required when auth_mode is pat")
+
+
+def godaddy_auth_mode(view: "ConnectionView") -> str:
+    """
+    "pat" or "classic" for a GoDaddy connection. An explicit auth_mode wins; otherwise "classic"
+    when api_key is stored (the legacy sso-key shape) and "pat" otherwise, matching what
+    developer.godaddy.com issues today.
+    """
+    mode = view.config.get("auth_mode")
+    if mode in _GODADDY_AUTH_MODES:
+        return mode
+    return "classic" if "api_key" in view.secrets_set else "pat"
+
+
 def zoom_include_transcripts(view: "ConnectionView") -> bool:
     """
     Whether the Zoom collector should also pull meeting transcripts. Defaults to True (owner decision
@@ -521,6 +558,8 @@ def create(kind: str, fields: Mapping[str, Any], origin: str = "ui") -> Connecti
             raise MissingField(name, "required")
     if kind == "zoom":
         _check_zoom_auth_mode(config)
+    elif kind == "godaddy":
+        _check_godaddy_credentials(config, secrets)
 
     connection_id, label = _derive(kind, spec, config)
     ciphertext = _require_vault().encrypt_json(secrets) if secrets else None

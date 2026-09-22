@@ -28,10 +28,19 @@ from pipeline.domains.registrars import godaddy  # noqa: E402
 
 GODADDY_KEY = "godaddy-key-Xy82QpL4vM"
 GODADDY_SECRET = "godaddy-secret-9qL2pMvX"
+# auth_mode "classic": this file exercises the legacy sso-key key/secret pair. See
+# test_from_connection_reads_pat_token etc. below for the default "pat" (Personal Access Token)
+# shape developer.godaddy.com now issues.
 GODADDY_CONFIG = {
     "label": "prod",
+    "auth_mode": "classic",
     "api_key": GODADDY_KEY,
     "api_secret": GODADDY_SECRET,
+}
+GODADDY_PAT = "godaddy-pat-7hK2mNq9wR4vLxYbZ"
+GODADDY_PAT_CONFIG = {
+    "label": "patacct",
+    "api_token": GODADDY_PAT,
 }
 CONTACT = Contact(
     first_name="Jane",
@@ -68,6 +77,12 @@ def connection_id(vault):
     return view.id
 
 
+@pytest.fixture
+def pat_connection_id(vault):
+    view = connections.create("godaddy", GODADDY_PAT_CONFIG)
+    return view.id
+
+
 class FakeResponse:
     def __init__(self, json_body=None, status_code: int = 200, headers=None, content: bytes = b"{}"):
         self._json_body = json_body
@@ -99,8 +114,10 @@ def route(monkeypatch, handler):
 def test_from_connection_reads_config_and_secrets(connection_id):
     client = godaddy.GoDaddyClient(connection_id)
     assert client.kind == "godaddy"
+    assert client._config.auth_mode == "classic"
     assert client._config.api_key == GODADDY_KEY
     assert client._config.api_secret == GODADDY_SECRET
+    assert client._config.api_token is None
     assert client._config.environment == "production"
 
 
@@ -130,6 +147,46 @@ def test_requests_use_sso_key_header(monkeypatch, connection_id):
     client = godaddy.GoDaddyClient(connection_id)
     client.list_domains()
     assert calls[0]["headers"]["Authorization"] == f"sso-key {GODADDY_KEY}:{GODADDY_SECRET}"
+
+
+# --- pat (Personal Access Token): the auth_mode default, what developer.godaddy.com issues today ---
+
+
+def test_pat_is_the_default_auth_mode(vault):
+    """No explicit auth_mode + only api_token supplied still creates (default resolves to "pat")."""
+    view = connections.create("godaddy", GODADDY_PAT_CONFIG)
+    assert view.config.get("auth_mode") in (None, "pat")
+    assert connections.godaddy_auth_mode(view) == "pat"
+
+
+def test_pat_mode_without_api_token_raises_missing_field(vault):
+    with pytest.raises(connections.MissingField):
+        connections.create("godaddy", {"label": "nopat", "auth_mode": "pat"})
+
+
+def test_classic_mode_without_api_key_raises_missing_field(vault):
+    with pytest.raises(connections.MissingField):
+        connections.create("godaddy", {"label": "noclassic", "auth_mode": "classic", "api_key": GODADDY_KEY})
+
+
+def test_from_connection_reads_pat_token(pat_connection_id):
+    client = godaddy.GoDaddyClient(pat_connection_id)
+    assert client._config.auth_mode == "pat"
+    assert client._config.api_token == GODADDY_PAT
+    assert client._config.api_key is None
+    assert client._config.api_secret is None
+
+
+def test_requests_use_bearer_pat_header(monkeypatch, pat_connection_id):
+    def handler(method, url, params, json_body):
+        return FakeResponse(json_body=[])
+
+    calls = route(monkeypatch, handler)
+    client = godaddy.GoDaddyClient(pat_connection_id)
+    client.list_domains()
+    assert calls[0]["headers"]["Authorization"] == f"Bearer {GODADDY_PAT}"
+    # Never both headers, and the classic secrets never leak into a pat-mode request.
+    assert "sso-key" not in calls[0]["headers"]["Authorization"]
 
 
 # --- list_domains ---------------------------------------------------------------------
