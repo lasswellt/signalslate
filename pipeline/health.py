@@ -5,18 +5,27 @@ and exiting, so callers (API, scheduler) can handle failure without a crashed pr
 """
 import base64
 import contextvars
+import fcntl
+import hashlib
 import os
 import re
+import threading
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterator, Mapping, Optional
+from typing import Callable, Iterator, Mapping, Optional, TypeGuard
 
 import msal
 import requests
 from dotenv import dotenv_values
 
-from pipeline import tokencache
+from pipeline import connections, db, tokencache
+
+# pipeline.oauth_zoom is imported lazily, inside the functions that need it, never at module level:
+# oauth_zoom -> oauth_gmail -> pipeline.health (for GMAIL_SCOPE) is an existing edge, and importing
+# it here would close a cycle (this module would not yet have defined its own names when
+# oauth_gmail tried to read one back off it).
 
 ROOT = Path(__file__).resolve().parent.parent
 TOKEN_DIR = ROOT / "tokens"
@@ -35,14 +44,32 @@ SLACK_SCOPES = {
 }
 # Dropped when SLACK_SKIP_DMS is set — the digest can be built without reading personal DMs.
 SLACK_DM_SCOPES = {"im:history", "im:read"}
-# cloud_recording:read:meeting_transcript:admin stays out: transcripts are optional.
+# The final S2S set the collector calls, one scope per endpoint:
+# - meeting:read:list_summaries:admin  -- GET /users/{userId}/meeting_summaries (enumerate)
+# - meeting:read:summary:admin         -- GET /meetings/{meetingUUID}/meeting_summary (fetch body)
+# - meeting:read:list_meetings:admin   -- GET /users/{userId}/meetings (list meetings)
+# - meeting:read:list_past_participants:admin -- GET /past_meetings/{meetingUUID}/participants
+# - report:read:user:admin             -- GET /report/users/{userId}/meetings (past meeting report)
+# cloud_recording:read:meeting_transcript:admin stays out here: transcripts are optional and a
+# later task adds that scope conditionally, not in this base set.
 ZOOM_SCOPES = {
     "meeting:read:list_summaries:admin",
     "meeting:read:summary:admin",
-    "meeting:read:past_meeting:admin",
+    "meeting:read:list_meetings:admin",
     "meeting:read:list_past_participants:admin",
     "report:read:user:admin",
 }
+# The user-level equivalents for an OAuth-mode Zoom connection (a user signs in for themselves, so
+# no :admin suffix). cloud_recording:read:meeting_transcript is added conditionally, same as its
+# :admin counterpart above, when the connection's include_transcripts flag is on.
+ZOOM_USER_SCOPES = {
+    "meeting:read:list_summaries",
+    "meeting:read:summary",
+    "meeting:read:list_meetings",
+    "meeting:read:list_past_participants",
+}
+ZOOM_TRANSCRIPT_SCOPE = "cloud_recording:read:meeting_transcript"
+ZOOM_TRANSCRIPT_ADMIN_SCOPE = "cloud_recording:read:meeting_transcript:admin"
 # gmail.readonly is the narrowest scope that reads bodies and supports `q` search: gmail.metadata is
 # also Restricted and can do neither (research 2026-09-20 §3). Google reports granted scopes as full
 # URLs in the token response, so the constant is the URL, not the short name.
@@ -382,12 +409,157 @@ def zoom_token_response() -> dict:
     return resp.json()
 
 
+class ZoomAuthError(Exception):
+    """
+    An OAuth-mode Zoom connection cannot yield a token without a fresh sign-in: either nothing was
+    ever stored, or Zoom rejected the stored refresh token (invalid_grant). Hard failure, like
+    GmailAuthError above: retrying cannot help, only Sign in can. Every message here is fixed text
+    with no token, secret or connection field embedded.
+    """
+
+
+_ZOOM_NOT_SIGNED_IN = "Zoom is not signed in — use Sign in on the Connections page"
+_ZOOM_SIGN_IN_EXPIRED = "Zoom sign-in expired or was revoked — sign in again"
+
+# Cross-process lock beside the connection DB: it, together with _ZOOM_LOCK below, serializes the
+# read refresh_token -> oauth_zoom.refresh -> connections.set_secret critical section against both
+# other threads in this process (API requests) and the separate `python -m pipeline.collect` CLI
+# process, so Zoom's single-token-pair-per-app rotation never races two refreshes of the same token.
+ZOOM_REFRESH_LOCK = db.DB_PATH.parent / "zoom_refresh.lock"
+_ZOOM_LOCK = threading.Lock()
+# 5 minutes of headroom before the cached access token's real expiry, so a caller never presents a
+# token that expires mid-request.
+_ZOOM_EXPIRY_MARGIN = 300
+
+
+@dataclass
+class _ZoomCache:
+    access_token: str
+    expires_at: float  # time.monotonic() seconds
+    scope: set
+    # sha256 of the refresh token this access token was derived from, never the token itself — a
+    # log line or a debugger that reprs the cache cannot leak it. The store is the only source of
+    # truth for the live refresh token; this is only how the cache notices it changed underneath
+    # (a new browser sign-in rotated it outside this process) and drops itself.
+    refresh_hash: str
+
+    def as_dict(self) -> dict:
+        return {"access_token": self.access_token, "scope": self.scope}
+
+
+_zoom_cache: Optional[_ZoomCache] = None
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _zoom_cache_valid(cache: Optional[_ZoomCache], refresh_hash: str) -> TypeGuard[_ZoomCache]:
+    # TypeGuard (not plain bool): every caller reads cache.as_dict() right after this check,
+    # and pyright can only narrow Optional[_ZoomCache] -> _ZoomCache through the guard form.
+    return (
+        cache is not None
+        and cache.refresh_hash == refresh_hash
+        and (cache.expires_at - time.monotonic()) > _ZOOM_EXPIRY_MARGIN
+    )
+
+
+def _zoom_oauth_token_data(view: "connections.ConnectionView") -> dict:
+    """
+    {"access_token": str, "scope": set[str]} for an OAuth-mode Zoom connection, refreshing and
+    rotating the stored refresh token when the cached one is missing or near expiry.
+
+    The new refresh token is persisted with connections.set_secret BEFORE it is cached or returned:
+    a crash after persisting simply means the next call refreshes again with the newest token; a
+    crash before persisting leaves the store holding the token that was just used, which Zoom will
+    reject on its next use, which is safe (ZoomAuthError, not silent data loss).
+
+    Raises ZoomAuthError when there is no client id/secret/refresh token stored, or Zoom rejected
+    the stored refresh token. Raises oauth_zoom.RefreshFailed on any other refresh failure
+    (network, unreadable response) — a transient error, distinct from ZoomAuthError, so callers do
+    not tell a user to sign in again for an outage.
+    """
+    from pipeline import oauth_zoom  # lazy: see the module-level import comment above
+
+    global _zoom_cache
+    connection_id = view.id
+    client_id = view.config.get("client_id")
+    client_secret = connections.get_secret(connection_id, "client_secret")
+    if not client_id or not client_secret:
+        raise ZoomAuthError(_ZOOM_NOT_SIGNED_IN)
+
+    with _ZOOM_LOCK:
+        refresh_token = connections.get_secret(connection_id, "refresh_token")
+        if not refresh_token:
+            raise ZoomAuthError(_ZOOM_NOT_SIGNED_IN)
+        refresh_hash = _hash_token(refresh_token)
+        if _zoom_cache_valid(_zoom_cache, refresh_hash):
+            return _zoom_cache.as_dict()
+
+        ZOOM_REFRESH_LOCK.parent.mkdir(parents=True, exist_ok=True)
+        with open(ZOOM_REFRESH_LOCK, "a+") as lock_file:
+            fcntl.flock(lock_file, fcntl.LOCK_EX)
+            try:
+                # Re-read: another process may have rotated the refresh token, or refreshed and
+                # updated this process's cache, while this call waited for the file lock.
+                current_refresh = connections.get_secret(connection_id, "refresh_token")
+                if not current_refresh:
+                    raise ZoomAuthError(_ZOOM_NOT_SIGNED_IN)
+                current_hash = _hash_token(current_refresh)
+                if _zoom_cache_valid(_zoom_cache, current_hash):
+                    return _zoom_cache.as_dict()
+
+                try:
+                    tokens = oauth_zoom.refresh(client_id, client_secret, current_refresh)
+                except oauth_zoom.RefreshTokenRejected:
+                    raise ZoomAuthError(_ZOOM_SIGN_IN_EXPIRED) from None
+
+                new_refresh = tokens["refresh_token"]
+                connections.set_secret(connection_id, "refresh_token", new_refresh)
+
+                _zoom_cache = _ZoomCache(
+                    access_token=tokens["access_token"],
+                    expires_at=time.monotonic() + tokens["expires_in"],
+                    scope=set((tokens.get("scope") or "").split()),
+                    refresh_hash=_hash_token(new_refresh),
+                )
+                return _zoom_cache.as_dict()
+            finally:
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+
+def zoom_mode() -> str:
+    """"oauth" or "s2s" for the configured Zoom source; "s2s" when there is no stored connection
+    (a pure .env setup with no vault), same fallback zoom_token() and check_zoom() use."""
+    view = connections.get("zoom")
+    return connections.zoom_auth_mode(view) if view is not None else "s2s"
+
+
 def zoom_token() -> str:
-    """Just the access token, for collectors."""
-    return zoom_token_response()["access_token"]
+    """
+    Access token for collectors, s2s or oauth depending on how Zoom is configured.
+
+    Raises RuntimeError/requests.RequestException in s2s mode (unchanged), or ZoomAuthError /
+    oauth_zoom.RefreshFailed in oauth mode.
+    """
+    view = connections.get("zoom")
+    if view is None or connections.zoom_auth_mode(view) != "oauth":
+        return zoom_token_response()["access_token"]
+    return _zoom_oauth_token_data(view)["access_token"]
 
 
 def check_zoom() -> HealthResult:
+    """
+    The Test button's Zoom check. Fetches (or refreshes) the same token zoom_token() would hand a
+    collector — never a second, independent refresh — and reports the scopes it granted.
+    """
+    view = connections.get("zoom")
+    if view is not None and connections.zoom_auth_mode(view) == "oauth":
+        return _check_zoom_oauth(view)
+    return _check_zoom_s2s(view)
+
+
+def _check_zoom_s2s(view: Optional["connections.ConnectionView"]) -> HealthResult:
     try:
         data = zoom_token_response()
     except requests.RequestException as exc:
@@ -396,12 +568,38 @@ def check_zoom() -> HealthResult:
         return HealthResult("zoom", "error", str(exc))
 
     granted = set((data.get("scope") or "").split())
-    missing = _missing(ZOOM_SCOPES, granted)
+    required = set(ZOOM_SCOPES)
+    # No stored view means a pure .env setup: there is no include_transcripts flag to read, so the
+    # base scope set is all that is required, to avoid breaking a configuration that predates it.
+    if view is not None and connections.zoom_include_transcripts(view):
+        required.add(ZOOM_TRANSCRIPT_ADMIN_SCOPE)
+    missing = _missing(required, granted)
     if missing:
         # Usually the app creator's role couldn't grant the admin scopes — recreate as account owner.
         return HealthResult("zoom", "error", f"token valid but missing scopes: {missing}")
 
     return HealthResult("zoom", "ok", f"token valid, expires_in={data['expires_in']}s, {len(granted)} scopes")
+
+
+def _check_zoom_oauth(view: "connections.ConnectionView") -> HealthResult:
+    from pipeline import oauth_zoom  # lazy: see the module-level import comment above
+
+    try:
+        data = _zoom_oauth_token_data(view)
+    except ZoomAuthError as exc:
+        return HealthResult("zoom", "error", str(exc))
+    except oauth_zoom.RefreshFailed as exc:
+        return HealthResult("zoom", "error", str(exc))
+
+    granted = data["scope"]
+    required = set(ZOOM_USER_SCOPES)
+    if connections.zoom_include_transcripts(view):
+        required.add(ZOOM_TRANSCRIPT_SCOPE)
+    missing = _missing(required, granted)
+    if missing:
+        return HealthResult("zoom", "error", f"token valid but missing scopes: {missing}")
+
+    return HealthResult("zoom", "ok", f"signed in, token valid, {len(granted)} scopes")
 
 
 class GmailAuthError(Exception):

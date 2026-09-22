@@ -1,0 +1,897 @@
+{
+  "$schema": "blitz-tasks/1.0",
+  "plan": "zoom-collector",
+  "updated": "2026-09-22T01:13:47Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Fix Zoom summaries date format and trim S2S scope check to the endpoints actually called",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/zoom.py",
+        "pipeline/health.py",
+        "tests/test_collectors.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qF '%Y-%m-%dT%H:%M:%SZ' pipeline/collectors/zoom.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'strftime\\(\"%Y-%m-%d\"\\)' pipeline/collectors/zoom.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'meeting:read:past_meeting:admin' pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collectors.py tests/test_health.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T23:02:41Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qF '%Y-%m-%dT%H:%M:%SZ' pipeline/collectors/zoom.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:02:40Z"
+          },
+          {
+            "cmd": "! grep -nE 'strftime\\(\"%Y-%m-%d\"\\)' pipeline/collectors/zoom.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:02:40Z"
+          },
+          {
+            "cmd": "! grep -nE 'meeting:read:past_meeting:admin' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:02:40Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collectors.py tests/test_health.py -q",
+            "exit": 0,
+            "duration_ms": 851,
+            "tail": "........................................................................ [ 30%]\n........................................................................ [ 61%]\n........................................................................ [ 91%]\n...................                                                      [100%]\n235 passed in 0.66s",
+            "recorded_at": "2026-09-21T23:02:41Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research doc docs/_research/2026-09-21_zoom-collector.md Finding 1 + Step 0. OpenAPI spec: /users/{userId}/meeting_summaries from/to are yyyy-MM-dd'T'HH:mm:ss'Z' UTC; collector currently sends date-only (zoom.py:79-80). Set ZOOM_SCOPES (health.py:39-45) to the final S2S set the collector will call after T-006: meeting:read:list_summaries:admin, meeting:read:summary:admin, meeting:read:list_meetings:admin, meeting:read:list_past_participants:admin, report:read:user:admin. Drop meeting:read:past_meeting:admin (never called). Add a test asserting the exact from/to query values sent."
+    },
+    {
+      "id": "T-002",
+      "title": "Zoom connection kind: auth_mode (oauth|s2s), optional account_id, refresh_token secret, include_transcripts",
+      "role": "backend",
+      "files": [
+        "pipeline/connections.py",
+        "api/routers/connections.py",
+        "tests/test_connections.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qE '\"auth_mode\"' pipeline/connections.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'include_transcripts' pipeline/connections.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'auth_mode' api/routers/connections.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_connections.py tests/test_api_connections.py tests/test_connection_materialize.py tests/test_management_e2e.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T23:08:56Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '\"auth_mode\"' pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:08:52Z"
+          },
+          {
+            "cmd": "grep -qE 'include_transcripts' pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:08:52Z"
+          },
+          {
+            "cmd": "grep -qE 'auth_mode' api/routers/connections.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:08:52Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_connections.py tests/test_api_connections.py tests/test_connection_materialize.py tests/test_management_e2e.py -q",
+            "exit": 0,
+            "duration_ms": 3387,
+            "tail": "........................................................................ [ 27%]\n........................................................................ [ 55%]\n........................................................................ [ 83%]\n..........................................                               [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate-zoom-collector/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n258 passed, 1 warning in 3.09s",
+            "recorded_at": "2026-09-21T23:08:56Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research Step 1. Keep label_field=None (singleton id 'zoom'; do not break e2e singleton assertions). config=('client_id',), optional_config=('auth_mode','account_id','redirect_mode','include_transcripts'), secrets=('client_secret','refresh_token'), required_secrets=('client_secret',). auth_mode absent => 's2s' if account_id set else 'oauth'; expose a helper (e.g. connections.zoom_auth_mode(view)). redirect_mode accepts only 'callback' for zoom. include_transcripts is a bool, default TRUE (owner decision 2026-09-21); absent = true. .env seeding (connections.py:536,613-618): ZOOM_AUTH_MODE optional key; existing ZOOM_ACCOUNT_ID/CLIENT_ID/CLIENT_SECRET setups must seed as s2s unchanged. refresh_token is never materialized to env and never returned by any view. Extend ZoomCreate (api/routers/connections.py:67) with optional account_id, auth_mode, include_transcripts."
+    },
+    {
+      "id": "T-003",
+      "title": "pipeline/oauth_zoom.py: Zoom authorization-code sign-in (callback mode only) and rotating refresh",
+      "role": "backend",
+      "files": [
+        "pipeline/oauth_zoom.py",
+        "pipeline/oauth_flows.py",
+        "tests/test_oauth_zoom.py"
+      ],
+      "depends_on": [
+        "T-002"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def start' pipeline/oauth_zoom.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def finish_callback' pipeline/oauth_zoom.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def refresh' pipeline/oauth_zoom.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'zoom.us/oauth/authorize' pipeline/oauth_zoom.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'PROVIDERS = \\(.*\"zoom\"' pipeline/oauth_flows.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/oauth_zoom.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_oauth_zoom.py tests/test_oauth_flows.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T23:13:55Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def start' pipeline/oauth_zoom.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:13:54Z"
+          },
+          {
+            "cmd": "grep -qE 'def finish_callback' pipeline/oauth_zoom.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:13:54Z"
+          },
+          {
+            "cmd": "grep -qE 'def refresh' pipeline/oauth_zoom.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:13:54Z"
+          },
+          {
+            "cmd": "grep -qE 'zoom.us/oauth/authorize' pipeline/oauth_zoom.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:13:54Z"
+          },
+          {
+            "cmd": "grep -qE 'PROVIDERS = \\(.*\"zoom\"' pipeline/oauth_flows.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:13:54Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/oauth_zoom.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:13:54Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_oauth_zoom.py tests/test_oauth_flows.py -q",
+            "exit": 0,
+            "duration_ms": 736,
+            "tail": "........................................................................ [ 48%]\n........................................................................ [ 96%]\n......                                                                   [100%]\n150 passed in 0.52s",
+            "recorded_at": "2026-09-21T23:13:55Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research Q2 + Step 2. Mirror pipeline/oauth_gmail.py (sequencing) + oauth_google.py (endpoint helpers) in ONE module. Endpoints: https://zoom.us/oauth/authorize, https://zoom.us/oauth/token (Basic client_id:client_secret), https://zoom.us/oauth/revoke. Read client id/secret from the connection store like oauth_gmail._client_credentials. finish stores refresh_token via connections.set_secret('zoom','refresh_token',...). paste_back start must fail with a fixed-message FlowError subclass ('Zoom requires callback mode'): Zoom docs say loopback redirects are for PKCE/native clients only, not confidential clients. refresh(client_id, client_secret, refresh_token) returns the full token JSON; invalid_grant raises a dedicated error (no token text in messages). All errors subclass oauth_flows.FlowError with fixed messages. Tests mock only requests to zoom.us (copy the shape of tests/test_oauth_gmail.py)."
+    },
+    {
+      "id": "T-004",
+      "title": "API: route Zoom sign-in through /api/oauth (start + callback) with paste-back refused",
+      "role": "backend",
+      "files": [
+        "api/routers/oauth.py",
+        "tests/test_api_oauth.py"
+      ],
+      "depends_on": [
+        "T-003"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '\"zoom\": *\"zoom\"' api/routers/oauth.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'oauth_zoom' api/routers/oauth.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_api_oauth.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T23:26:40Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '\"zoom\": *\"zoom\"' api/routers/oauth.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:26:38Z"
+          },
+          {
+            "cmd": "grep -qE 'oauth_zoom' api/routers/oauth.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:26:38Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_oauth.py -q",
+            "exit": 0,
+            "duration_ms": 1956,
+            "tail": ".................................................................        [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate-zoom-collector/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n65 passed, 1 warning in 1.71s",
+            "recorded_at": "2026-09-21T23:26:40Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Codebase finding 3: _KIND_FOR_PROVIDER (oauth.py:68) and the google/else dispatch in _start/_finish_paste/_finish_callback (oauth.py:166-187) are binary; make them handle zoom explicitly. Callback URL is {PUBLIC_BASE_URL}/api/oauth/callback/zoom via oauth_flows.build_callback_url. Paste-back for zoom returns the handled FlowError code, never a 500. Keep CSRF and nonce-cookie behaviour identical to google."
+    },
+    {
+      "id": "T-005",
+      "title": "Single-flight Zoom token: mode-aware zoom_token(), persist rotated refresh token first, ZoomAuthError, per-mode scope check",
+      "role": "backend",
+      "files": [
+        "pipeline/health.py",
+        "tests/test_health.py"
+      ],
+      "depends_on": [
+        "T-002",
+        "T-003"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'class ZoomAuthError' pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'ZOOM_USER_SCOPES' pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'fcntl' pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_health.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T23:35:10Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'class ZoomAuthError' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:35:10Z"
+          },
+          {
+            "cmd": "grep -qE 'ZOOM_USER_SCOPES' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:35:10Z"
+          },
+          {
+            "cmd": "grep -qE 'fcntl' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:35:10Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_health.py -q",
+            "exit": 0,
+            "duration_ms": 795,
+            "tail": ".................................................................        [100%]\n65 passed in 0.57s",
+            "recorded_at": "2026-09-21T23:35:10Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research Q6, Finding 4, Step 3. Zoom allows one token pair per user+app and rotates refresh tokens (devforum 127541); refresh tokens expire after 90 days. OAuth mode: hold a threading.Lock AND an fcntl.flock on a lock file beside the connection DB (covers the separate python -m pipeline.collect CLI process; owner confirmed this approach 2026-09-21) across read refresh_token -> oauth_zoom.refresh -> connections.set_secret(new refresh_token) BEFORE returning/caching; cache the access token in-process until 5 min before expiry. invalid_grant -> ZoomAuthError (hard, 'sign in again', like GmailAuthError health.py:400). check_zoom() uses the same function (Test button never refreshes separately) and checks ZOOM_USER_SCOPES in oauth mode: meeting:read:list_summaries, meeting:read:summary, meeting:read:list_meetings, meeting:read:list_past_participants + cloud_recording:read:meeting_transcript whenever include_transcripts is true (default true). S2S mode likewise adds cloud_recording:read:meeting_transcript:admin to the required set when include_transcripts is true. S2S mode path unchanged. Required test: two threads call zoom_token() concurrently -> exactly one POST to zoom.us/oauth/token and the stored refresh_token is the newest."
+    },
+    {
+      "id": "T-006",
+      "title": "Meetings collector: union of summaries, previous_meetings and (S2S) pastJoined report, with participants",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/zoom.py",
+        "tests/test_collectors.py"
+      ],
+      "depends_on": [
+        "T-001",
+        "T-005"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'previous_meetings' pipeline/collectors/zoom.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'pastJoined' pipeline/collectors/zoom.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '/participants' pipeline/collectors/zoom.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/zoom.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-21T23:46:27Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'previous_meetings' pipeline/collectors/zoom.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:46:26Z"
+          },
+          {
+            "cmd": "grep -qE 'pastJoined' pipeline/collectors/zoom.py",
+            "exit": 0,
+            "duration_ms": 6,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:46:26Z"
+          },
+          {
+            "cmd": "grep -qE '/participants' pipeline/collectors/zoom.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:46:26Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/zoom.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:46:26Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q",
+            "exit": 0,
+            "duration_ms": 881,
+            "tail": "........................................................................ [ 36%]\n........................................................................ [ 73%]\n...................................................                      [100%]\n195 passed in 0.65s",
+            "recorded_at": "2026-09-21T23:46:27Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research Q4 + Step 4. /users/me/meetings?type=previous_meetings (spec: scheduled only, no instant meetings); /report/users/{uid}/meetings?type=pastJoined only in S2S mode (report:read:user:admin; resolve uid via GET /users/me, reports may reject 'me'); summaries list catches instant meetings with a summary. Merge by meeting_uuid, one Item('meeting', uuid, occurred, payload) per meeting in window. Payload keys: topic, start_time, end_time, host_email, hosted (bool), participants[] (name/email, only for hosted meetings via GET /past_meetings/{uuid}/participants, double-encode UUID via encode_uuid), summary_content, summary_doc_url, summary_available. Keep existing behaviours: 404 summary -> summary_available False; partial status on per-meeting failures; SUMMARY_LOOKBACK. ZoomAuthError -> CollectionResult error with 'sign in again'. Mock only requests."
+    },
+    {
+      "id": "T-007",
+      "title": "Opt-in transcripts: fetch /meetings/{uuid}/transcript and download text, capped, when include_transcripts",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/zoom.py",
+        "tests/test_collectors.py"
+      ],
+      "depends_on": [
+        "T-006"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '/transcript' pipeline/collectors/zoom.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'include_transcripts' pipeline/collectors/zoom.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'TRANSCRIPT_MAX' pipeline/collectors/zoom.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T00:07:04Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '/transcript' pipeline/collectors/zoom.py",
+            "exit": 0,
+            "duration_ms": 27,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:07:02Z"
+          },
+          {
+            "cmd": "grep -qE 'include_transcripts' pipeline/collectors/zoom.py",
+            "exit": 0,
+            "duration_ms": 7,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:07:02Z"
+          },
+          {
+            "cmd": "grep -qE 'TRANSCRIPT_MAX' pipeline/collectors/zoom.py",
+            "exit": 0,
+            "duration_ms": 20,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:07:02Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q",
+            "exit": 0,
+            "duration_ms": 1670,
+            "tail": "........................................................................ [ 35%]\n........................................................................ [ 70%]\n.............................................................            [100%]\n205 passed in 1.14s",
+            "recorded_at": "2026-09-22T00:07:04Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research Finding 6. On by default (owner decision 2026-09-21); include_transcripts=false turns it off. Only for hosted meetings. GET /meetings/{uuid}/transcript returns download_url, can_download, download_restriction_reason; download with Bearer token; cap text at TRANSCRIPT_MAX = 200_000 chars with a transcript_truncated flag; 404 or can_download false -> transcript_available False plus reason, never a failure. Transcripts need cloud recording per Zoom staff; do not treat absence as an error."
+    },
+    {
+      "id": "T-008",
+      "title": "normalize.py: Zoom meeting adapter so meetings reach triage and the digest",
+      "role": "backend",
+      "files": [
+        "pipeline/normalize.py",
+        "tests/test_normalize.py"
+      ],
+      "depends_on": [
+        "T-006"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def normalize_zoom' pipeline/normalize.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'source == \"zoom\"' pipeline/normalize.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_normalize.py tests/test_triage.py tests/test_triage_cli.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T00:10:53Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def normalize_zoom' pipeline/normalize.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:10:52Z"
+          },
+          {
+            "cmd": "grep -qE 'source == \"zoom\"' pipeline/normalize.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:10:52Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_normalize.py tests/test_triage.py tests/test_triage_cli.py -q",
+            "exit": 0,
+            "duration_ms": 1054,
+            "tail": "........................................................................ [ 35%]\n........................................................................ [ 70%]\n...........................................................              [100%]\n203 passed in 0.78s",
+            "recorded_at": "2026-09-22T00:10:53Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research Step 5; normalize() only handles gmail_* today (normalize.py:190-211). NormalizedItem is email-shaped: extend Participant.role Literal with 'host' and 'attendee' (check every consumer of role). title = topic; body_text = summary_content (or 'No AI Companion summary available.') plus transcript excerpt if present, truncated with truncate(); permalink = summary_doc_url; direction='inbound', is_unread=False, is_bulk=False, labels=['zoom'] (+ 'no-summary'), trust stays untrusted_third_party (summaries contain other people's words). Non-gmail/non-zoom sources still raise NoAdapterError."
+    },
+    {
+      "id": "T-009",
+      "title": "web: Zoom connection form with auth-mode choice, redirect URL to copy, and transcripts toggle",
+      "role": "frontend",
+      "files": [
+        "web/components/ConnectionDialog.vue",
+        "web/tests/ConnectionDialog.test.ts"
+      ],
+      "depends_on": [
+        "T-002"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'auth_mode' web/components/ConnectionDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'include_transcripts' web/components/ConnectionDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'oauth/callback/zoom' web/components/ConnectionDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npm run typecheck",
+          "timeout": 300
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/ConnectionDialog.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T00:30:06Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'auth_mode' web/components/ConnectionDialog.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:29:59Z"
+          },
+          {
+            "cmd": "grep -qE 'include_transcripts' web/components/ConnectionDialog.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:29:59Z"
+          },
+          {
+            "cmd": "grep -qE 'oauth/callback/zoom' web/components/ConnectionDialog.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:30:00Z"
+          },
+          {
+            "cmd": "cd web && npm run typecheck",
+            "exit": 0,
+            "duration_ms": 2959,
+            "tail": "\n> typecheck\n> nuxt typecheck",
+            "recorded_at": "2026-09-22T00:30:02Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/ConnectionDialog.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3617,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate-zoom-collector/web\n\nstdout | tests/ConnectionDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·····························\n\n Test Files  1 passed (1)\n      Tests  29 passed (29)\n   Start at  20:30:04\n   Duration  2.36s (transform 45%, tests 37%, environment 9%, import 8%, setup 1%)",
+            "recorded_at": "2026-09-22T00:30:06Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Codebase finding 5: KIND_FIELDS.zoom (ConnectionDialog.vue:145-149) is S2S-only. Add an auth-mode choice ('Sign in with Zoom' default / 'Server-to-Server'). oauth: client_id + write-only client_secret + read-only redirect URL {PUBLIC_BASE_URL}/api/oauth/callback/zoom to paste into the Zoom app (show a note when no public base URL is configured). s2s: current three fields. include_transcripts toggle, ON by default, with a hint that transcripts need Zoom cloud recording. refresh_token is never an input."
+    },
+    {
+      "id": "T-010",
+      "title": "web: Sign in button and OAuth dialog for Zoom (callback only)",
+      "role": "frontend",
+      "files": [
+        "web/pages/connections.vue",
+        "web/components/OAuthDialog.vue",
+        "web/tests/OAuthDialog.test.ts"
+      ],
+      "depends_on": [
+        "T-004",
+        "T-009"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE \"'zoom'\" web/pages/connections.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE \"zoom\" web/components/OAuthDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npm run typecheck",
+          "timeout": 300
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/OAuthDialog.test.ts tests/connections.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "cd web && npm run build",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T00:37:04Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE \"'zoom'\" web/pages/connections.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:36:50Z"
+          },
+          {
+            "cmd": "grep -qE \"zoom\" web/components/OAuthDialog.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:36:50Z"
+          },
+          {
+            "cmd": "cd web && npm run typecheck",
+            "exit": 0,
+            "duration_ms": 2961,
+            "tail": "\n> typecheck\n> nuxt typecheck",
+            "recorded_at": "2026-09-22T00:36:53Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/OAuthDialog.test.ts tests/connections.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3951,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate-zoom-collector/web\n\nstdout | tests/connections.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/OAuthDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······················································\n\n Test Files  2 passed (2)\n      Tests  54 passed (54)\n   Start at  20:36:54\n   Duration  2.76s (transform 48%, tests 33%, import 9%, environment 8%, setup 1%)\n\n  Transform  transforming modules took 2.35s · 48% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-09-22T00:36:57Z"
+          },
+          {
+            "cmd": "cd web && npm run build",
+            "exit": 0,
+            "duration_ms": 7333,
+            "tail": "yles.Pd4Strki.mjs (3.83 kB) (1.22 kB gzip)\n  ├─ .output/server/chunks/build/error-404-styles.Pd4Strki.mjs.map (196 B) (155 B gzip)\n  ├─ .output/server/chunks/build/error-500-Dk46He1_.mjs (4.72 kB) (1.94 kB gzip)\n  ├─ .output/server/chunks/build/error-500-Dk46He1_.mjs.map (205 B) (176 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs (2.18 kB) (862 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs.map (196 B) (156 B gzip)\n  ├─ .output/server/chunks/build/history-ClUW5Owp.mjs (79.9 kB) (17.8 kB gzip)\n  ├─ .output/server/chunks/build/history-ClUW5Owp.mjs.map (1.73 kB) (506 B gzip)\n  ├─ .output/server/chunks/build/index-CNbqLKWU.mjs (40.7 kB) (3.56 kB gzip)\n  ├─ .output/server/chunks/build/index-CNbqLKWU.mjs.map (18.3 kB) (2.69 kB gzip)\n  ├─ .output/server/chunks/build/interval-CGX2yBCt.mjs (376 B) (274 B gzip)\n  ├─ .output/server/chunks/build/interval-CGX2yBCt.mjs.map (167 B) (152 B gzip)\n  ├─ .output/server/chunks/build/server.mjs (157 kB) (41.7 kB gzip)\n  ├─ .output/server/chunks/build/server.mjs.map (5.93 kB) (1.33 kB gzip)\n  ├─ .output/server/chunks/build/styles.mjs (497 B) (260 B gzip)\n  ├─ .output/server/chunks/build/styles.mjs.map (395 B) (203 B gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs (167 kB) (41.2 kB gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs.map (3.04 kB) (753 B gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs (14.2 kB) (4.57 kB gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs.map (845 B) (272 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs (94 B) (100 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs.map (88 B) (97 B gzip)\n  ├─ .output/server/index.mjs (353 B) (205 B gzip)\n  └─ .output/server/package.json (723 B) (321 B gzip)\nΣ Total size: 3.27 MB (718 kB gzip)\n[nitro] ✔ You can preview this build using node .output/server/index.mjs\n│\n└  ✨ Build complete!",
+            "recorded_at": "2026-09-22T00:37:04Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Codebase finding 5: Sign-in button gated to gmail||m365 (connections.vue:104-111); OAuthDialog provider is a binary ternary (OAuthDialog.vue:174) and ready/signedIn ternaries at :268,:322. Replace with a kind->provider lookup; zoom -> 'zoom', uses the refresh_token-in-secrets_set branch like google. Show Sign in for zoom only when auth_mode === 'oauth'. Zoom offers callback mode only; hide the paste-back option and explain when PUBLIC_BASE_URL is missing. scope+api/routers/status.py scope+web/composables/useApi.ts scope+tests/test_api_startup.py (main-thread ruling: /api/system oauth map needs a zoom entry {modes: [\"callback\"] if PUBLIC_BASE_URL https else []} and OAuthProvider must include 'zoom'; the system endpoint must still never echo the public URL)"
+    },
+    {
+      "id": "T-011",
+      "title": "e2e: Zoom OAuth connection through the real app: create, callback sign-in, rotation, no secret leaks, S2S seed unchanged",
+      "role": "test",
+      "files": [
+        "tests/test_management_e2e.py"
+      ],
+      "depends_on": [
+        "T-004",
+        "T-005"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def test_zoom_oauth' tests/test_management_e2e.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_management_e2e.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T00:50:02Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def test_zoom_oauth' tests/test_management_e2e.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:50:00Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_management_e2e.py -q",
+            "exit": 0,
+            "duration_ms": 1763,
+            "tail": "............                                                             [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate-zoom-collector/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n12 passed, 1 warning in 1.42s",
+            "recorded_at": "2026-09-22T00:50:02Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Test-only task: its sole product is the e2e test file. Mock only zoom.us HTTP. Cover: create zoom in oauth mode; start + callback stores refresh_token; no API response or log contains the refresh/access token or client secret; Test button after sign-in rotates and persists the new refresh token; invalid_grant surfaces 'sign in again'; a .env S2S seed still yields auth_mode s2s and id 'zoom'."
+    },
+    {
+      "id": "T-012",
+      "title": "Docs: Zoom General-app setup, auth modes, scopes, transcripts; reverse management-ui out-of-scope line",
+      "role": "infra",
+      "files": [
+        "README.md",
+        ".env.example",
+        "docs/plans/management-ui/spec.md"
+      ],
+      "depends_on": [
+        "T-002"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'ZOOM_AUTH_MODE' .env.example",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'meeting:read:list_summaries' README.md",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'oauth/callback/zoom' README.md",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'Zoom and Slack OAuth' docs/plans/management-ui/spec.md",
+          "timeout": 10
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T01:13:47Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'ZOOM_AUTH_MODE' .env.example",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:13:47Z"
+          },
+          {
+            "cmd": "grep -qE 'meeting:read:list_summaries' README.md",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:13:47Z"
+          },
+          {
+            "cmd": "grep -qE 'oauth/callback/zoom' README.md",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:13:47Z"
+          },
+          {
+            "cmd": "! grep -nE 'Zoom and Slack OAuth' docs/plans/management-ui/spec.md",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:13:47Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research Configuration Changes. README Zoom section: General app -> user-managed -> redirect URL {PUBLIC_BASE_URL}/api/oauth/callback/zoom -> user scopes list -> sign in from Connections; S2S kept as alternative (instant + attended meetings only there). Note host-only summaries, no My Notes API, transcripts need cloud recording. Repo is public: no personal host names, emails or account ids (memory rule). spec.md:22 becomes 'Slack OAuth' only."
+    }
+  ]
+}

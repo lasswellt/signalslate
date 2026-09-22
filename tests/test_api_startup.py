@@ -170,6 +170,7 @@ def test_system_reports_callback_only_for_an_https_public_url(home, monkeypatch)
         assert plain["oauth"] == {
             "google": {"modes": ["paste_back"]},
             "microsoft": {"modes": ["paste_back"]},
+            "zoom": {"modes": []},
             "wordpress": {"modes": ["paste_back"]},
         }
         assert plain["web_origins"] == ["http://localhost:3000"]
@@ -184,6 +185,7 @@ def test_system_reports_callback_only_for_an_https_public_url(home, monkeypatch)
         assert body["public_base_url_configured"] is True
         assert body["oauth"]["google"]["modes"] == ["paste_back", "callback"]
         assert body["oauth"]["microsoft"]["modes"] == ["paste_back", "callback"]
+        assert body["oauth"]["zoom"]["modes"] == ["callback"]
         assert body["web_origins"] == ["https://app.example.com", "https://ui.example.org"]
         # The URL itself is config, not something the UI needs echoed.
         assert "insecure.example.com" not in https.text

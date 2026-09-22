@@ -44,7 +44,7 @@ class Participant(BaseModel):
 
     name: str
     address: str
-    role: Literal["from", "to", "cc"]
+    role: Literal["from", "to", "cc", "host", "attendee"]
 
 
 class Attachment(BaseModel):
@@ -187,14 +187,85 @@ def normalize_gmail(source: str, external_id: str, occurred_at: datetime, payloa
     )
 
 
+NO_TOPIC = "Zoom meeting"
+NOT_HOST_SUFFIX = " (you did not host this meeting)"
+
+
+def normalize_zoom(source: str, external_id: str, occurred_at: datetime, payload: dict) -> NormalizedItem:
+    """
+    A pipeline.collectors.zoom Item payload -> NormalizedItem.
+
+    Zoom items have no "from" participant (a meeting has a host, not a sender), so
+    pipeline.triage's stub fallback and prompt-building both cope with that already: `stub_record`
+    treats a missing "from" as an item with no sender label, and `_participant_line` just prefixes
+    "host"/"attendee" the same way it prefixes "from"/"to"/"cc".
+    """
+    summary_available = bool(payload.get("summary_available"))
+    if summary_available:
+        body = payload.get("summary_content") or ""
+    else:
+        body = "No AI Companion summary available."
+        if payload.get("summary_unavailable_reason") == "not_host":
+            body += NOT_HOST_SUFFIX
+
+    transcript_text = payload.get("transcript_text")
+    if transcript_text:
+        body += "\n\nTranscript excerpt:\n" + transcript_text
+
+    body_text, cut = truncate(body, NORMALIZED_BODY_CAP)
+    body_truncated = cut or bool(payload.get("transcript_truncated"))
+
+    host_email = payload.get("host_email") or None
+    participants: list[Participant] = []
+    if host_email:
+        participants.append(Participant(name="", address=host_email, role="host"))
+    for attendee in payload.get("participants") or []:
+        if not isinstance(attendee, dict):
+            continue
+        email = attendee.get("email")
+        # Participant.address is required (not Optional): an attendee row with no email has
+        # nothing usable for it, so it is dropped rather than stored with a blank address. The
+        # host is deduped the same way an entry may legitimately list them as an attendee too.
+        if not email or email == host_email:
+            continue
+        participants.append(Participant(name=attendee.get("name") or "", address=email, role="attendee"))
+
+    hosted = bool(payload.get("hosted"))
+    labels = ["zoom"]
+    if not summary_available:
+        labels.append("no-summary")
+    labels.append("hosted" if hosted else "attended")
+    if payload.get("transcript_available"):
+        labels.append("transcript")
+
+    return NormalizedItem(
+        id=f"{source}:{external_id}",
+        source=source,
+        kind="meeting",
+        occurred_at=occurred_at,
+        title=(payload.get("topic") or "").strip() or NO_TOPIC,
+        body_text=body_text,
+        body_truncated=body_truncated,
+        participants=participants,
+        thread_key=None,
+        labels=labels,
+        direction="inbound",
+        is_unread=False,
+        is_bulk=False,
+        attachments=[],
+        raw_ref=external_id,
+        permalink=payload.get("summary_doc_url") or None,
+    )
+
+
 def normalize(source: str, item_type: str, external_id: str, occurred_at: datetime, payload: object) -> NormalizedItem:
     """
-    Dispatch on the source prefix to that source's adapter.
+    Dispatch on the source prefix (gmail_*) or exact source ("zoom") to that source's adapter.
 
     `payload` is a dict (collectors' Item) or a JSON string (pipeline.db.CollectedItem stores it that way).
     Raises NoAdapterError for a source with no adapter, PayloadError for a payload that is not a JSON object.
     """
-    if not source.startswith("gmail_"):
+    if not source.startswith("gmail_") and source != "zoom":
         raise NoAdapterError(f"no normalizer for source {source!r}")
 
     if isinstance(payload, str):
@@ -205,6 +276,8 @@ def normalize(source: str, item_type: str, external_id: str, occurred_at: dateti
     if not isinstance(payload, dict):
         raise PayloadError(f"{source}:{external_id}: payload is not a JSON object")
 
-    item = normalize_gmail(source, external_id, occurred_at, payload)
-    # Gmail messages are always "mail"; kind follows the stored item_type so the two cannot disagree.
+    item = normalize_zoom(source, external_id, occurred_at, payload) if source == "zoom" else normalize_gmail(
+        source, external_id, occurred_at, payload
+    )
+    # kind follows the stored item_type so it cannot disagree with what the collector recorded.
     return item.model_copy(update={"kind": item_type})

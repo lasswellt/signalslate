@@ -44,7 +44,7 @@ from urllib.parse import parse_qs, urlsplit
 from pipeline.clock import utcnow
 
 MODES = ("paste_back", "callback")
-PROVIDERS = ("google", "microsoft", "wordpress")
+PROVIDERS = ("google", "microsoft", "zoom", "wordpress")
 
 DEFAULT_TTL_SECONDS = 900
 MAX_PENDING = 20

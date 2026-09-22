@@ -5,13 +5,15 @@ _env() reads ROOT/".env" on every call, so each test points pipeline.health.ROOT
 holding a purpose-built .env. No network: the Slack/Zoom checks get a stubbed requests.post.
 """
 import sys
+import threading
 from pathlib import Path
 
 import pytest
+from sqlmodel import SQLModel, create_engine
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pipeline import health  # noqa: E402
+from pipeline import connections, crypto, db, health  # noqa: E402
 
 
 @pytest.fixture
@@ -25,6 +27,40 @@ def env(monkeypatch, tmp_path):
         return tmp_path
 
     return _write
+
+
+@pytest.fixture(autouse=True)
+def isolated_connection_store(monkeypatch, tmp_path):
+    """
+    Zoom mode resolution now reads pipeline.connections, which reads pipeline.db: every test gets a
+    throwaway SQLite file and lock path, the same isolation test_connections.py and test_oauth_zoom.py
+    already use, so nothing here ever touches the real data/digest.db or data/zoom_refresh.lock.
+    """
+    engine = create_engine(f"sqlite:///{tmp_path / 'connections.db'}", connect_args={"check_same_thread": False})
+    monkeypatch.setattr(db, "engine", engine)
+    SQLModel.metadata.create_all(engine)
+    monkeypatch.setattr(health, "ZOOM_REFRESH_LOCK", tmp_path / "zoom_refresh.lock")
+    monkeypatch.setattr(health, "_zoom_cache", None)
+    connections.set_vault(None)
+    yield
+    connections.set_vault(None)
+
+
+@pytest.fixture
+def vault():
+    v = crypto.Vault([crypto.generate_key()])
+    connections.set_vault(v)
+    yield v
+    connections.set_vault(None)
+
+
+@pytest.fixture
+def oauth_zoom_connection(vault):
+    """An oauth-mode Zoom connection, signed in, with a stored refresh token."""
+    return connections.create(
+        "zoom",
+        {"client_id": "zcid", "client_secret": "zcsecret", "auth_mode": "oauth", "refresh_token": "rt-initial"},
+    )
 
 
 class FakeResponse:
@@ -220,6 +256,250 @@ def test_check_zoom_errors_on_missing_admin_scope(env, monkeypatch):
 def test_check_zoom_missing_credentials(env):
     env("ZOOM_ACCOUNT_ID=a\n")
     assert health.check_zoom().status == "error"
+
+
+def test_check_zoom_s2s_requires_transcript_admin_scope_when_flag_on(env, monkeypatch, vault):
+    env(ZOOM_ENV)
+    connections.create("zoom", {"client_id": "b", "auth_mode": "s2s", "account_id": "a", "client_secret": "c"})
+    monkeypatch.setattr(
+        health.requests,
+        "post",
+        lambda *a, **k: FakeResponse({"expires_in": 3600, "scope": " ".join(sorted(health.ZOOM_SCOPES))}),
+    )
+    result = health.check_zoom()
+    assert result.status == "error"
+    assert health.ZOOM_TRANSCRIPT_ADMIN_SCOPE in result.detail
+
+
+def test_check_zoom_s2s_transcript_admin_scope_not_required_when_flag_off(env, monkeypatch, vault):
+    env(ZOOM_ENV)
+    connections.create(
+        "zoom",
+        {"client_id": "b", "auth_mode": "s2s", "account_id": "a", "client_secret": "c", "include_transcripts": "false"},
+    )
+    monkeypatch.setattr(
+        health.requests,
+        "post",
+        lambda *a, **k: FakeResponse({"expires_in": 3600, "scope": " ".join(sorted(health.ZOOM_SCOPES))}),
+    )
+    assert health.check_zoom().status == "ok"
+
+
+# --- Zoom OAuth mode: single-flight token, rotation, scope checks -----------------
+
+from pipeline import oauth_zoom  # noqa: E402
+
+ZOOM_USER_GRANTED = " ".join(sorted(health.ZOOM_USER_SCOPES | {health.ZOOM_TRANSCRIPT_SCOPE}))
+
+
+def _oauth_token_endpoint(monkeypatch, *, new_refresh="rt-rotated", access_token="at-1", expires_in=3600,
+                           scope=ZOOM_USER_GRANTED, status_code=200, body=None, delay_event=None, release_event=None):
+    """
+    Stubs oauth_zoom.requests.post (the token endpoint) and records every call.
+
+    delay_event/release_event let the concurrency test hold the first call open until both threads
+    are inside the critical section, so a race that skipped the lock would show up as two calls.
+    """
+    calls: list[dict] = []
+    lock = threading.Lock()
+
+    def fake_post(url, data=None, auth=None, timeout=None, **kwargs):
+        assert url == oauth_zoom.TOKEN_ENDPOINT
+        with lock:
+            calls.append({"data": data, "auth": auth})
+        if delay_event is not None:
+            delay_event.set()
+        if release_event is not None:
+            release_event.wait(timeout=5)
+        reply_body = body if body is not None else {
+            "access_token": access_token, "refresh_token": new_refresh, "expires_in": expires_in, "scope": scope,
+        }
+        return FakeResponse(reply_body, status_code=status_code)
+
+    monkeypatch.setattr(oauth_zoom.requests, "post", fake_post)
+    return calls
+
+
+def test_zoom_token_oauth_mode_refreshes_and_persists_before_returning(env, oauth_zoom_connection, monkeypatch):
+    env("")
+    calls = _oauth_token_endpoint(monkeypatch, new_refresh="rt-rotated", access_token="at-live")
+
+    token = health.zoom_token()
+
+    assert token == "at-live"
+    assert len(calls) == 1
+    assert connections.get_secret("zoom", "refresh_token") == "rt-rotated"
+
+
+def test_zoom_token_oauth_mode_caches_and_skips_second_post(env, oauth_zoom_connection, monkeypatch):
+    env("")
+    calls = _oauth_token_endpoint(monkeypatch)
+
+    first = health.zoom_token()
+    second = health.zoom_token()
+
+    assert first == second
+    assert len(calls) == 1
+
+
+def test_zoom_mode_reports_oauth_and_s2s(env, oauth_zoom_connection):
+    env("")
+    assert health.zoom_mode() == "oauth"
+
+
+def test_zoom_mode_s2s_without_stored_connection(env):
+    env(ZOOM_ENV)
+    assert health.zoom_mode() == "s2s"
+
+
+def test_zoom_token_oauth_not_signed_in_raises_ZoomAuthError(env, vault):
+    env("")
+    connections.create("zoom", {"client_id": "zcid", "auth_mode": "oauth", "client_secret": "zcsecret"})
+    with pytest.raises(health.ZoomAuthError) as info:
+        health.zoom_token()
+    assert "Sign in" in str(info.value)
+
+
+def test_zoom_token_oauth_invalid_grant_raises_ZoomAuthError(env, oauth_zoom_connection, monkeypatch):
+    env("")
+
+    def reject(*a, **k):
+        raise oauth_zoom.RefreshTokenRejected()
+
+    monkeypatch.setattr(oauth_zoom, "refresh", reject)
+    with pytest.raises(health.ZoomAuthError) as info:
+        health.zoom_token()
+    assert "sign in again" in str(info.value)
+
+
+def test_check_zoom_oauth_invalid_grant_reports_sign_in_again(env, oauth_zoom_connection, monkeypatch):
+    env("")
+
+    def reject(*a, **k):
+        raise oauth_zoom.RefreshTokenRejected()
+
+    monkeypatch.setattr(oauth_zoom, "refresh", reject)
+    result = health.check_zoom()
+    assert result.status == "error"
+    assert "sign in again" in result.detail
+
+
+def test_check_zoom_oauth_not_signed_in(env, vault):
+    env("")
+    connections.create("zoom", {"client_id": "zcid", "auth_mode": "oauth", "client_secret": "zcsecret"})
+    result = health.check_zoom()
+    assert result.status == "error"
+    assert "Sign in" in result.detail
+
+
+def test_check_zoom_oauth_ok_with_every_required_scope(env, oauth_zoom_connection, monkeypatch):
+    env("")
+    _oauth_token_endpoint(monkeypatch, scope=ZOOM_USER_GRANTED)
+    result = health.check_zoom()
+    assert result.status == "ok"
+    assert "signed in" in result.detail
+
+
+def test_check_zoom_oauth_missing_transcript_scope_when_flag_on(env, oauth_zoom_connection, monkeypatch):
+    env("")
+    granted = " ".join(sorted(health.ZOOM_USER_SCOPES))  # no transcript scope
+    _oauth_token_endpoint(monkeypatch, scope=granted)
+    result = health.check_zoom()
+    assert result.status == "error"
+    assert health.ZOOM_TRANSCRIPT_SCOPE in result.detail
+
+
+def test_check_zoom_oauth_transcript_scope_not_required_when_flag_off(env, vault, monkeypatch):
+    env("")
+    connections.create(
+        "zoom",
+        {
+            "client_id": "zcid", "client_secret": "zcsecret", "auth_mode": "oauth",
+            "refresh_token": "rt-initial", "include_transcripts": "false",
+        },
+    )
+    granted = " ".join(sorted(health.ZOOM_USER_SCOPES))
+    _oauth_token_endpoint(monkeypatch, scope=granted)
+    assert health.check_zoom().status == "ok"
+
+
+def test_zoom_token_oauth_transient_refresh_failure_is_not_ZoomAuthError(env, oauth_zoom_connection, monkeypatch):
+    env("")
+
+    def boom(*a, **k):
+        raise oauth_zoom.RefreshFailed()
+
+    monkeypatch.setattr(oauth_zoom, "refresh", boom)
+    with pytest.raises(oauth_zoom.RefreshFailed):
+        health.zoom_token()
+
+
+def test_check_zoom_oauth_transient_refresh_failure_does_not_say_sign_in_again(env, oauth_zoom_connection, monkeypatch):
+    env("")
+
+    def boom(*a, **k):
+        raise oauth_zoom.RefreshFailed()
+
+    monkeypatch.setattr(oauth_zoom, "refresh", boom)
+    result = health.check_zoom()
+    assert result.status == "error"
+    assert "sign in again" not in result.detail
+
+
+def test_zoom_token_oauth_no_secret_in_any_message(env, vault, monkeypatch):
+    env("")
+    connections.create(
+        "zoom", {"client_id": "zcid", "client_secret": "super-secret-abc", "auth_mode": "oauth", "refresh_token": "rt-super-secret"},
+    )
+
+    def reject(*a, **k):
+        raise oauth_zoom.RefreshTokenRejected()
+
+    monkeypatch.setattr(oauth_zoom, "refresh", reject)
+    result = health.check_zoom()
+    assert "super-secret-abc" not in result.detail
+    assert "rt-super-secret" not in result.detail
+    with pytest.raises(health.ZoomAuthError) as info:
+        health.zoom_token()
+    assert "super-secret-abc" not in str(info.value)
+    assert "rt-super-secret" not in str(info.value)
+
+
+def test_zoom_token_oauth_concurrent_calls_single_flight(env, oauth_zoom_connection, monkeypatch):
+    """Two threads call zoom_token() concurrently: exactly one POST, and the stored refresh_token
+    ends up the newest one — the other thread must see it via the cache, not a second refresh."""
+    env("")
+    entered = threading.Event()
+    release = threading.Event()
+    calls = _oauth_token_endpoint(
+        monkeypatch, new_refresh="rt-newest", access_token="at-newest",
+        delay_event=entered, release_event=release,
+    )
+
+    results = []
+    errors = []
+
+    def worker():
+        try:
+            results.append(health.zoom_token())
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    t1 = threading.Thread(target=worker)
+    t2 = threading.Thread(target=worker)
+    t1.start()
+    # Give the first thread a moment to be the one inside the critical section before starting the
+    # second; the second still has to block on the same threading.Lock either way.
+    entered.wait(timeout=5)
+    t2.start()
+    release.set()
+    t1.join(timeout=5)
+    t2.join(timeout=5)
+
+    assert not errors
+    assert len(calls) == 1
+    assert results == ["at-newest", "at-newest"]
+    assert connections.get_secret("zoom", "refresh_token") == "rt-newest"
 
 
 # --- Gmail auth -------------------------------------------------------------------

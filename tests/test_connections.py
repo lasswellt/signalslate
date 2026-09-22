@@ -113,6 +113,60 @@ def test_create_zoom_is_a_singleton_with_literal_label(vault):
         connections.create("zoom", {**ZOOM, "client_id": "another"})
 
 
+def test_create_zoom_oauth_needs_no_account_id_and_defaults_to_oauth_mode(vault):
+    view = connections.create("zoom", {"client_id": "zoomClient_Ex", "client_secret": ZOOM_SECRET})
+    assert view.config == {"client_id": "zoomClient_Ex"}
+    assert connections.zoom_auth_mode(view) == "oauth"
+    assert connections.zoom_include_transcripts(view) is True
+
+
+def test_zoom_auth_mode_is_s2s_when_account_id_is_set(vault):
+    view = connections.create("zoom", ZOOM)
+    assert connections.zoom_auth_mode(view) == "s2s"
+
+
+def test_zoom_explicit_s2s_without_account_id_is_rejected(vault):
+    with pytest.raises(InvalidField) as info:
+        connections.create("zoom", {"client_id": "c", "client_secret": ZOOM_SECRET, "auth_mode": "s2s"})
+    assert info.value.field == "account_id"
+    assert connections.list_connections() == []
+    connections.create("zoom", {"client_id": "c", "client_secret": ZOOM_SECRET, "auth_mode": "oauth"})
+    with pytest.raises(InvalidField) as info:
+        connections.update("zoom", config={"auth_mode": "s2s"})
+    assert info.value.field == "account_id"
+
+
+@pytest.mark.parametrize("mode", ["", "OAUTH", "paste_back", None, 1])
+def test_zoom_auth_mode_is_an_enum(vault, mode):
+    with pytest.raises(InvalidField) as info:
+        connections.create("zoom", {**ZOOM, "auth_mode": mode})
+    assert info.value.field == "auth_mode"
+
+
+@pytest.mark.parametrize("mode", ["", "paste_back", "popup", None, 1])
+def test_zoom_redirect_mode_only_accepts_callback(vault, mode):
+    with pytest.raises(InvalidField) as info:
+        connections.create("zoom", {**ZOOM, "redirect_mode": mode})
+    assert info.value.field == "redirect_mode"
+    view = connections.create("zoom", {**ZOOM, "redirect_mode": "callback"})
+    assert view.config["redirect_mode"] == "callback"
+
+
+@pytest.mark.parametrize("value", ["", "True", "1", None, 0])
+def test_zoom_include_transcripts_is_an_enum(vault, value):
+    with pytest.raises(InvalidField) as info:
+        connections.create("zoom", {**ZOOM, "include_transcripts": value})
+    assert info.value.field == "include_transcripts"
+
+
+def test_zoom_include_transcripts_defaults_true_and_can_be_set_false(vault):
+    default_view = connections.create("zoom", ZOOM)
+    assert "include_transcripts" not in default_view.config
+    assert connections.zoom_include_transcripts(default_view) is True
+    off_view = connections.update("zoom", config={"include_transcripts": "false"})
+    assert connections.zoom_include_transcripts(off_view) is False
+
+
 def test_create_slack(vault):
     view = connections.create("slack", SLACK)
     assert (view.id, view.label, view.config) == ("slack_work", "work", {"label": "work"})
@@ -338,8 +392,10 @@ def test_secret_values_must_be_clean_non_empty_strings(vault, bad):
 def test_missing_required_fields_are_named(vault):
     cases = [
         ("m365", {"alias": "a", "tenant_id": "t"}, "client_id"),
+        # account_id is optional (T-002: oauth mode has no account_id); client_id is zoom's only
+        # always-required config field now.
         ("zoom", {"account_id": "a", "client_id": "c"}, "client_secret"),
-        ("zoom", {"client_id": "c", "client_secret": ZOOM_SECRET}, "account_id"),
+        ("zoom", {"client_secret": ZOOM_SECRET}, "client_id"),
         ("slack", {"label": "work"}, "token"),
         ("slack", {"token": SLACK_TOKEN}, "label"),
         ("gmail", {"label": "p", "client_id": "c"}, "client_secret"),

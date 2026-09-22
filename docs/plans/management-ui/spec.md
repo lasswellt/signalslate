@@ -19,7 +19,7 @@ Let the owner manage everything the app collects from, in the browser: see every
 
 ## Out of scope
 - App login, user accounts, roles, or password reset (owner chose network or reverse-proxy protection).
-- Connections that are not M365, Zoom, Slack or Gmail (Todoist, reMarkable, Anthropic key management); Zoom and Slack OAuth (they use server-to-server credentials and tokens).
+- Connections that are not M365, Zoom, Slack or Gmail (Todoist, reMarkable, Anthropic key management); Slack OAuth (it uses a user token); Zoom OAuth moved to docs/plans/zoom-collector.
 - TLS, DNS, reverse-proxy or hostname setup (documented only; the owner's real hostname must never appear in a tracked file).
 - Phases 3 to 5 of the digest (synthesis, render, deliver) and any change to collector behavior.
 - Persisting pending sign-in flows across a restart (they live 15 minutes in memory), multi-process deployment, and encrypting the MSAL cache files (they stay 0600 files).

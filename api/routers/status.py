@@ -69,6 +69,8 @@ def get_system():
     callback_ready = health.public_base_url() is not None
     # Paste-back needs no public address; callback needs an https PUBLIC_BASE_URL to register.
     modes = ["paste_back", "callback"] if callback_ready else ["paste_back"]
+    # Zoom is a confidential client offering callback mode only, so it has no paste-back fallback.
+    zoom_modes = ["callback"] if callback_ready else []
     return {
         "secret_key_configured": health.secret_key_setting() is not None,
         "store_active": connections.get_vault() is not None,
@@ -78,6 +80,7 @@ def get_system():
         "oauth": {
             "google": {"modes": list(modes)},
             "microsoft": {"modes": list(modes)},
+            "zoom": {"modes": list(zoom_modes)},
             "wordpress": {"modes": list(modes)},
         },
     }

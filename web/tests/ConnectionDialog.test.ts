@@ -13,7 +13,7 @@ const SYSTEM: SystemInfo = {
   store_active: true,
   public_base_url_configured: false,
   web_origins: [],
-  oauth: { google: { modes: ['paste_back'] }, microsoft: { modes: ['paste_back'] } },
+  oauth: { google: { modes: ['paste_back'] }, microsoft: { modes: ['paste_back'] }, zoom: { modes: [] } },
 }
 
 // An invented value that must never be found anywhere it should not be.
@@ -156,7 +156,8 @@ describe('ConnectionDialog fields', () => {
     await mountDialog({ mode: 'create' })
     const expected: Record<string, string[]> = {
       m365: ['alias', 'tenant_id', 'client_id'],
-      zoom: ['account_id', 'client_id', 'client_secret'],
+      // zoom defaults to oauth mode on create, which hides account_id.
+      zoom: ['client_id', 'client_secret'],
       slack: ['label', 'token'],
       gmail: ['label', 'client_id', 'client_secret', 'redirect_mode'],
       namecheap: ['label', 'api_user', 'username', 'client_ip', 'api_key', 'sandbox', 'registrant_contact'],
@@ -211,6 +212,120 @@ describe('ConnectionDialog fields', () => {
     await mountDialog({ mode: 'edit', connection: connection({ origin: 'env' }) })
     expect(fieldNames()).toEqual([])
     expect($('env-note')?.textContent).toContain('authoritative')
+  })
+})
+
+describe('ConnectionDialog zoom auth mode', () => {
+  it('create defaults to oauth: hides account_id, shows the redirect block, and posts auth_mode/include_transcripts without account_id', async () => {
+    stubApi((call) => (call.method === 'POST' ? connection({ id: 'zoom', kind: 'zoom' }) : undefined))
+    await mountDialog({ mode: 'create' })
+    await click('kind-zoom')
+
+    expect(fieldNames()).toEqual(['client_id', 'client_secret'])
+    expect($('zoom-redirect-uri')?.textContent).toContain('/api/oauth/callback/zoom')
+    expect($('field-account_id')).toBeNull()
+    expect(body.textContent).not.toContain('refresh_token')
+    expect($('field-refresh_token')).toBeNull()
+
+    await type('client_id', 'cid-1')
+    await type('client_secret', OTHER_SECRET)
+    await submit()
+
+    expect(calls.find((call) => call.method === 'POST')?.body).toEqual({
+      kind: 'zoom',
+      auth_mode: 'oauth',
+      client_id: 'cid-1',
+      client_secret: OTHER_SECRET,
+      include_transcripts: true,
+    })
+  })
+
+  it('switching to s2s shows account_id, hides the redirect block, and posts account_id', async () => {
+    stubApi((call) => (call.method === 'POST' ? connection({ id: 'zoom', kind: 'zoom' }) : undefined))
+    await mountDialog({ mode: 'create' })
+    await click('kind-zoom')
+    await click('zoom-auth-s2s')
+
+    expect(fieldNames()).toEqual(['account_id', 'client_id', 'client_secret'])
+    expect($('zoom-redirect-uri')).toBeNull()
+
+    await type('account_id', 'acct-9')
+    await type('client_id', 'cid-1')
+    await type('client_secret', OTHER_SECRET)
+    await submit()
+
+    expect(calls.find((call) => call.method === 'POST')?.body).toEqual({
+      kind: 'zoom',
+      auth_mode: 's2s',
+      account_id: 'acct-9',
+      client_id: 'cid-1',
+      client_secret: OTHER_SECRET,
+      include_transcripts: true,
+    })
+  })
+
+  it('warns when no public base URL is configured', async () => {
+    await mountDialog({ mode: 'create' })
+    await click('kind-zoom')
+    expect($('zoom-callback-missing')?.textContent).toContain('https PUBLIC_BASE_URL')
+  })
+
+  it('does not warn once a public base URL is configured', async () => {
+    system = { ...SYSTEM, public_base_url_configured: true }
+    await mountDialog({ mode: 'create' })
+    await click('kind-zoom')
+    expect($('zoom-callback-missing')).toBeNull()
+  })
+
+  it('unchecking include transcripts posts include_transcripts: false', async () => {
+    stubApi((call) => (call.method === 'POST' ? connection({ id: 'zoom', kind: 'zoom' }) : undefined))
+    await mountDialog({ mode: 'create' })
+    await click('kind-zoom')
+    await click('zoom-include-transcripts')
+    await type('client_id', 'cid-1')
+    await type('client_secret', OTHER_SECRET)
+    await submit()
+
+    expect(calls.find((call) => call.method === 'POST')?.body).toMatchObject({ include_transcripts: false })
+  })
+
+  it('edit initialises auth mode from config.auth_mode and the transcripts toggle from config.include_transcripts', async () => {
+    const oauthConn = connection({
+      id: 'zoom',
+      kind: 'zoom',
+      config: { client_id: 'cid-1', auth_mode: 'oauth', account_id: 'acct-legacy', include_transcripts: 'false' },
+      secrets_set: ['client_secret'],
+    })
+    stubApi((call) => (call.method === 'PATCH' ? oauthConn : undefined))
+    await mountDialog({ mode: 'edit', connection: oauthConn })
+
+    // An explicit auth_mode of oauth wins even though account_id is set on the stored config.
+    expect(fieldNames()).toEqual(['client_id'])
+    expect($('zoom-redirect-uri')).not.toBeNull()
+
+    await click('zoom-auth-s2s')
+    expect(fieldNames()).toEqual(['account_id', 'client_id'])
+
+    await type('account_id', 'acct-new')
+    await submit()
+
+    expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({
+      config: { auth_mode: 's2s', account_id: 'acct-new' },
+    })
+  })
+
+  it('edit defaults auth mode to s2s from a legacy config that has account_id but no auth_mode', async () => {
+    await mountDialog({ mode: 'edit', connection: ZOOM })
+    expect(fieldNames()).toEqual(['account_id', 'client_id'])
+    expect($('zoom-redirect-uri')).toBeNull()
+  })
+
+  it('never renders refresh_token as an input for zoom', async () => {
+    await mountDialog({ mode: 'create' })
+    await click('kind-zoom')
+    expect($('field-refresh_token')).toBeNull()
+    await click('zoom-auth-s2s')
+    expect($('field-refresh_token')).toBeNull()
   })
 })
 

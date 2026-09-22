@@ -18,6 +18,7 @@ for every ciphertext the store ever held (snapshotted after each request, so a c
 later PATCH replaced is still looked for), and the persisted SQLite and config files are searched
 for the plaintext. All secret values are invented.
 """
+import logging
 import sys
 import time
 from contextlib import contextmanager
@@ -25,6 +26,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Iterator, Optional
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
@@ -37,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import api.main as api_main  # noqa: E402
 from api.routers import collectors as collectors_router  # noqa: E402
 from api.routers import config as config_router  # noqa: E402
-from pipeline import collect, config_store, connections, crypto, db, health, runner  # noqa: E402
+from pipeline import collect, config_store, connections, crypto, db, health, oauth_zoom, runner  # noqa: E402
 from pipeline.clock import utcnow  # noqa: E402
 from pipeline.collectors import CollectionResult, Item  # noqa: E402
 from pipeline.redact import MARKER  # noqa: E402
@@ -62,6 +64,17 @@ PASTED_VALUE = "xoxb-e2e-PASTED-value"
 PASTED_KEY = "xoxb-e2e-PASTED-key"
 PASTED_PATH = "xoxb-e2e-PASTED-path"
 
+# Zoom OAuth: a distinct prefix from ZOOM_SECRET/STALE_ZOOM above so no value here is ever a
+# substring of another secret used elsewhere in this file.
+ZOOM_PUBLIC_BASE_URL = "https://hook.e2e.example.com"
+ZOOM_OAUTH_CLIENT_ID = "zoom-oauth-client-e2e"
+ZOOM_OAUTH_CLIENT_SECRET = "zoom-oauth-e2e-SECRET-client"
+ZOOM_AUTH_CODE = "zoom-oauth-e2e-SECRET-authcode"
+ZOOM_REFRESH_INITIAL = "zoom-oauth-e2e-SECRET-refresh-initial"
+ZOOM_REFRESH_ROTATED = "zoom-oauth-e2e-SECRET-refresh-rotated"
+ZOOM_ACCESS_INITIAL = "zoom-oauth-e2e-SECRET-access-initial"
+ZOOM_ACCESS_ROTATED = "zoom-oauth-e2e-SECRET-access-rotated"
+
 SECRETS: dict[str, str] = {
     "slack work token": SLACK_WORK_TOKEN,
     "slack old token": SLACK_OLD_TOKEN,
@@ -76,6 +89,12 @@ SECRETS: dict[str, str] = {
     "pasted value": PASTED_VALUE,
     "pasted key name": PASTED_KEY,
     "pasted path": PASTED_PATH,
+    "zoom oauth client secret": ZOOM_OAUTH_CLIENT_SECRET,
+    "zoom oauth auth code": ZOOM_AUTH_CODE,
+    "zoom oauth refresh initial": ZOOM_REFRESH_INITIAL,
+    "zoom oauth refresh rotated": ZOOM_REFRESH_ROTATED,
+    "zoom oauth access initial": ZOOM_ACCESS_INITIAL,
+    "zoom oauth access rotated": ZOOM_ACCESS_ROTATED,
 }
 
 GMAIL_CLIENT_ID = "gmail-client-e2e.apps.example.com"
@@ -100,6 +119,17 @@ CHANGED_ENV_FILE = (
 )
 
 CONNECTION_FIELDS = {"id", "kind", "label", "origin", "config", "secrets_set", "active", "health"}
+
+# Like ENV_FILE, but with no ZOOM_* line: the store starts with no Zoom connection at all, so the
+# UI can create one as id "zoom" (a Zoom connection is always a singleton) without hitting the
+# duplicate_connection 409 the s2s-seeded ENV_FILE above would cause.
+ZOOM_OAUTH_ENV_FILE = (
+    f"PUBLIC_BASE_URL={ZOOM_PUBLIC_BASE_URL}\n"
+    f"SLACK_WORK_TOKEN={SLACK_WORK_TOKEN}\n"
+    f"GMAIL_CLIENT_ID={GMAIL_CLIENT_ID}\n"
+    f"GMAIL_CLIENT_SECRET={GMAIL_SECRET}\n"
+    f"GMAIL_PERSONAL_REFRESH_TOKEN={GMAIL_REFRESH_OLD}\n"
+)
 
 
 # --- recording ------------------------------------------------------------------------------------
@@ -198,6 +228,10 @@ class Recorder:
     def options(self, url: str, **kwargs: Any) -> httpx.Response:
         return self.request("OPTIONS", url, **kwargs)
 
+    @property
+    def cookies(self) -> httpx.Cookies:
+        return self._client.cookies
+
 
 # --- the externals --------------------------------------------------------------------------------
 
@@ -213,10 +247,64 @@ class _SlackReply:
         return {"ok": False, "error": "invalid_auth"}
 
 
+class _FakeZoomResponse:
+    def __init__(self, status_code: int, body: dict) -> None:
+        self.status_code = status_code
+        self._body = body
+
+    def json(self) -> dict:
+        return self._body
+
+
+@dataclass
+class ZoomTokenStub:
+    """
+    Stands in for https://zoom.us/oauth/token: the authorization_code exchange (finish_callback)
+    and the refresh_token rotation (health.check_zoom -> oauth_zoom.refresh). Zoom always rotates
+    the refresh token on use, so every successful call hands back a value distinct from what it
+    was given.
+    """
+
+    granted_scope: str = field(default_factory=lambda: " ".join(sorted(health.ZOOM_USER_SCOPES | {health.ZOOM_TRANSCRIPT_SCOPE})))
+    refresh_status: int = 200
+    refresh_error: str = "invalid_grant"
+    exchange_calls: list[dict] = field(default_factory=list)
+    refresh_calls: list[dict] = field(default_factory=list)
+
+    def post(self, data: dict, auth: Any) -> _FakeZoomResponse:
+        grant = data.get("grant_type")
+        if grant == "authorization_code":
+            self.exchange_calls.append({"data": data, "auth": auth})
+            return _FakeZoomResponse(
+                200,
+                {
+                    "refresh_token": ZOOM_REFRESH_INITIAL,
+                    "access_token": ZOOM_ACCESS_INITIAL,
+                    "expires_in": 3600,
+                    "scope": self.granted_scope,
+                },
+            )
+        if grant == "refresh_token":
+            self.refresh_calls.append({"data": data, "auth": auth})
+            if self.refresh_status != 200:
+                return _FakeZoomResponse(self.refresh_status, {"error": self.refresh_error})
+            return _FakeZoomResponse(
+                200,
+                {
+                    "refresh_token": ZOOM_REFRESH_ROTATED,
+                    "access_token": ZOOM_ACCESS_ROTATED,
+                    "expires_in": 3600,
+                    "scope": self.granted_scope,
+                },
+            )
+        raise AssertionError(f"unexpected zoom grant_type {grant!r}")
+
+
 class Network:
     """
-    Stands in for Slack and for the collectors' network layer. It reads the token from the live env
-    exactly as a collector would, so a token that never reached the overlay fails the test.
+    Stands in for Slack, Zoom's OAuth token endpoint, and for the collectors' network layer. It
+    reads the token from the live env exactly as a collector would, so a token that never reached
+    the overlay fails the test.
     """
 
     def __init__(self) -> None:
@@ -224,14 +312,17 @@ class Network:
         self.slack_tokens: list[str] = []
         self.unexpected: list[str] = []
         self.dispatched: list[tuple[str, Optional[str]]] = []
+        self.zoom: Optional[ZoomTokenStub] = None
 
-    def post(self, url: str, *args: Any, **kwargs: Any) -> _SlackReply:
-        if url != SLACK_AUTH_TEST:
-            self.unexpected.append(url)
-            raise requests.ConnectionError("no network in tests")
-        token = kwargs["headers"]["Authorization"].removeprefix("Bearer ")
-        self.slack_tokens.append(token)
-        return _SlackReply(self.valid_tokens is None or token in self.valid_tokens)
+    def post(self, url: str, *args: Any, **kwargs: Any) -> Any:
+        if url == SLACK_AUTH_TEST:
+            token = kwargs["headers"]["Authorization"].removeprefix("Bearer ")
+            self.slack_tokens.append(token)
+            return _SlackReply(self.valid_tokens is None or token in self.valid_tokens)
+        if url == oauth_zoom.TOKEN_ENDPOINT and self.zoom is not None:
+            return self.zoom.post(kwargs.get("data") or {}, kwargs.get("auth"))
+        self.unexpected.append(url)
+        raise requests.ConnectionError("no network in tests")
 
     def dispatch(self, source: str, since: Any, until: Any) -> CollectionResult:
         token = health.slack_workspaces().get(source.removeprefix("slack_")) if source.startswith("slack_") else None
@@ -272,8 +363,11 @@ class World:
         health.set_env_overlay_provider(None, None)
 
     @contextmanager
-    def app(self, headers: Optional[dict[str, str]] = None) -> Iterator[Recorder]:
-        with TestClient(api_main.app, headers=WRITE if headers is None else headers) as client:
+    def app(self, headers: Optional[dict[str, str]] = None, *, base_url: str = "http://testserver") -> Iterator[Recorder]:
+        # base_url="https://..." is what the Zoom OAuth tests need: the nonce cookie is Secure
+        # whenever PUBLIC_BASE_URL is https (api.routers.oauth._secure()), and httpx's cookie jar
+        # will not replay a Secure cookie back over a plain http:// connection.
+        with TestClient(api_main.app, headers=WRITE if headers is None else headers, base_url=base_url) as client:
             yield Recorder(client, self.capture)
 
 
@@ -373,6 +467,56 @@ def store_state() -> dict[str, Any]:
         "cursors": cursors,
         "config": path.read_text() if path.exists() else None,
     }
+
+
+def assert_no_secrets_in_logs(caplog: pytest.LogCaptureFixture, needles: dict[str, str]) -> None:
+    """
+    The app's own log records carry no secret. httpx/httpcore/asyncio are the test client's own
+    request-echo logging (it prints the URL it just called, code and all) and is not the app.
+    """
+    for record in caplog.records:
+        if record.name.startswith(("httpx", "httpcore", "asyncio")):
+            continue
+        message = record.getMessage()
+        for label, value in needles.items():
+            assert value not in message, f"{label} leaked into a log record: {record.name} {message[:200]}"
+
+
+def create_zoom_oauth(client: Recorder) -> dict[str, Any]:
+    created = client.post(
+        "/api/connections",
+        json={
+            "kind": "zoom",
+            "auth_mode": "oauth",
+            "client_id": ZOOM_OAUTH_CLIENT_ID,
+            "client_secret": ZOOM_OAUTH_CLIENT_SECRET,
+            "include_transcripts": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+    return created.json()
+
+
+def sign_in_zoom(client: Recorder, code: str = ZOOM_AUTH_CODE) -> str:
+    """Runs start + callback for the "zoom" connection; returns the state Zoom's redirect carried."""
+    started = client.post("/api/oauth/zoom/start", json={"connection_id": "zoom", "mode": "callback"})
+    assert started.status_code == 200, started.text
+    body = started.json()
+    assert body["auth_url"].startswith(f"{oauth_zoom.AUTHORIZE_ENDPOINT}?")
+    qs = parse_qs(urlsplit(body["auth_url"]).query)
+    assert qs["redirect_uri"] == [f"{ZOOM_PUBLIC_BASE_URL}/api/oauth/callback/zoom"]
+    state = qs["state"][0]
+    cookie_name = f"ss_oauth_{body['flow_id']}"
+    assert cookie_name in client.cookies
+
+    callback = client.get(f"/api/oauth/callback/zoom?code={code}&state={state}", follow_redirects=False)
+    assert callback.status_code == 302, callback.text
+    assert callback.headers["location"] == f"{ALLOWED_ORIGIN}/connections?oauth=ok"
+    assert any(
+        line.startswith(f"{cookie_name}=") and "Max-Age=0" in line
+        for line in callback.headers.get_list("set-cookie")
+    )
+    return state
 
 
 def poll_dry_run(client: Recorder, job_id: str) -> dict[str, Any]:
@@ -831,3 +975,161 @@ def test_without_a_key_the_store_is_inactive_secret_writes_get_503_and_env_colle
         assert store_state()["connections"] == []
 
     world.capture.assert_clean(files=True)
+
+
+# --- 8: Zoom OAuth ----------------------------------------------------------------------------
+
+
+def zoom_isolated(world: World) -> None:
+    """
+    health.check_zoom's refresh path uses a module-level cross-process lock file and an in-process
+    token cache computed once at import time from the real data/ dir (T-005/T-010, see
+    pipeline.health.ZOOM_REFRESH_LOCK and _zoom_cache); world's db.DB_PATH patch does not retarget
+    either, so every test that calls the Zoom test endpoint must isolate them itself.
+    """
+    world.monkeypatch.setattr(health, "ZOOM_REFRESH_LOCK", world.home / "zoom_refresh.lock")
+    world.monkeypatch.setattr(health, "_zoom_cache", None)
+
+
+def test_zoom_oauth_create_start_and_callback_sign_in_store_only_the_refresh_token(world, caplog):
+    caplog.set_level(logging.DEBUG)
+    world.enable_key()
+    zoom_isolated(world)
+    world.write_env(ZOOM_OAUTH_ENV_FILE)
+    world.net.zoom = ZoomTokenStub()
+    with world.app(base_url="https://testserver") as client:
+        assert client.get("/api/system").json()["oauth"]["zoom"]["modes"] == ["callback"]
+
+        created = create_zoom_oauth(client)
+        assert set(created) == CONNECTION_FIELDS
+        assert (created["id"], created["origin"], created["active"]) == ("zoom", "ui", False)
+        assert created["config"] == {
+            "client_id": ZOOM_OAUTH_CLIENT_ID,
+            "auth_mode": "oauth",
+            "include_transcripts": "true",
+        }
+        assert created["secrets_set"] == ["client_secret"]
+        assert toggles(client)["zoom"] is False
+
+        paste_refused = client.post("/api/oauth/zoom/paste", json={"flow_id": "whatever", "url": "http://x/?state=s&code=c"})
+        assert paste_refused.status_code in (400, 404)  # a real flow_id is not needed to prove paste is refused
+
+        paste_back = client.post("/api/oauth/zoom/start", json={"connection_id": "zoom", "mode": "paste_back"})
+        assert paste_back.status_code == 400
+        assert paste_back.json()["detail"]["code"] == "invalid_mode"
+
+        sign_in_zoom(client)
+
+        assert len(world.net.zoom.exchange_calls) == 1
+        exchange = world.net.zoom.exchange_calls[0]
+        assert exchange["data"]["code"] == ZOOM_AUTH_CODE
+        assert exchange["data"]["redirect_uri"] == f"{ZOOM_PUBLIC_BASE_URL}/api/oauth/callback/zoom"
+        assert exchange["auth"] == (ZOOM_OAUTH_CLIENT_ID, ZOOM_OAUTH_CLIENT_SECRET)
+
+        assert connections.get_secret("zoom", "refresh_token") == ZOOM_REFRESH_INITIAL
+        after = rows_by_id(client)["zoom"]
+        assert after["secrets_set"] == ["client_secret", "refresh_token"]
+        assert after["active"] is False  # signing in does not switch it on
+
+    world.capture.assert_clean(files=True)
+    assert_no_secrets_in_logs(caplog, world.capture.needles())
+
+
+def test_zoom_oauth_test_button_rotates_and_persists_the_refresh_token(world, caplog):
+    caplog.set_level(logging.DEBUG)
+    world.enable_key()
+    zoom_isolated(world)
+    world.write_env(ZOOM_OAUTH_ENV_FILE)
+    world.net.zoom = ZoomTokenStub()
+    with world.app(base_url="https://testserver") as client:
+        create_zoom_oauth(client)
+        sign_in_zoom(client)
+        assert connections.get_secret("zoom", "refresh_token") == ZOOM_REFRESH_INITIAL
+
+        tested = client.post("/api/connections/zoom/test")
+        assert tested.status_code == 200
+        result = tested.json()
+        assert result["status"] == "ok"
+        assert "signed in" in result["detail"]
+
+        assert len(world.net.zoom.refresh_calls) == 1
+        refreshed = world.net.zoom.refresh_calls[0]
+        assert refreshed["data"]["refresh_token"] == ZOOM_REFRESH_INITIAL
+        assert refreshed["auth"] == (ZOOM_OAUTH_CLIENT_ID, ZOOM_OAUTH_CLIENT_SECRET)
+        assert connections.get_secret("zoom", "refresh_token") == ZOOM_REFRESH_ROTATED
+
+        still_tested = client.post("/api/connections/zoom/test")
+        assert still_tested.status_code == 200
+
+    world.capture.assert_clean(files=True)
+    assert_no_secrets_in_logs(caplog, world.capture.needles())
+
+
+def test_zoom_oauth_missing_scope_on_test_names_the_missing_scope(world, caplog):
+    caplog.set_level(logging.DEBUG)
+    world.enable_key()
+    zoom_isolated(world)
+    world.write_env(ZOOM_OAUTH_ENV_FILE)
+    world.net.zoom = ZoomTokenStub(granted_scope=" ".join(sorted(health.ZOOM_USER_SCOPES)))  # no transcript scope
+    with world.app(base_url="https://testserver") as client:
+        create_zoom_oauth(client)
+        sign_in_zoom(client)
+
+        tested = client.post("/api/connections/zoom/test")
+        assert tested.status_code == 200
+        result = tested.json()
+        assert result["status"] == "error"
+        assert health.ZOOM_TRANSCRIPT_SCOPE in result["detail"]
+
+    world.capture.assert_clean(files=True)
+    assert_no_secrets_in_logs(caplog, world.capture.needles())
+
+
+def test_zoom_oauth_test_button_invalid_grant_reports_sign_in_again(world, caplog):
+    caplog.set_level(logging.DEBUG)
+    world.enable_key()
+    zoom_isolated(world)
+    world.write_env(ZOOM_OAUTH_ENV_FILE)
+    world.net.zoom = ZoomTokenStub()
+    with world.app(base_url="https://testserver") as client:
+        create_zoom_oauth(client)
+        sign_in_zoom(client)
+
+        world.net.zoom.refresh_status = 400
+        world.net.zoom.refresh_error = "invalid_grant"
+        tested = client.post("/api/connections/zoom/test")
+
+        assert tested.status_code == 200
+        result = tested.json()
+        assert result["status"] == "error"
+        assert "sign in again" in result["detail"]
+        # A rejected refresh cannot be persisted (Zoom rotates on use; nothing to rotate to here).
+        assert connections.get_secret("zoom", "refresh_token") == ZOOM_REFRESH_INITIAL
+
+    world.capture.assert_clean(files=True)
+    assert_no_secrets_in_logs(caplog, world.capture.needles())
+
+
+def test_zoom_oauth_env_s2s_seed_keeps_its_effective_auth_mode_and_id(world, caplog):
+    """Unchanged behaviour: a .env with ZOOM_ACCOUNT_ID/ZOOM_CLIENT_ID/ZOOM_CLIENT_SECRET (the
+    default ENV_FILE, written by the world fixture) seeds connection id "zoom", origin "env", with
+    no browser sign-in on offer and an effective auth_mode of s2s even though config never says so."""
+    caplog.set_level(logging.DEBUG)
+    world.enable_key()
+    zoom_isolated(world)
+    with world.app() as client:
+        assert client.get("/api/system").json()["oauth"]["zoom"]["modes"] == []  # no PUBLIC_BASE_URL
+
+        rows = rows_by_id(client)
+        assert rows["zoom"]["origin"] == "env"
+        assert rows["zoom"]["config"] == {"account_id": "acct_E2eExample", "client_id": "zoomClientE2e"}
+        assert "auth_mode" not in rows["zoom"]["config"]
+        zoom_view = connections.get("zoom")
+        assert zoom_view is not None
+        assert connections.zoom_auth_mode(zoom_view) == "s2s"
+
+        start_refused = client.post("/api/oauth/zoom/start", json={"connection_id": "zoom", "mode": "callback"})
+        assert start_refused.status_code == 400  # no PUBLIC_BASE_URL: callback_unavailable
+
+    world.capture.assert_clean(files=True)
+    assert_no_secrets_in_logs(caplog, world.capture.needles())

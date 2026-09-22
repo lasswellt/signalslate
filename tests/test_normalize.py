@@ -20,6 +20,7 @@ from pipeline.normalize import (
     PayloadError,
     normalize,
     normalize_gmail,
+    normalize_zoom,
     strip_quoted_reply,
     truncate,
 )
@@ -272,3 +273,150 @@ def test_normalize_gmail_collector_truncation_flag_is_carried_through():
 
 def test_normalize_gmail_short_body_from_untruncated_collector_is_not_flagged():
     assert item_from(flattened(bodyText="short body", bodyTruncated=False)).body_truncated is False
+
+
+# --- Zoom adapter ------------------------------------------------------------------------------
+
+
+ZOOM_OCCURRED_AT = datetime(2026, 9, 20, 15, 0, 0)
+
+
+def zoom_payload(**overrides) -> dict:
+    payload = {
+        "topic": "Weekly sync",
+        "start_time": "2026-09-20T15:00:00Z",
+        "end_time": "2026-09-20T15:30:00Z",
+        "host_email": "host@example.com",
+        "hosted": True,
+        "summary_content": "Discussed roadmap and next steps.",
+        "summary_doc_url": "https://zoom.us/docs/abc123",
+        "summary_available": True,
+        "participants": [
+            {"name": "Host Person", "email": "host@example.com"},
+            {"name": "Attendee One", "email": "attendee1@example.com"},
+            {"name": "No Email Attendee", "email": None},
+        ],
+    }
+    payload.update(overrides)
+    return payload
+
+
+def zoom_item(**overrides) -> NormalizedItem:
+    return normalize_zoom("zoom", "meeting-uuid-1", ZOOM_OCCURRED_AT, zoom_payload(**overrides))
+
+
+def test_normalize_zoom_hosted_meeting_maps_scalar_fields():
+    item = zoom_item()
+
+    assert item.id == "zoom:meeting-uuid-1"
+    assert item.source == "zoom"
+    assert item.kind == "meeting"
+    assert item.occurred_at == ZOOM_OCCURRED_AT
+    assert item.title == "Weekly sync"
+    assert item.body_text == "Discussed roadmap and next steps."
+    assert item.body_truncated is False
+    assert item.thread_key is None
+    assert item.direction == "inbound"
+    assert item.is_unread is False
+    assert item.is_bulk is False
+    assert item.attachments == []
+    assert item.raw_ref == "meeting-uuid-1"
+    assert item.permalink == "https://zoom.us/docs/abc123"
+    assert item.trust == "untrusted_third_party"
+
+
+def test_normalize_zoom_participants_have_host_and_attendee_roles_and_dedupe_host():
+    item = zoom_item()
+
+    assert [(p.role, p.name, p.address) for p in item.participants] == [
+        ("host", "", "host@example.com"),
+        ("attendee", "Attendee One", "attendee1@example.com"),
+    ]
+
+
+def test_normalize_zoom_attendee_without_email_is_dropped():
+    item = zoom_item(host_email=None, participants=[{"name": "No Email", "email": None}])
+
+    assert item.participants == []
+
+
+def test_normalize_zoom_labels_hosted_with_summary():
+    item = zoom_item()
+
+    assert item.labels == ["zoom", "hosted"]
+
+
+def test_normalize_zoom_labels_not_host_no_summary():
+    item = zoom_item(
+        hosted=False,
+        participants=[],
+        summary_available=False,
+        summary_unavailable_reason="not_host",
+        transcript_available=False,
+        transcript_unavailable_reason="not_host",
+    )
+
+    assert item.labels == ["zoom", "no-summary", "attended"]
+    assert item.body_text == "No AI Companion summary available. (you did not host this meeting)"
+
+
+def test_normalize_zoom_labels_hosted_missing_summary_not_flagged_not_host():
+    item = zoom_item(summary_available=False, summary_content=None, summary_unavailable_reason=None)
+
+    assert item.labels == ["zoom", "no-summary", "hosted"]
+    assert item.body_text == "No AI Companion summary available."
+
+
+def test_normalize_zoom_labels_include_transcript_when_available():
+    item = zoom_item(transcript_available=True, transcript_text="Speaker: hello", transcript_truncated=False)
+
+    assert item.labels == ["zoom", "hosted", "transcript"]
+    assert "Transcript excerpt:\nSpeaker: hello" in item.body_text
+
+
+def test_normalize_zoom_transcript_truncated_flag_carries_through_even_when_body_fits():
+    item = zoom_item(transcript_available=True, transcript_text="short excerpt", transcript_truncated=True)
+
+    assert item.body_truncated is True
+
+
+def test_normalize_zoom_body_is_capped_and_flagged_truncated():
+    item = zoom_item(summary_content="word " * 1000)
+
+    assert len(item.body_text) <= NORMALIZED_BODY_CAP
+    assert item.body_truncated is True
+
+
+def test_normalize_zoom_missing_topic_falls_back_to_placeholder_title():
+    assert zoom_item(topic=None).title == "Zoom meeting"
+    assert zoom_item(topic="   ").title == "Zoom meeting"
+
+
+def test_normalize_zoom_no_host_email_has_no_host_participant():
+    item = zoom_item(host_email=None, participants=[{"name": "Attendee One", "email": "attendee1@example.com"}])
+
+    assert [p.role for p in item.participants] == ["attendee"]
+
+
+def test_normalize_zoom_missing_summary_doc_url_has_no_permalink():
+    assert zoom_item(summary_doc_url=None).permalink is None
+
+
+def test_normalize_dispatches_zoom_source_with_dict_payload():
+    item = normalize("zoom", "meeting", "meeting-uuid-1", ZOOM_OCCURRED_AT, zoom_payload())
+
+    assert item == zoom_item()
+    assert item.kind == "meeting"
+
+
+def test_normalize_accepts_zoom_payload_as_json_string():
+    payload = zoom_payload()
+
+    from_string = normalize("zoom", "meeting", "meeting-uuid-1", ZOOM_OCCURRED_AT, json.dumps(payload))
+
+    assert from_string == normalize("zoom", "meeting", "meeting-uuid-1", ZOOM_OCCURRED_AT, payload)
+
+
+def test_normalize_unknown_source_still_raises_no_adapter_error():
+    with pytest.raises(NoAdapterError, match="slack_x"):
+        normalize("slack_x", "message", "m1", ZOOM_OCCURRED_AT, {})

@@ -1,6 +1,7 @@
 """
-Browser sign-in routes for Gmail (provider google), Microsoft 365 (provider microsoft) and
-WordPress.com (provider wordpress) (docs/_research/2026-09-21_management-ui.md section 6, RFC 9700).
+Browser sign-in routes for Gmail (provider google), Microsoft 365 (provider microsoft), Zoom
+(provider zoom) and WordPress.com (provider wordpress)
+(docs/_research/2026-09-21_management-ui.md section 6, RFC 9700).
 
 Design decisions:
 
@@ -46,7 +47,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from api.routers.connections import ConnectionOut, _out_for
 from api.security import normalize_origin
 from api.serialize import iso_z
-from pipeline import connections, health, oauth_gmail, oauth_m365, oauth_wordpress
+from pipeline import connections, health, oauth_gmail, oauth_m365, oauth_wordpress, oauth_zoom
 from pipeline.clock import utcnow
 from pipeline.crypto import SecretDecryptError, SecretKeyMissing
 from pipeline.oauth_flows import (
@@ -73,7 +74,7 @@ COOKIE_PATH = "/api/oauth"
 _NO_STORE = {"Cache-Control": "no-store"}
 
 # The connection kind each provider path signs in.
-_KIND_FOR_PROVIDER = {"google": "gmail", "microsoft": "m365", "wordpress": "wordpress"}
+_KIND_FOR_PROVIDER = {"google": "gmail", "microsoft": "m365", "zoom": "zoom", "wordpress": "wordpress"}
 
 # Bound on what one callback will read from the query string; the provider modules only compare
 # `error` to a constant and hand `code` to the token endpoint.
@@ -178,12 +179,18 @@ _HANDLED = (FlowError, connections.ConnectionError, SecretKeyMissing, SecretDecr
 
 
 def _start(provider: str, connection_id: str, mode: str) -> oauth_gmail.StartResult:
+    # provider is always a key of _KIND_FOR_PROVIDER by the time this is called (both callers check
+    # first); the final raise keeps an unknown provider from ever falling through to a real flow.
     base = health.public_base_url()
     if provider == "google":
         return oauth_gmail.start(connection_id, mode, store=FLOWS, public_base_url=base)
+    if provider == "microsoft":
+        return oauth_m365.start(connection_id, mode, store=FLOWS, public_base_url=base)
+    if provider == "zoom":
+        return oauth_zoom.start(connection_id, mode, store=FLOWS, public_base_url=base)
     if provider == "wordpress":
         return oauth_wordpress.start(connection_id, mode, store=FLOWS, public_base_url=base)
-    return oauth_m365.start(connection_id, mode, store=FLOWS, public_base_url=base)
+    raise AssertionError(f"unhandled provider {provider!r}")
 
 
 def _finish_paste(
@@ -191,9 +198,15 @@ def _finish_paste(
 ) -> Union[connections.ConnectionView, oauth_m365.FinishResult]:
     if provider == "google":
         return oauth_gmail.finish_paste(FLOWS, flow_id, url, nonce)
+    if provider == "microsoft":
+        return oauth_m365.finish_paste(FLOWS, flow_id, url, nonce)
+    if provider == "zoom":
+        # Zoom is a confidential client offering callback mode only; there is no oauth_zoom.finish_paste.
+        # Raised without touching the flow or its nonce cookie, same as a paste_back start would raise.
+        raise oauth_zoom.PasteBackNotSupported()
     if provider == "wordpress":
         return oauth_wordpress.finish_paste(FLOWS, flow_id, url, nonce)
-    return oauth_m365.finish_paste(FLOWS, flow_id, url, nonce)
+    raise AssertionError(f"unhandled provider {provider!r}")
 
 
 def _finish_callback(
@@ -201,9 +214,13 @@ def _finish_callback(
 ) -> object:
     if provider == "google":
         return oauth_gmail.finish_callback(FLOWS, state, code, nonce, error)
+    if provider == "microsoft":
+        return oauth_m365.finish_callback(FLOWS, state, code, nonce, error)
+    if provider == "zoom":
+        return oauth_zoom.finish_callback(FLOWS, state, code, nonce, error)
     if provider == "wordpress":
         return oauth_wordpress.finish_callback(FLOWS, state, code, nonce, error)
-    return oauth_m365.finish_callback(FLOWS, state, code, nonce, error)
+    raise AssertionError(f"unhandled provider {provider!r}")
 
 
 def _secure() -> bool:

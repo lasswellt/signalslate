@@ -15,17 +15,17 @@ const PASTE_ONLY: SystemInfo = {
   store_active: true,
   public_base_url_configured: false,
   web_origins: [],
-  oauth: { google: { modes: ['paste_back'] }, microsoft: { modes: ['paste_back'] } },
+  oauth: { google: { modes: ['paste_back'] }, microsoft: { modes: ['paste_back'] }, zoom: { modes: [] } },
 }
 const WITH_CALLBACK: SystemInfo = {
   ...PASTE_ONLY,
   public_base_url_configured: true,
-  oauth: { google: { modes: ['paste_back', 'callback'] }, microsoft: { modes: ['paste_back'] } },
+  oauth: { google: { modes: ['paste_back', 'callback'] }, microsoft: { modes: ['paste_back'] }, zoom: { modes: ['callback'] } },
 }
 
 const BOTH_CALLBACK: SystemInfo = {
   ...WITH_CALLBACK,
-  oauth: { google: { modes: ['paste_back', 'callback'] }, microsoft: { modes: ['paste_back', 'callback'] } },
+  oauth: { google: { modes: ['paste_back', 'callback'] }, microsoft: { modes: ['paste_back', 'callback'] }, zoom: { modes: ['callback'] } },
 }
 
 // Invented values; the code must never be found anywhere it should not be.
@@ -50,6 +50,7 @@ function connection(overrides: Partial<ConnectionView> = {}): ConnectionView {
 
 const GMAIL = connection()
 const M365 = connection({ id: 'm365_corp', kind: 'm365', label: 'corp', config: { tenant_id: 't', client_id: 'c' }, secrets_set: [] })
+const ZOOM = connection({ id: 'zoom', kind: 'zoom', label: 'zoom', config: { client_id: 'cid-1', auth_mode: 'oauth' }, secrets_set: ['client_secret'] })
 const WORDPRESS = connection({
   id: 'wordpress_blog',
   kind: 'wordpress',
@@ -247,6 +248,45 @@ describe('mode availability', () => {
     expect($('oauth-wordpress-note')?.textContent).toContain('import a CSV instead')
     expect($('oauth-gmail-note')).toBeNull()
     expect($('oauth-ms-warning')).toBeNull()
+  })
+})
+
+describe('zoom', () => {
+  it('offers no paste-back UI and starts with mode callback', async () => {
+    await mountDialog(ZOOM, WITH_CALLBACK)
+    expect($('oauth-mode')).toBeNull()
+    expect($('mode-paste_back')).toBeNull()
+    expect($('mode-callback')).toBeNull()
+    expect($('oauth-callback-unavailable')).toBeNull()
+
+    await click('oauth-start')
+    expect(startCalls()).toEqual([
+      { method: 'POST', path: '/api/oauth/zoom/start', credentials: 'include', body: { connection_id: 'zoom', mode: 'callback' } },
+    ])
+  })
+
+  it('warns and disables Start when no https PUBLIC_BASE_URL makes callback unavailable', async () => {
+    await mountDialog(ZOOM, PASTE_ONLY)
+    expect($('oauth-callback-unavailable')).not.toBeNull()
+    expect($<HTMLButtonElement>('oauth-start')?.hasAttribute('disabled')).toBe(true)
+
+    await click('oauth-start')
+    expect(startCalls()).toHaveLength(0)
+  })
+
+  it('finishes when the flow reports ok, like google (T-038: flow status, not stored state, decides)', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+    const wrapper = await mountDialog(ZOOM, WITH_CALLBACK)
+    await click('oauth-start')
+    flowStatus = () => ({ status: 'ok' })
+    list = [{ ...ZOOM, secrets_set: ['client_secret', 'refresh_token'] }]
+    await vi.advanceTimersByTimeAsync(2_100)
+    await flushPromises()
+
+    expect($('oauth-connected')).not.toBeNull()
+    expect(wrapper.emitted('connected')).toHaveLength(1)
+    expect(wrapper.emitted('connected')?.[0]).toEqual([list[0]])
+    vi.useRealTimers()
   })
 })
 

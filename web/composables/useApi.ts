@@ -42,7 +42,7 @@ export interface DigestConfig {
 }
 
 export type ConnectionKind = 'm365' | 'zoom' | 'slack' | 'gmail' | 'namecheap' | 'godaddy' | 'wordpress'
-export type OAuthProvider = 'google' | 'microsoft' | 'wordpress'
+export type OAuthProvider = 'google' | 'microsoft' | 'zoom' | 'wordpress'
 export type OAuthMode = 'paste_back' | 'callback'
 
 // Create payloads mirror api/routers/connections.py. Secrets are write-only: they appear here and
@@ -180,6 +180,28 @@ export interface ConnectionView {
 export interface ConnectionCheck {
   status: 'ok' | 'error'
   detail: string
+}
+
+// Which OAuth provider a connection kind signs in through. slack carries a single static token and
+// has no OAuth flow, so it is absent here.
+export const PROVIDER_FOR_KIND: Partial<Record<ConnectionKind, OAuthProvider>> = {
+  gmail: 'google',
+  m365: 'microsoft',
+  zoom: 'zoom',
+  wordpress: 'wordpress',
+}
+
+/**
+ * Zoom's effective auth mode. Same rule as pipeline.connections.zoom_auth_mode and
+ * ConnectionDialog's zoomAuthMode: an explicit config.auth_mode wins; otherwise "s2s" when
+ * account_id is set, "oauth" otherwise.
+ * @param conn - The connection to resolve config for (meaningful only for kind "zoom").
+ * @returns "oauth" or "s2s".
+ */
+export function zoomAuthMode(conn: { config: Record<string, string> }): 'oauth' | 's2s' {
+  const mode = conn.config.auth_mode
+  if (mode === 'oauth' || mode === 's2s') return mode
+  return conn.config.account_id ? 's2s' : 'oauth'
 }
 
 export interface SystemInfo {

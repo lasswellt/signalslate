@@ -78,9 +78,13 @@ class M365Create(_CreateBase):
 
 class ZoomCreate(_CreateBase):
     kind: Literal["zoom"]
-    account_id: str
     client_id: str
     client_secret: SecretStr
+    account_id: Optional[str] = None
+    auth_mode: Optional[str] = None
+    refresh_token: Optional[SecretStr] = None
+    redirect_mode: Optional[str] = None
+    include_transcripts: Optional[bool] = None
 
 
 class SlackCreate(_CreateBase):
@@ -294,6 +298,10 @@ def create_connection(body: Annotated[CreateBody, Body()]) -> ConnectionOut:
         name: value.get_secret_value() if isinstance(value, SecretStr) else value
         for name, value in body.model_dump(exclude={"kind"}, exclude_none=True).items()
     }
+    # pipeline.connections stores every config value as a string; the UI posts include_transcripts
+    # as a JSON bool (ZoomCreate.include_transcripts: Optional[bool]).
+    if isinstance(fields.get("include_transcripts"), bool):
+        fields["include_transcripts"] = "true" if fields["include_transcripts"] else "false"
     had_tombstone_before = _tombstoned_ids()
     try:
         view = connections.create(body.kind, fields)
