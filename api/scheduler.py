@@ -14,10 +14,17 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from dotenv import dotenv_values
+from sqlmodel import select
 
+from pipeline import db
 from pipeline.config_store import load_config
+from pipeline.db import JobsProfile
 from pipeline.domains import DEFAULT_REFRESH_CRON, domain_settings
 from pipeline.domains.inventory import refresh_snapshots, sync_all
+from pipeline.jobs import DEFAULT_REFRESH_CRON as JOBS_DEFAULT_REFRESH_CRON
+from pipeline.jobs import jobs_settings
+from pipeline.jobs.inventory import poll_all, resolve_pending
+from pipeline.jobs.scoring import score_new
 from pipeline.runner import RunAlreadyInProgress, execute_run
 
 _log = logging.getLogger(__name__)
@@ -50,6 +57,7 @@ def schedule_timezone():
 _scheduler = BackgroundScheduler(timezone=schedule_timezone() or UTC)
 JOB_ID = "daily_digest_run"
 DOMAINS_JOB_ID = "domains_refresh"
+JOBS_JOB_ID = "jobs_refresh"
 
 
 def _run_scheduled() -> None:
@@ -73,6 +81,29 @@ def _run_domains_scheduled() -> None:
         refresh_snapshots()
     except Exception as exc:
         _log.warning("domains scheduled refresh failed: %s", type(exc).__name__)
+
+
+def _run_jobs_scheduled() -> None:
+    """
+    Resolve -> poll -> score, run inline in one session so a scoring pass always sees postings this
+    run's own poll just upserted. Any failure is caught here (never left to APScheduler's own
+    traceback logging) and logged by exception CLASS only, per pipeline/redact.py: a resolver/ATS/
+    LLM error can echo request/response detail.
+
+    Scoring is skipped (not a failure) when no JobsProfile row exists yet: a fresh install with the
+    profile never configured is a normal state, not something to warn about.
+    """
+    try:
+        with db.get_session() as session:
+            resolve_pending(session)
+            poll_all(session)
+            profile = session.exec(select(JobsProfile)).first()
+            if profile is not None:
+                score_new(session, profile)
+            else:
+                _log.info("jobs scheduled refresh: no JobsProfile configured yet, skipping scoring")
+    except Exception as exc:
+        _log.warning("jobs scheduled refresh failed: %s", type(exc).__name__)
 
 
 def reschedule() -> None:
@@ -106,11 +137,32 @@ def reschedule_domains() -> None:
         _scheduler.add_job(_run_domains_scheduled, trigger=trigger, id=DOMAINS_JOB_ID, replace_existing=True)
 
 
+def _jobs_trigger() -> CronTrigger:
+    """CronTrigger from jobs_settings().refresh_cron; a value that fails cron parsing (not just the
+    already-defaulted empty case jobs_settings() handles) falls back to pipeline.jobs's own
+    DEFAULT_REFRESH_CRON with a warning rather than taking the scheduler down."""
+    cron = jobs_settings().refresh_cron
+    try:
+        return CronTrigger.from_crontab(cron, timezone=schedule_timezone() or UTC)
+    except ValueError:
+        _log.warning("invalid JOBS_REFRESH_CRON %r, using default %r", cron, JOBS_DEFAULT_REFRESH_CRON)
+        return CronTrigger.from_crontab(JOBS_DEFAULT_REFRESH_CRON, timezone=schedule_timezone() or UTC)
+
+
+def reschedule_jobs() -> None:
+    trigger = _jobs_trigger()
+    if _scheduler.get_job(JOBS_JOB_ID):
+        _scheduler.reschedule_job(JOBS_JOB_ID, trigger=trigger)
+    else:
+        _scheduler.add_job(_run_jobs_scheduled, trigger=trigger, id=JOBS_JOB_ID, replace_existing=True)
+
+
 def start_scheduler() -> None:
     if not _scheduler.running:
         _scheduler.start()
     reschedule()
     reschedule_domains()
+    reschedule_jobs()
 
 
 def next_run_time():
@@ -120,4 +172,9 @@ def next_run_time():
 
 def next_domains_run_time():
     job = _scheduler.get_job(DOMAINS_JOB_ID)
+    return job.next_run_time if job else None
+
+
+def next_jobs_run_time():
+    job = _scheduler.get_job(JOBS_JOB_ID)
     return job.next_run_time if job else None
