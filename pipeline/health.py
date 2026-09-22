@@ -14,7 +14,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterator, Mapping, Optional
+from typing import Callable, Iterator, Mapping, Optional, TypeGuard
 
 import msal
 import requests
@@ -447,7 +447,9 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def _zoom_cache_valid(cache: Optional[_ZoomCache], refresh_hash: str) -> bool:
+def _zoom_cache_valid(cache: Optional[_ZoomCache], refresh_hash: str) -> TypeGuard[_ZoomCache]:
+    # TypeGuard (not plain bool): every caller reads cache.as_dict() right after this check,
+    # and pyright can only narrow Optional[_ZoomCache] -> _ZoomCache through the guard form.
     return (
         cache is not None
         and cache.refresh_hash == refresh_hash
