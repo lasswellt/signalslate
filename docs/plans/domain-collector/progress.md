@@ -46,3 +46,6 @@ Ruling: fix — main-thread review of purchase.py found years bypassing caps, da
 ## 2026-09-22T00:50:51Z verify T-017 ok=true
 ## 2026-09-22T00:50:51Z build T-018 start (attempt 1)
 ## 2026-09-22T00:56:26Z verify T-018 ok=true
+## 2026-09-22T00:56:26Z build T-019 start (attempt 1)
+Ruling: accept-with-followup — domain_buy.py duplicates purchase._DAILY_CAP_STATUSES for remaining_today; candidate for check to expose a public spent_today() from purchase.py (T-019)
+## 2026-09-22T01:04:36Z verify T-019 ok=true

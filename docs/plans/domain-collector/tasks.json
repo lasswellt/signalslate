@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-22T00:56:26Z",
+  "updated": "2026-09-22T01:04:36Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1567,11 +1567,53 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T01:04:36Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '@router\\.post\\(\"/domains/quotes\"' api/routers/domain_buy.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:04:35Z"
+          },
+          {
+            "cmd": "grep -qE '@router\\.post\\(\"/domains/purchases\"' api/routers/domain_buy.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:04:35Z"
+          },
+          {
+            "cmd": "grep -qE 'domain_buy\\.router' api/main.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:04:35Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/domain_buy.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:04:35Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_domain_buy.py -q",
+            "exit": 0,
+            "duration_ms": 1333,
+            "tail": ".....................                                                    [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n21 passed, 1 warning in 0.97s",
+            "recorded_at": "2026-09-22T01:04:36Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "POST /domains/ideas {seeds,tlds,brief?,use_llm} -> candidates with prefilter status. POST /domains/check {names, connection_id} -> authoritative registrar check (NotEligible surfaced as 409 code not_eligible). POST /domains/quotes, POST /domains/purchases {quote_id, confirm_name, years} -> PurchaseRefused reasons as 422 with code; GET /domains/purchases. GET /domains/purchase-settings exposes enabled/max/daily cap/remaining (no secrets). Body models extra=forbid."
     },
