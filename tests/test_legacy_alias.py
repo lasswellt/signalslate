@@ -244,5 +244,5 @@ def test_a_run_with_one_bad_alias_and_one_good_source_collects_the_good_one(inst
         stored = list(session.exec(select(db.CollectedItem)).all())
     assert [(i.source, i.external_id) for i in stored] == [("m365_acme_corp", "legacy-1")]
     by_source = {h.source: h.status for h in db.source_health_for_run(run.id)}
-    assert by_source == {"m365_../evil": "error", "m365_acme_corp": "ok", "domains": "ok"}
+    assert by_source == {"m365_../evil": "error", "m365_acme_corp": "ok", "domains": "ok", "jobs": "ok"}
     assert db.get_cursor("m365_acme_corp") is not None

@@ -94,7 +94,7 @@ def test_a_rejected_m365_alias_keeps_running_and_slack_is_seeded(home, monkeypat
 
             # The declaration is gone from the raw env's point of view: the store owns the family.
             _set_env(home, "")
-            assert set(health.known_sources()) == {"m365_my_org", "zoom", "slack_work", "domains"}
+            assert set(health.known_sources()) == {"m365_my_org", "zoom", "slack_work", "domains", "jobs"}
             assert health.m365_tenant_config("my_org") == {"alias": "my_org", "tenant_id": TENANT, "client_id": CLIENT}
 
             system = client.get("/api/system")

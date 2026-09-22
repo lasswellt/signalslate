@@ -184,7 +184,7 @@ def test_state_lists_every_known_source_with_defaults(client):
     """A declared source is on until a toggle says otherwise (config_store)."""
     body = client.get("/api/collectors").json()
 
-    assert [entry["source"] for entry in body] == health.known_sources() == ["zoom", "slack_team", "slack_work", "domains"]
+    assert [entry["source"] for entry in body] == health.known_sources() == ["zoom", "slack_team", "slack_work", "domains", "jobs"]
     for entry in body:
         assert entry == {
             "source": entry["source"],
