@@ -377,3 +377,54 @@ npm test
 No auth on the interface or the API — LAN-only by design. Put it behind your network or an
 authenticating reverse proxy before exposing it anywhere else; see the
 [security model](#management-ui).
+
+## Domains
+
+A **Domains** page and daily job give a portfolio view of every domain you own, pulled from
+Namecheap, GoDaddy and WordPress.com plus anything added manually or by CSV import. For any
+domain, owned or not, it shows DNS records, mail posture (SPF/DMARC/DKIM/MTA-STS/BIMI) and RDAP
+registration data, and on demand CT-log subdomains and Wayback URLs. It can generate name ideas,
+check availability, and — only once you enable it — buy through your Namecheap or GoDaddy account.
+A `domains` source feeds the morning digest with what changed: expiry approaching, nameservers or
+mail records changed, lock removed.
+
+Registrar connections are added in the **Connections** page like every other source, not in `.env`.
+`.env` only holds the purchase guardrails and refresh schedule below.
+
+### Namecheap
+
+The API is off for new accounts until the account qualifies: **20 domains**, a **$50 balance**, or
+**$50 spent in the last 2 years** (whichever comes first). Once qualified, generate an API key
+under Profile > Tools > API Access, then whitelist the server's public **IPv4** address — Namecheap
+accepts IPv4 only, and calls silently fail if the whitelist and the server's actual egress address
+drift apart (common on a home connection with a dynamic IP). There is a sandbox
+(`sandbox.namecheap.com`) with its own account and test-registry data; use it to test the purchase
+flow first.
+
+### GoDaddy
+
+Any account with **at least one domain** gets the Domains API (list, detail, DNS, purchase).
+**Availability checks** are a separate, stricter tier: **50 or more domains**, or **average monthly
+spend of $20 or more**. Generate an API key/secret at developer.godaddy.com. GoDaddy also runs a
+test environment, **OTE** (`api.ote-godaddy.com`), with its own account — test purchases there
+before using a production key.
+
+### WordPress.com
+
+WordPress.com has no documented domain API. Signing in creates an OAuth app (developer.wordpress.com
+> Create New Application) with the `global` scope, and the connection calls an **undocumented**
+endpoint (`/rest/v1.1/all-domains`) that may change without notice. WordPress.com also issues no
+refresh token, so a lapsed connection just needs signing in again. If that adapter breaks or the
+account isn't set up for it, add those domains by pasting names or importing a CSV instead — every
+other feature (DNS, RDAP, mail posture, digest alerts) works the same regardless of how a domain
+was added.
+
+### Purchasing
+
+Buying a domain is disabled out of the box (`DOMAINS_PURCHASE_ENABLED=false`) and every purchase
+goes through a server-issued quote, a price cap, a daily spend cap, and retyping the domain name to
+confirm — see `.env.example` for the exact keys. **Test the full quote-then-purchase flow against
+the Namecheap sandbox or GoDaddy OTE connection before pointing it at a production account.** A
+green sandbox/OTE run is necessary but not sufficient: each registrar's test environment has its
+own, different pool of "available" names, so it cannot confirm a specific production domain is
+purchasable — only that the flow itself works.
