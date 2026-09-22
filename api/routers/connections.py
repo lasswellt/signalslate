@@ -23,6 +23,12 @@ Design decisions:
 - The health checks are blocking network calls, so the handlers are plain `def` and run in the
   threadpool. The test endpoint runs its check inside health.env_snapshot() so it sees one
   consistent overlaid environment.
+- namecheap/godaddy/wordpress are registrar connections, not collector sources: they never appear
+  in health.known_sources() and have no active_sources entry at all (pipeline/connections.py's
+  module docstring; pipeline/config_store.py keys active_sources off known_sources()). The
+  "inactive until tested" gate below does not apply to them, so create_connection() returns them
+  directly instead of running the known_sources()/set_source_active dance every other kind needs
+  (that dance always fails 503 store_inactive for an id known_sources() can never list).
 """
 import logging
 from typing import Annotated, Any, Literal, Optional, Union
@@ -34,6 +40,8 @@ from sqlmodel import select
 from api.serialize import iso_z
 from pipeline import config_store, connections, db, health
 from pipeline.crypto import SecretDecryptError, SecretKeyMissing
+from pipeline.domains import inventory
+from pipeline.domains.registrars import AuthFailed, IpNotWhitelisted, NotEligible, RateLimited, RegistrarError
 from pipeline.redact import redact
 
 router = APIRouter(tags=["connections"])
@@ -42,6 +50,10 @@ _log = logging.getLogger(__name__)
 
 # Same cap the runner applies to text it persists: applied after redaction, never before.
 _MAX_TEXT = 1000
+
+# Mirrors pipeline/domains/inventory.py's own _REGISTRAR_KINDS: the connections.KINDS entries with
+# a Registrar adapter (inventory.registrar_for) instead of a pipeline.health check_* counterpart.
+_REGISTRAR_KINDS = frozenset({"namecheap", "godaddy", "wordpress"})
 
 
 class _CreateBase(BaseModel):
@@ -86,6 +98,35 @@ class GmailCreate(_CreateBase):
     redirect_mode: Optional[str] = None
 
 
+class NamecheapCreate(_CreateBase):
+    kind: Literal["namecheap"]
+    label: str
+    api_user: str
+    username: str
+    client_ip: str
+    api_key: SecretStr
+    sandbox: Optional[str] = None
+    registrant_contact: Optional[SecretStr] = None
+
+
+class GodaddyCreate(_CreateBase):
+    kind: Literal["godaddy"]
+    label: str
+    api_key: SecretStr
+    api_secret: SecretStr
+    environment: Optional[str] = None
+    registrant_contact: Optional[SecretStr] = None
+
+
+class WordpressCreate(_CreateBase):
+    kind: Literal["wordpress"]
+    label: str
+    client_id: str
+    client_secret: SecretStr
+    redirect_mode: Optional[str] = None
+    access_token: Optional[SecretStr] = None
+
+
 def _kind_tag(value: Any) -> Optional[str]:
     kind = value.get("kind") if isinstance(value, dict) else None
     return kind if kind in connections.KINDS else None
@@ -98,6 +139,9 @@ CreateBody = Annotated[
         Annotated[ZoomCreate, Tag("zoom")],
         Annotated[SlackCreate, Tag("slack")],
         Annotated[GmailCreate, Tag("gmail")],
+        Annotated[NamecheapCreate, Tag("namecheap")],
+        Annotated[GodaddyCreate, Tag("godaddy")],
+        Annotated[WordpressCreate, Tag("wordpress")],
     ],
     Discriminator(_kind_tag, custom_error_type="invalid_kind", custom_error_message="Unknown or missing kind"),
 ]
@@ -256,6 +300,9 @@ def create_connection(body: Annotated[CreateBody, Body()]) -> ConnectionOut:
     except _HANDLED as exc:
         raise _translate(exc) from None
 
+    if body.kind in _REGISTRAR_KINDS:
+        return _to_out(view, {}, {}, [])
+
     had_tombstone = view.id in had_tombstone_before
     if view.id not in health.known_sources():
         _roll_back_create(view.id, had_tombstone)
@@ -305,6 +352,20 @@ def delete_connection(connection_id: str) -> Response:
     return Response(status_code=204)
 
 
+def _run_registrar_check(view: connections.ConnectionView) -> health.HealthResult:
+    """
+    Registrar kinds have no pipeline.health check_* counterpart: the credentials live behind
+    inventory.registrar_for(), and its check_connection() already raises typed, secret-free
+    RegistrarError subclasses (module docstring, pipeline/domains/registrars/__init__.py) that are
+    readable as-is — Namecheap's IpNotWhitelisted message already names the egress IP to whitelist.
+    """
+    try:
+        detail = inventory.registrar_for(view.id).check_connection()
+    except (NotEligible, IpNotWhitelisted, AuthFailed, RateLimited, RegistrarError) as exc:
+        return health.HealthResult(view.id, "error", str(exc))
+    return health.HealthResult(view.id, "ok", detail)
+
+
 def _run_check(view: connections.ConnectionView) -> health.HealthResult:
     if view.kind == "m365":
         return health.check_m365(view.label)
@@ -312,7 +373,9 @@ def _run_check(view: connections.ConnectionView) -> health.HealthResult:
         return health.check_zoom()
     if view.kind == "slack":
         return health.check_slack(view.label, health.slack_workspaces().get(view.label))
-    return health.check_gmail(view.label)
+    if view.kind == "gmail":
+        return health.check_gmail(view.label)
+    return _run_registrar_check(view)
 
 
 @router.post("/connections/{connection_id}/test", response_model=CheckResult)
