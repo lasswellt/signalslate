@@ -374,6 +374,33 @@ def test_mutating_domains_post_without_csrf_header_is_forbidden(env):
     env.capture.assert_clean()
 
 
+# --- scenario: sync lists both registrars' domains -------------------------------------------------
+
+
+def test_sync_lists_domains_from_both_registrars(env):
+    env.nc_state.domains = {"nc-alpha.com": {}}
+    env.gd_state.domains = [
+        {"domain": "gd-beta.com", "expires": "2027-09-21T00:00:00.000Z", "renewAuto": True, "locked": True}
+    ]
+    with env.app() as client:
+        assert create_namecheap(client).status_code == 201
+        assert create_godaddy(client).status_code == 201
+
+        synced = client.post("/api/domains/sync")
+        assert synced.status_code == 200
+        sync_body = synced.json()
+        assert {row["kind"] for row in sync_body["sync"]} == {"namecheap", "godaddy"}
+        assert all(row["status"] == "ok" for row in sync_body["sync"])
+
+        listed = {row["name"]: row for row in client.get("/api/domains").json()}
+        assert listed["nc-alpha.com"]["source"] == "namecheap"
+        assert listed["nc-alpha.com"]["ownership"] == "owned"
+        assert listed["gd-beta.com"]["source"] == "godaddy"
+        assert listed["gd-beta.com"]["ownership"] == "owned"
+    env.capture.assert_clean()
+    env.capture.assert_items_clean()
+
+
 # --- scenario: purchase disabled by default -------------------------------------------------------
 
 
