@@ -19,3 +19,5 @@ Ruling: defer — Pyright reportOptionalMemberAccess on _zoom_cache.as_dict() in
 Ruling: defer — report endpoint 1-month window not clamped; window is SUMMARY_LOOKBACK (48h) unless a long outage widens it, and a report failure only makes the run partial (T-006, round 1)
 ## 2026-09-21T23:46:50Z build T-007 start (attempt 1)
 ## 2026-09-22T00:07:13Z verify T-007 ok=true (round 1 resume after ECONNRESET; no attempt consumed)
+## 2026-09-22T00:07:13Z build T-008 start (attempt 1)
+## 2026-09-22T00:10:53Z verify T-008 ok=true

@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "zoom-collector",
-  "updated": "2026-09-22T00:07:04Z",
+  "updated": "2026-09-22T00:10:53Z",
   "tasks": [
     {
       "id": "T-001",
@@ -566,11 +566,39 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T00:10:53Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def normalize_zoom' pipeline/normalize.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:10:52Z"
+          },
+          {
+            "cmd": "grep -qE 'source == \"zoom\"' pipeline/normalize.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:10:52Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_normalize.py tests/test_triage.py tests/test_triage_cli.py -q",
+            "exit": 0,
+            "duration_ms": 1054,
+            "tail": "........................................................................ [ 35%]\n........................................................................ [ 70%]\n...........................................................              [100%]\n203 passed in 0.78s",
+            "recorded_at": "2026-09-22T00:10:53Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Step 5; normalize() only handles gmail_* today (normalize.py:190-211). NormalizedItem is email-shaped: extend Participant.role Literal with 'host' and 'attendee' (check every consumer of role). title = topic; body_text = summary_content (or 'No AI Companion summary available.') plus transcript excerpt if present, truncated with truncate(); permalink = summary_doc_url; direction='inbound', is_unread=False, is_bulk=False, labels=['zoom'] (+ 'no-summary'), trust stays untrusted_third_party (summaries contain other people's words). Non-gmail/non-zoom sources still raise NoAdapterError."
     },
