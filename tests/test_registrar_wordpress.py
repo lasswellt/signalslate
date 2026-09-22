@@ -164,6 +164,38 @@ def test_list_domains_entry_without_name_is_skipped(monkeypatch, connection_id):
     assert client.list_domains() == []
 
 
+# Regression: all-domains lists every site's free "<site>.wordpress.com" subdomain alongside real
+# custom domains mapped to that site, with nothing in the response distinguishing the two — a real
+# account's list came back 110 entries, 63 of them free subdomains nobody registered.
+def test_list_domains_skips_wordpress_com_subdomains(monkeypatch, connection_id):
+    def handler(url, headers):
+        return FakeResponse(json_body={
+            "domains": [
+                {"domain": "mysite.wordpress.com", "expiry": None, "auto_renewing": False},
+                {"domain": "MySite.WordPress.Com"},  # same subdomain, mixed case
+                {"domain": "wordpress.com"},  # the bare apex itself is never a user's own domain either
+                {"domain": "mysite.com", "expiry": "2027-01-01T00:00:00Z", "auto_renewing": True},
+            ]
+        })
+
+    route(monkeypatch, handler)
+    client = wordpress.WordPressClient(connection_id)
+    domains = client.list_domains()
+    assert [d.name for d in domains] == ["mysite.com"]
+
+
+def test_list_domains_keeps_a_custom_domain_whose_name_contains_wordpress(monkeypatch, connection_id):
+    """The filter is a suffix match, not a substring match: a real registered domain that merely
+    contains "wordpress" (unlikely, but not impossible) must not be swept up with it."""
+    def handler(url, headers):
+        return FakeResponse(json_body={"domains": [{"domain": "notwordpress.com"}]})
+
+    route(monkeypatch, handler)
+    client = wordpress.WordPressClient(connection_id)
+    domains = client.list_domains()
+    assert [d.name for d in domains] == ["notwordpress.com"]
+
+
 @pytest.mark.parametrize("body", [
     [],
     "unexpected string",
