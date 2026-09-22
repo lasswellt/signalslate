@@ -57,3 +57,6 @@ Ruling: scope+api/routers/status.py,tests/test_api_startup.py — wordpress mode
 ## 2026-09-22T01:19:26Z verify T-021 ok=true
 ## 2026-09-22T01:19:26Z build T-022 start (attempt 1)
 ## 2026-09-22T01:23:26Z verify T-022 ok=true
+## 2026-09-22T01:23:26Z build T-023 start (attempt 1)
+Ruling: accept — useApi.ts OAuthProvider += wordpress, SystemInfo.oauth Partial<Record> (dialog already guards ?.modes ?? []) (T-023)
+## 2026-09-22T01:26:16Z verify T-023 ok=true

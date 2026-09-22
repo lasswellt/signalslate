@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-22T01:23:26Z",
+  "updated": "2026-09-22T01:26:16Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1866,11 +1866,46 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T01:26:16Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE \"'wordpress'\" web/components/OAuthDialog.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:26:12Z"
+          },
+          {
+            "cmd": "grep -qE \"conn\\.kind === 'wordpress'\" web/pages/connections.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:26:12Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/OAuthDialog.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T01:26:12Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/OAuthDialog.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3872,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/OAuthDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n································································\n\n Test Files  1 passed (1)\n      Tests  64 passed (64)\n   Start at  21:26:14\n   Duration  2.68s (tests 45%, transform 40%, environment 7%, import 7%, setup 1%)",
+            "recorded_at": "2026-09-22T01:26:16Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "OAuthDialog.vue:174 maps kind->provider (m365->microsoft else google): make it explicit incl. wordpress. Banner: 'uses an undocumented WordPress.com endpoint; if it breaks, import a CSV instead'. Sign-in button shown for wordpress (connections.vue:104)."
     },
