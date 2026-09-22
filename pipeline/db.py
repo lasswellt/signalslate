@@ -248,6 +248,79 @@ class JobPosting(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("board_id", "external_id"),)
 
 
+class JobsProfile(SQLModel, table=True):
+    """
+    The user's own profile for apply assist — contact info, links, work-authorization stance,
+    salary/EEO disclosure policy and target preferences. Singleton: the app has exactly one user,
+    so callers always operate on `id=1` (created lazily) rather than looking one up by any other
+    key. Mirrors DomainPurchase's money-as-decimal-string convention for salary fields.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    github_url: Optional[str] = None
+    portfolio_url: Optional[str] = None
+    other_links: str = "[]"  # JSON list of {label, url} or plain urls
+    work_authorized: Optional[bool] = None
+    needs_sponsorship: Optional[bool] = None
+    open_to_relocation: Optional[bool] = None
+    relocation_notes: Optional[str] = None
+    start_date_notes: Optional[str] = None  # free text: "2 weeks notice", "immediately", etc.
+    salary_floor: Optional[str] = None  # decimal as str, account currency
+    # decline | range | exact — what the user is willing to state when a form asks for salary
+    salary_disclosure_policy: str = "decline"
+    # JSON object of {question: answer}; default policy is decline-to-answer for EEO/demographic
+    # questions unless the user explicitly fills one in.
+    eeo_answers: str = "{}"
+    target_roles: str = "[]"  # JSON list of role titles/keywords
+    target_locations: str = "[]"  # JSON list
+    target_remote: Optional[bool] = None
+    target_salary_floor: Optional[str] = None  # decimal as str
+    target_exclusions: str = "[]"  # JSON list of companies/industries to skip
+    resume_paths: str = "[]"  # JSON list of file paths, one or more resume PDFs
+    cover_letter_tone: Optional[str] = None
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class AnswerBank(SQLModel, table=True):
+    """
+    A screening-question answer the user approved or edited, kept for reuse on later forms.
+    `question_norm` is NOT unique on purpose: answers are reused "by similarity" (research doc),
+    so more than one stored answer per normalized question is expected as an answer evolves over
+    time — a caller picks the best/most recent match itself, this table only stores rows.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    question_norm: str = Field(index=True)  # normalized form of the question, for lookup
+    question_raw: str  # as originally asked on the form
+    answer: str
+    source_application_id: Optional[int] = Field(default=None, foreign_key="jobapplication.id")
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class JobApplication(SQLModel, table=True):
+    """
+    One application against one posting — state, not an event, like Domain/JobPosting. UNIQUE
+    posting_id: at most one application per posting. `assist_state` tracks the desktop-runner
+    session lifecycle (see §Apply Assist) separately from `status`, the overall application
+    lifecycle a user cares about; `assist_log` is the audit trail of what the assist session
+    filled, from where, and what the user overrode.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    posting_id: int = Field(unique=True, index=True, foreign_key="jobposting.id")
+    # draft | packet_ready | queued | in_progress | submitted | withdrawn | rejected | offer
+    status: str = "draft"
+    packet: Optional[str] = None  # JSON blob: cover letter text + screening-answer drafts
+    cover_letter_path: Optional[str] = None
+    resume_path: Optional[str] = None
+    assist_state: str = "idle"  # idle | queued | claimed | running | paused | done | failed
+    assist_session_id: Optional[str] = Field(default=None, index=True)
+    assist_log: Optional[str] = None  # JSON blob: per-step fields filled/values/sources/overrides
+    created_at: datetime = Field(default_factory=utcnow)
+    submitted_at: Optional[datetime] = None
+
+
 def _add_missing_columns() -> None:
     """
     Add columns that exist in the models but not yet on disk.
