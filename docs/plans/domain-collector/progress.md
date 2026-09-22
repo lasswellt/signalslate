@@ -72,3 +72,6 @@ Ruling: accept-with-followup — useDomainsApi.ts duplicates useApi.ts request()
 ## 2026-09-22T01:44:25Z build T-028 start (attempt 1)
 Ruling: accept — dev hit 50-turn cap after typecheck + tests passed; main thread re-ran verify + web suite (233) and committed its files (T-028, round 1)
 ## 2026-09-22T01:52:37Z verify T-028 ok=true
+## 2026-09-22T01:52:37Z build T-029 start (attempt 1)
+Ruling: accept — e2e written after round-1 resume (first pass spent budget reading); secret sweep covers responses + collecteditem, not DB file bytes (secrets are vault-encrypted there by crypto.py) (T-029, round 1)
+## 2026-09-22T02:03:29Z verify T-029 ok=true

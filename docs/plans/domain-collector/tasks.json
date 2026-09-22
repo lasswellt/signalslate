@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "domain-collector",
-  "updated": "2026-09-22T01:52:37Z",
+  "updated": "2026-09-22T02:03:29Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2272,11 +2272,32 @@
           "timeout": 600
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T02:03:29Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_domains_e2e.py -q",
+            "exit": 0,
+            "duration_ms": 2657,
+            "tail": ".....                                                                    [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n5 passed, 1 warning in 2.29s",
+            "recorded_at": "2026-09-22T02:03:08Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest  -q",
+            "exit": 0,
+            "duration_ms": 21371,
+            "tail": "...................................................... [ 74%]\n........................................................................ [ 77%]\n........................................................................ [ 80%]\n........................................................................ [ 83%]\n........................................................................ [ 87%]\n........................................................................ [ 90%]\n........................................................................ [ 93%]\n........................................................................ [ 96%]\n........................................................................ [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions\n    warnings.warn(  # deprecated in 14.0 - 2024-11-09\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:16: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated\n    from websockets.server import WebSocketServerProtocol\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2232 passed, 3 warnings in 20.53s",
+            "recorded_at": "2026-09-22T02:03:29Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "test-only: product is the test file; behavior lives in earlier tasks. Through the real app (TestClient) with registrar HTTP stubbed at requests (true external): create namecheap+godaddy connections, sync, change fake DNS, refresh, run 'domains' collector -> domain_alert item; purchase refused when disabled; enabled: quote -> purchase once, second submit refused; api keys and registrant_contact never appear in any response or collecteditem payload; POST without X-Requested-With -> 403. Second check runs the full suite."
     },
