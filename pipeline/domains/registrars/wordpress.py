@@ -83,13 +83,23 @@ def _parse_expires(value: Any) -> Optional[datetime]:
 
 
 def _parse_domain(entry: dict[str, Any]) -> Optional[RegistrarDomain]:
-    """One entry of the "domains" list; None when the entry itself has no usable name."""
+    """One entry of the "domains" list; None when the entry itself has no usable name, or when it
+    is one of WordPress.com's own free "<site>.wordpress.com" subdomains rather than something the
+    account registered. Every WordPress.com site, free or paid, gets one of these automatically,
+    and all-domains lists it right alongside any real custom domain mapped to that site with no
+    field distinguishing the two (module docstring: locked/privacy are already unconfirmed, and
+    there is no "is this actually registered" flag either) — so the wordpress.com suffix is the
+    only reliable signal available: nothing under that zone is ever a name a user can register for
+    themselves, so it can never legitimately be one of the account's own domains."""
     name = entry.get("domain")
     if not isinstance(name, str) or not name:
         return None
+    name = name.lower()
+    if name == "wordpress.com" or name.endswith(".wordpress.com"):
+        return None
     auto_renew = entry.get("auto_renewing")
     return RegistrarDomain(
-        name=name.lower(),
+        name=name,
         expires_at=_parse_expires(entry.get("expiry")),
         auto_renew=auto_renew if isinstance(auto_renew, bool) else None,
         # UNVERIFIED (module docstring): the undocumented response has no confirmed locked field.
