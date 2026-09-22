@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Acme Corp - Multi-step Application</title>
+</head>
+<body>
+<div id="step-1">
+  <h1>Step 1: Basic Info</h1>
+
+  <label for="full_name">Full Name</label>
+  <input type="text" id="full_name" name="full_name">
+
+  <label for="email">Email</label>
+  <input type="email" id="email" name="email">
+
+  <label for="resume">Resume</label>
+  <input type="file" id="resume" name="resume">
+
+  <button type="button" id="next_btn">Next</button>
+</div>
+
+<div id="step-2" style="display:none">
+  <h1>Step 2: Review</h1>
+  <p>Review your application, then submit.</p>
+  <button type="submit" id="submit_btn">Submit Application</button>
+</div>
+
+<script>
+  window.__submitted = false;
+  document.getElementById("next_btn").addEventListener("click", function () {
+    document.getElementById("step-1").style.display = "none";
+    document.getElementById("step-2").style.display = "block";
+  });
+  document.getElementById("submit_btn").addEventListener("click", function (event) {
+    event.preventDefault();
+    window.__submitted = true;
+  });
+</script>
+</body>
+</html>
