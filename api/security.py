@@ -22,7 +22,14 @@ Design decisions (docs/_research/2026-09-21_management-ui.md sections 8 and 9, v
   or a reflected arbitrary Origin, reach that list while credentials are allowed.
 - health.web_origins() returns the operator's strings verbatim, so a pasted "https://Host/" would
   never equal the canonical Origin a browser sends. Both sides are normalized before comparing.
+- Origin and header checks only stop writes. With no login, a DNS-rebinding page (attacker.example
+  re-resolved to this machine's address) makes the browser send same-origin GETs to the API and lets
+  its script READ collected items, config and status. The browser still sends Host: attacker.example,
+  so install_host_guard refuses every request whose Host is not on an explicit allow-list, on every
+  path and method (no /api/health exemption: a health probe reaches the API by a listed name).
 """
+import ipaddress
+import re
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
@@ -32,12 +39,15 @@ from fastapi.responses import JSONResponse
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from starlette.websockets import WebSocketClose
 
 REQUIRED_HEADER = "X-Requested-With"
 REQUIRED_HEADER_VALUE = "signalslate"
 
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 _DEFAULT_PORTS = {"http": 80, "https": 443}
+_HOSTNAME = re.compile(r"[a-z0-9_](?:[a-z0-9_.-]*[a-z0-9_])?")
+_PORT = re.compile(r"[0-9]{1,5}")
 
 
 def normalize_origin(value: str) -> str | None:
@@ -67,6 +77,46 @@ def normalize_origin(value: str) -> str | None:
     if port is None or port == _DEFAULT_PORTS[scheme]:
         return f"{scheme}://{host}"
     return f"{scheme}://{host}:{port}"
+
+
+def normalize_host(value: str) -> str | None:
+    """
+    Canonical lowercase hostname of a Host header value or a configured host, or None if unusable.
+
+    Accepts "name", "name:port", "1.2.3.4[:port]", "[::1][:port]" and a bare "::1" (configured
+    entries only mean that; a request never sends it, and the guard treats it the same way). The
+    port is validated and then ignored, because the same API answers on several ports behind
+    different proxies. None covers an empty value, a "*" wildcard or any other character outside a
+    hostname or an IP literal (userinfo, path, a scheme, spaces), and a malformed port.
+
+    :param value: a Host header value or a configured allowed host.
+    :returns: the lowercase hostname without brackets or port, or None.
+    """
+    text = value.strip().lower()
+    if not text:
+        return None
+    if text.startswith("["):
+        end = text.find("]")
+        if end == -1:
+            return None
+        host, rest = text[1:end], text[end + 1:]
+        if rest and not (rest.startswith(":") and _PORT.fullmatch(rest[1:])):
+            return None
+        return host if _is_ipv6(host) else None
+    if text.count(":") > 1:
+        return text if _is_ipv6(text) else None
+    host, _, port = text.partition(":")
+    if ":" in text and not _PORT.fullmatch(port):
+        return None
+    return host if _HOSTNAME.fullmatch(host) else None
+
+
+def _is_ipv6(host: str) -> bool:
+    try:
+        ipaddress.IPv6Address(host)
+    except ValueError:
+        return False
+    return True
 
 
 def _carries_body(headers: Headers) -> bool:
@@ -142,6 +192,38 @@ class _RequestGuard:
         await self.app(scope, receive, send)
 
 
+class _HostGuard:
+    """
+    Pure ASGI middleware: refuses any HTTP or WebSocket request whose Host is not allow-listed.
+
+    A missing, duplicated or malformed Host is refused too; a request that lands here without one
+    is not a browser. The submitted value is never echoed back or logged: it is attacker-chosen.
+    """
+
+    def __init__(self, app: ASGIApp, allowed_hosts: frozenset[str]) -> None:
+        self.app = app
+        self.allowed_hosts = allowed_hosts
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+
+        values = Headers(scope=scope).getlist("host")
+        host = normalize_host(values[0]) if len(values) == 1 else None
+        if host is not None and host in self.allowed_hosts:
+            await self.app(scope, receive, send)
+            return
+
+        if scope["type"] == "websocket":
+            await WebSocketClose(code=1008)(scope, receive, send)
+            return
+        rejection = JSONResponse(
+            {"detail": {"code": "host_not_allowed", "message": "Host not allowed"}}, status_code=400
+        )
+        await rejection(scope, receive, send)
+
+
 async def _validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
     if not isinstance(exc, RequestValidationError):
         raise exc
@@ -177,3 +259,22 @@ def install_security(app: FastAPI, *, allowed_origins: list[str]) -> None:
         allow_credentials=True,
     )
     app.add_exception_handler(RequestValidationError, _validation_error_handler)
+
+
+def install_host_guard(app: FastAPI, *, allowed_hosts: list[str]) -> None:
+    """
+    Refuse every request whose Host header is not in `allowed_hosts` (DNS-rebinding defence).
+
+    Call after install_security so it is the outermost layer: nothing, not even a CORS preflight,
+    is answered for an unlisted Host. A rejection is 400 {"detail": {"code": "host_not_allowed", ...}}
+    with no CORS headers, since a rebinding page is not an allowed origin anyway.
+
+    :param app: the FastAPI app to protect.
+    :param allowed_hosts: hostnames (or host:port, the port is ignored) the API may be reached by.
+        Compared case-insensitively; IPv6 literals may be written with or without brackets. Unusable
+        entries, including any "*" wildcard, are dropped, never widened: an empty result refuses everything.
+    """
+    normalized = frozenset(
+        host for host in (normalize_host(raw) for raw in allowed_hosts) if host is not None
+    )
+    app.add_middleware(_HostGuard, allowed_hosts=normalized)

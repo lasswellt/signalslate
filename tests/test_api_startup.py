@@ -88,7 +88,7 @@ def test_no_key_store_inactive_and_env_only_behaviour_unchanged(home, capsys):
         assert "slack_work" in health.known_sources()
         assert "zoom" in health.known_sources()
         assert client.get("/api/connections").json() == []
-        assert [row["source"] for row in client.get("/api/collectors").json()] == ["zoom", "slack_work"]
+        assert [row["source"] for row in client.get("/api/collectors").json()] == ["zoom", "slack_work", "domains"]
     assert "connection store active" not in capsys.readouterr().out
 
 
@@ -105,7 +105,7 @@ def test_key_seeds_env_connections_and_overlay_serves_them(home, monkeypatch, ca
 
         # The store, not .env, is now the source of truth: empty the file and both stay declared.
         (home / ".env").write_text("")
-        assert set(health.known_sources()) == {"zoom", "slack_work"}
+        assert set(health.known_sources()) == {"zoom", "slack_work", "domains"}
         assert "slack_work" in {row["source"] for row in client.get("/api/collectors").json()}
 
     out = capsys.readouterr().out
@@ -171,6 +171,7 @@ def test_system_reports_callback_only_for_an_https_public_url(home, monkeypatch)
             "google": {"modes": ["paste_back"]},
             "microsoft": {"modes": ["paste_back"]},
             "zoom": {"modes": []},
+            "wordpress": {"modes": ["paste_back"]},
         }
         assert plain["web_origins"] == ["http://localhost:3000"]
 
@@ -274,4 +275,4 @@ def test_oauth_router_answers_through_the_real_app(home, monkeypatch):
 
 def test_helper_leaves_no_state_between_tests(home):
     assert connections.get_vault() is None
-    assert health.known_sources() == ["zoom", "slack_work"]
+    assert health.known_sources() == ["zoom", "slack_work", "domains"]

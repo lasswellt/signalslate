@@ -47,6 +47,8 @@
 </template>
 
 <script setup lang="ts">
+import { parseUtc } from '~/composables/useApi'
+
 const route = useRoute()
 const id = Number(route.params.id)
 const api = useApi()
@@ -57,7 +59,8 @@ function statusColor(s: string) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString()
+  const date = parseUtc(iso)
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString()
 }
 
 onMounted(async () => {

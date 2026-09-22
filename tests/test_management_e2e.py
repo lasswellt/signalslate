@@ -561,7 +561,7 @@ def test_fresh_start_seeds_env_connections_and_lists_no_secret_value(world):
             assert value not in resp.text, f"{label} in GET /connections"
 
         assert client.get("/api/system").json()["store_active"] is True
-        assert [row["source"] for row in client.get("/api/collectors").json()] == ["zoom", "slack_work", "gmail_personal"]
+        assert [row["source"] for row in client.get("/api/collectors").json()] == ["zoom", "slack_work", "gmail_personal", "domains"]
 
         # At rest: one ciphertext per connection, none of it readable.
         with db.get_session() as session:

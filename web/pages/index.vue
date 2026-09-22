@@ -57,6 +57,8 @@
 </template>
 
 <script setup lang="ts">
+import { parseUtc } from '~/composables/useApi'
+
 const api = useApi()
 const status = ref<Awaited<ReturnType<typeof api.getStatus>> | null>(null)
 const triggering = ref(false)
@@ -86,7 +88,8 @@ function statusColor(s: string) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString()
+  const date = parseUtc(iso)
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString()
 }
 
 onMounted(refresh)

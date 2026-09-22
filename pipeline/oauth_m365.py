@@ -58,6 +58,9 @@ _CALLBACK_INSTRUCTIONS = (
 )
 _MAX_ACCOUNT_LENGTH = 320
 _AADSTS_CODE = re.compile(r"AADSTS\d{1,7}")
+# tokencache accepts the wider legacy filename class (acme_corp, acme.com) so pre-UI installs keep
+# working; browser sign-in stays on the stricter rule connection creation enforces.
+_SIGN_IN_ALIAS = re.compile(r"[A-Za-z0-9-]+")
 
 _log = logging.getLogger(__name__)
 
@@ -124,6 +127,8 @@ def _config(connection_id: str) -> dict[str, str]:
         tokencache.cache_path(alias)
     except ValueError:
         raise InvalidAlias() from None
+    if _SIGN_IN_ALIAS.fullmatch(alias) is None:
+        raise InvalidAlias()
     return {"alias": alias, "tenant_id": tenant_id, "client_id": client_id}
 
 

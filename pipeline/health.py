@@ -349,6 +349,13 @@ def check_m365(alias: str) -> HealthResult:
     if cfg is None:
         return HealthResult(source, "error", f"No usable .env entry for alias={alias!r} (tenant_id + client_id)")
 
+    # An alias is a filename component; one tokencache refuses (traversal, empty, too long) must become
+    # this source's error, not a ValueError that aborts check_all_configured for every other source.
+    try:
+        tokencache.cache_path(alias, token_dir=TOKEN_DIR)
+    except ValueError:
+        return HealthResult(source, "error", "Alias cannot name a token cache file: use 1-64 letters, digits, '_', '.' or '-', starting with a letter or digit")
+
     # The lock spans load -> refresh -> save: MSAL rotates the refresh token on use, so two
     # unserialized refreshes of one alias strand the loser's token.
     with tokencache.locked(alias, token_dir=TOKEN_DIR):
@@ -717,13 +724,38 @@ def check_slack(label: str, token: Optional[str]) -> HealthResult:
     return HealthResult(source, "ok", f"user={data['user']} team={data['team']}, {len(granted)} scopes")
 
 
+def check_domains() -> HealthResult:
+    """
+    "domains" is always healthy: it reads only the local DomainSnapshot table (no network, no
+    credentials — see pipeline.collectors.domains), so there is nothing to authenticate and an
+    empty portfolio is not a failure. Only a broken DB session counts as unhealthy.
+
+    Imported locally, matching dispatch()'s own local import of pipeline.collectors.domains: this
+    module is imported by nearly everything (see module docstring), so a module-level import of the
+    database layer here should stay avoidable even though pipeline.db itself doesn't import back.
+    """
+    from sqlmodel import select
+
+    from pipeline import db
+    from pipeline.db import Domain
+
+    try:
+        with db.get_session() as session:
+            count = len(session.exec(select(Domain)).all())
+    except Exception as exc:  # noqa: BLE001 — a health check must report, never crash the run
+        return HealthResult("domains", "error", type(exc).__name__)
+    return HealthResult("domains", "ok", f"{count} domain(s) tracked")
+
+
 def known_sources() -> list[str]:
-    """Every source id the current .env declares: m365_<alias>, zoom, slack_<label>, gmail_<label>."""
+    """Every source id the current .env declares: m365_<alias>, zoom, slack_<label>, gmail_<label>,
+    plus the always-available "domains" source (local DB, no .env entry needed)."""
     return (
         [f"m365_{a}" for a in m365_aliases()]
         + ["zoom"]
         + [f"slack_{l}" for l in slack_workspaces()]
         + [f"gmail_{l}" for l in gmail_accounts()]
+        + ["domains"]
     )
 
 
@@ -737,6 +769,9 @@ def check_all_configured(active_sources: dict[str, bool]) -> list[HealthResult]:
 
     if active_sources.get("zoom", False):
         results.append(check_zoom())
+
+    if active_sources.get("domains", False):
+        results.append(check_domains())
 
     for label, token in slack_workspaces().items():
         if active_sources.get(f"slack_{label}", False):

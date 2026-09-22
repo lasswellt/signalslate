@@ -17,8 +17,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 CONFIG_PREFIXES = ("M365_", "SLACK_", "ZOOM_", "MSTODO_", "GMAIL_", "DOMAINS_")
 CONFIG_KEYS = (
     "RMAPI_CONFIG", "LAN_HOST", "TZ", "ANTHROPIC_API_KEY", "SIGNALSLATE_MAP_MODEL",
-    "SIGNALSLATE_SECRET_KEY", "WEB_ORIGINS", "PUBLIC_BASE_URL",
+    "SIGNALSLATE_SECRET_KEY", "WEB_ORIGINS", "PUBLIC_BASE_URL", "ALLOWED_HOSTS",
 )
+
+# Starlette's TestClient sends Host: testserver. api.main builds its Host guard at import time,
+# which for test modules is collection time, before any fixture runs, so the value has to be in
+# the process environment by then. The autouse fixture below keeps it for every test but lets a
+# test override it, and restores it afterwards.
+TEST_ALLOWED_HOSTS = "testserver"
+os.environ["ALLOWED_HOSTS"] = TEST_ALLOWED_HOSTS
 
 
 @pytest.fixture(autouse=True)
@@ -27,6 +34,7 @@ def isolated_environment(monkeypatch):
     for key in list(os.environ):
         if key.startswith(CONFIG_PREFIXES) or key in CONFIG_KEYS:
             monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("ALLOWED_HOSTS", TEST_ALLOWED_HOSTS)
 
 
 @pytest.fixture(autouse=True)

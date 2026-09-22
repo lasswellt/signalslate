@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-21T22:55:44Z",
+  "updated": "2026-09-22T01:42:34Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2514,7 +2514,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T22:55:44Z",
+        "ts": "2026-09-22T01:42:34Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -2524,28 +2524,28 @@
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T22:55:40Z"
+            "recorded_at": "2026-09-22T01:42:28Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/connections.py pipeline/health.py",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T22:55:40Z"
+            "recorded_at": "2026-09-22T01:42:28Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_gmail_pending_connection.py -q",
             "exit": 0,
-            "duration_ms": 758,
-            "tail": ".........                                                                [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n9 passed, 1 warning in 0.53s",
-            "recorded_at": "2026-09-21T22:55:41Z"
+            "duration_ms": 1532,
+            "tail": ".........                                                                [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n9 passed, 1 warning in 1.05s",
+            "recorded_at": "2026-09-22T01:42:30Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_connections.py tests/test_connection_materialize.py tests/test_env_overlay.py tests/test_api_connections.py tests/test_management_e2e.py -q",
             "exit": 0,
-            "duration_ms": 3285,
-            "tail": "........................................................................ [ 26%]\n........................................................................ [ 53%]\n........................................................................ [ 79%]\n.......................................................                  [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n271 passed, 1 warning in 3.01s",
-            "recorded_at": "2026-09-21T22:55:44Z"
+            "duration_ms": 3997,
+            "tail": "........................................................................ [ 26%]\n........................................................................ [ 53%]\n........................................................................ [ 79%]\n.......................................................                  [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n271 passed, 1 warning in 3.55s",
+            "recorded_at": "2026-09-22T01:42:34Z"
           }
         ]
       },
@@ -2578,13 +2578,41 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:01:35Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'A-Za-z0-9_\\.-' pipeline/tokencache.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:01:34Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/tokencache.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:01:34Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_legacy_alias.py tests/test_tokencache.py tests/test_tokencache_wiring.py -q",
+            "exit": 0,
+            "duration_ms": 1492,
+            "tail": "........................................................................ [ 70%]\n..............................                                           [100%]\n102 passed in 1.28s",
+            "recorded_at": "2026-09-21T23:01:35Z"
+          }
+        ]
+      },
       "origin": "check",
-      "notes": "check-report finding 2. origin/main built the MSAL cache path from any alias, so aliases such as acme_corp or acme.com worked. tokencache.cache_path now raises ValueError for anything outside [A-Za-z0-9-]+ and health.check_m365 does not catch it, so check_all_configured raises and the WHOLE run fails for such an install even with no key configured. FIX: (1) widen the tokencache alias rule to a safe FILENAME class that still blocks traversal: ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$ (no separators, no leading dot, no empty); keep alias_lock/cache_path/locked/load/save semantics and per-alias lock identity; connection VALIDATION for new UI-created m365 aliases stays [A-Za-z0-9-]+ (do not touch pipeline/connections.py). (2) defense in depth: health.check_m365 and the Graph collector path must convert a ValueError from tokencache into a HealthResult error / a per-source failure, never an exception that aborts the run. Existing tests unchanged. Tests: with NO vault and an env declaring M365_ORG1_ALIAS=acme_corp and another acme.com, and a pre-existing cache file named <alias>_cache.bin in a temp TOKEN_DIR, check_m365 finds the cache (returns a normal HealthResult or the stubbed MSAL path) and check_all_configured does not raise; traversal aliases '../evil', 'a/b', '.hidden', '' and a 65-char alias are still refused by tokencache; the 0600 atomic write and corrupt-file tolerance tests still pass; a run with one bad alias and one good source completes with the good source collected."
+      "notes": "check-report finding 2. origin/main built the MSAL cache path from any alias, so aliases such as acme_corp or acme.com worked. tokencache.cache_path now raises ValueError for anything outside [A-Za-z0-9-]+ and health.check_m365 does not catch it, so check_all_configured raises and the WHOLE run fails for such an install even with no key configured. FIX: (1) widen the tokencache alias rule to a safe FILENAME class that still blocks traversal: ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$ (no separators, no leading dot, no empty); keep alias_lock/cache_path/locked/load/save semantics and per-alias lock identity; connection VALIDATION for new UI-created m365 aliases stays [A-Za-z0-9-]+ (do not touch pipeline/connections.py). (2) defense in depth: health.check_m365 and the Graph collector path must convert a ValueError from tokencache into a HealthResult error / a per-source failure, never an exception that aborts the run. Existing tests unchanged. Tests: with NO vault and an env declaring M365_ORG1_ALIAS=acme_corp and another acme.com, and a pre-existing cache file named <alias>_cache.bin in a temp TOKEN_DIR, check_m365 finds the cache (returns a normal HealthResult or the stubbed MSAL path) and check_all_configured does not raise; traversal aliases '../evil', 'a/b', '.hidden', '' and a 65-char alias are still refused by tokencache; the 0600 atomic write and corrupt-file tolerance tests still pass; a run with one bad alias and one good source completes with the good source collected. scope+tests/test_tokencache.py scope+pipeline/oauth_m365.py: existing tokencache tests asserted a.b and a_b are refused (the stricter rule that caused this regression); drop those two parametrizations only; keep browser sign-in strict via an explicit [A-Za-z0-9-]+ check in oauth_m365 so tests/test_oauth_m365.py stays unchanged."
     },
     {
       "id": "T-036",
@@ -2616,11 +2644,46 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:06:39Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def unseeded_env_keys' pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:06:36Z"
+          },
+          {
+            "cmd": "grep -qE 'unseeded_env' api/routers/status.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:06:36Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/connections.py api/routers/status.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:06:36Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_unseeded_env.py tests/test_connections.py tests/test_env_overlay.py tests/test_api_startup.py -q",
+            "exit": 0,
+            "duration_ms": 2402,
+            "tail": "........................................................................ [ 40%]\n........................................................................ [ 80%]\n....................................                                     [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n180 passed, 1 warning in 2.05s",
+            "recorded_at": "2026-09-21T23:06:39Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check-report finding 3. Once a key is set health._live_env drops every family key from the raw env. seed_from_env only logs and skips a declaration it cannot store (an alias or label that fails validation, an over-long id, a Gmail account with no client id or secret); the skipped .env source therefore silently disappears from known_sources() and stops being collected. Tombstoned (deleted) ids MUST stay dropped and stored ids keep store-wins; only declarations that were REJECTED at seed time are affected. FIX: seed_from_env records the raw env keys (names AND values held only in memory) of declarations it skipped for a validation or incompleteness reason and returns/exposes them through a new connections.unseeded_env_keys() (names only for callers); connections.overlay_provider() merges those retained raw entries into the mapping it hands to health._live_env so those sources keep working exactly as before the key was set (do not change pipeline/health.py). A later successful seed of the same id, a tombstone or a stored row for it removes the retention. The startup log line names the KEY NAMES only, never values. api/routers/status.py: GET /system gains unseeded_env: list of env key NAMES (strings) so the UI can tell the owner which declarations were not imported and why they still run from .env; add the field to the existing /system model and keep every existing field. A row that cannot be decrypted stays fail-closed (unchanged, out of scope). Tests: an env with an M365 alias containing an underscore plus a valid slack workspace, key set: after startup the alias source is still in known_sources() and still resolves m365_tenant_config, /system lists its key name in unseeded_env and no value, the slack workspace is seeded into the store; a deleted (tombstoned) seeded id is NOT retained; editing env for a stored id changes nothing; with no key nothing changes and unseeded_env is []; retained raw values never appear in any API response or log capture."
     },
@@ -2650,11 +2713,39 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:12:56Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'oauth/flows' api/routers/oauth.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:12:52Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/oauth.py pipeline/oauth_flows.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:12:53Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_oauth_flow_status.py tests/test_api_oauth.py tests/test_oauth_flows.py -q",
+            "exit": 0,
+            "duration_ms": 3032,
+            "tail": "........................................................................ [ 37%]\n........................................................................ [ 74%]\n..................................................                       [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n194 passed, 1 warning in 2.74s",
+            "recorded_at": "2026-09-21T23:12:56Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check-report finding 4. The callback-mode dialog polls listConnections for a health row that sign-in never writes (Microsoft finish only writes the MSAL cache file; a Gmail re-sign-in already has refresh_token), so it runs to expiry and shows expired even though the token was stored. Give the browser one authoritative signal. Add GET /api/oauth/flows/{flow_id} (safe method) returning {status: pending|ok|error|expired, reason: optional fixed code from the existing fixed reason-code set}. It requires the ss_oauth_<flow_id> nonce cookie and compares it with the flow's nonce hash in constant time; an unknown flow, a wrong or missing cookie -> the same generic 404 (no oracle for flow ids). It never returns connection data, tokens, the auth_url or any provider text. pipeline/oauth_flows.py: FlowStore remembers a bounded outcome per flow id (dict capped at 100 entries, dropped at the flow's original expiry, never longer than the TTL) written when a flow is consumed and finished by the router: the callback route records ok, or error with the same reason code it redirects with; paste flows record too. The router must obtain the flow id BEFORE consuming (add a store lookup by state if needed) and record the outcome in a finally so a provider failure still ends as error. Unauthenticated callback semantics stay exactly as they are (fixed redirect, no echo, cookie handling per the T-021 ruling). Do NOT edit pipeline/oauth_gmail.py or oauth_m365.py. Existing tests unchanged. Tests (router-level app plus the real FlowStore, stub only the provider modules' network calls): pending right after start; ok after a successful callback and after a successful paste; error with the fixed reason after a provider error=access_denied callback; expired after TTL (fake clock); wrong cookie and unknown flow -> identical 404 bodies; outcome table stays bounded (150 flows -> <=100 entries); the response never contains the code, state, nonce, verifier or any secret (assert on every body and header); a replayed callback does not flip an ok outcome to error."
     },
@@ -2692,13 +2783,55 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:22:37Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'oauthFlowStatus' web/composables/useApi.ts",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:22:22Z"
+          },
+          {
+            "cmd": "! grep -nE 'isSignedIn' web/components/OAuthDialog.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:22:22Z"
+          },
+          {
+            "cmd": "cd web && npm run typecheck",
+            "exit": 0,
+            "duration_ms": 3171,
+            "tail": "\n> typecheck\n> nuxt typecheck",
+            "recorded_at": "2026-09-21T23:22:26Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/OAuthDialog.test.ts tests/useApi.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3832,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/useApi.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n····························stdout | tests/OAuthDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······························································\n\n Test Files  2 passed (2)\n      Tests  90 passed (90)\n   Start at  19:22:27\n   Duration  2.61s (tests 53%, transform 32%, environment 9%, import 5%, setup 1%)",
+            "recorded_at": "2026-09-21T23:22:30Z"
+          },
+          {
+            "cmd": "cd web && npm run build",
+            "exit": 0,
+            "duration_ms": 7670,
+            "tail": "yles.Pd4Strki.mjs (3.83 kB) (1.22 kB gzip)\n  ├─ .output/server/chunks/build/error-404-styles.Pd4Strki.mjs.map (196 B) (155 B gzip)\n  ├─ .output/server/chunks/build/error-500-D5UJ6Lpm.mjs (4.72 kB) (1.94 kB gzip)\n  ├─ .output/server/chunks/build/error-500-D5UJ6Lpm.mjs.map (205 B) (175 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs (2.18 kB) (862 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs.map (196 B) (156 B gzip)\n  ├─ .output/server/chunks/build/history-DCmhBHbS.mjs (79.9 kB) (17.8 kB gzip)\n  ├─ .output/server/chunks/build/history-DCmhBHbS.mjs.map (1.73 kB) (506 B gzip)\n  ├─ .output/server/chunks/build/index-D5t3h5U6.mjs (40.7 kB) (3.56 kB gzip)\n  ├─ .output/server/chunks/build/index-D5t3h5U6.mjs.map (18.3 kB) (2.69 kB gzip)\n  ├─ .output/server/chunks/build/interval-CwAGk-1A.mjs (376 B) (274 B gzip)\n  ├─ .output/server/chunks/build/interval-CwAGk-1A.mjs.map (167 B) (152 B gzip)\n  ├─ .output/server/chunks/build/server.mjs (157 kB) (41.7 kB gzip)\n  ├─ .output/server/chunks/build/server.mjs.map (5.93 kB) (1.33 kB gzip)\n  ├─ .output/server/chunks/build/styles.mjs (497 B) (260 B gzip)\n  ├─ .output/server/chunks/build/styles.mjs.map (395 B) (203 B gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs (167 kB) (41.2 kB gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs.map (3.04 kB) (753 B gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs (14.2 kB) (4.57 kB gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs.map (845 B) (272 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs (94 B) (100 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs.map (88 B) (97 B gzip)\n  ├─ .output/server/index.mjs (353 B) (205 B gzip)\n  └─ .output/server/package.json (723 B) (321 B gzip)\nΣ Total size: 3.25 MB (717 kB gzip)\n[nitro] ✔ You can preview this build using node .output/server/index.mjs\n│\n└  ✨ Build complete!",
+            "recorded_at": "2026-09-21T23:22:37Z"
+          }
+        ]
+      },
       "origin": "check",
-      "notes": "check-report finding 4 plus the T-029 review note. useApi.ts: add oauthFlowStatus(flowId) -> {status: 'pending'|'ok'|'error'|'expired', reason?} calling GET /oauth/flows/{flow_id} with credentials: 'include' (the nonce cookie), typed like the other calls; add nothing else. OAuthDialog.vue: in callback mode poll oauthFlowStatus every 2 s (same timer hygiene as now: cleared on close, unmount, terminal state and expiry), on ok call listConnections once and finish(view), on error show the fixed message for reason, on expired show the expired state; REMOVE the isSignedIn/baseline/health heuristic entirely. The paste-back path is unchanged. web/tests/OAuthDialog.test.ts: you may rewrite ONLY the tests that faked a health row for polling (they assert the removed heuristic) and replace the vacuous q-btn--loading assertions (Quasar never renders that class) with a check for the spinner element; every other test must pass unchanged. New tests: the poll completes on ok for BOTH providers including a Gmail connection that already had a refresh_token; error reason mapping; expired; polling stops at terminal states, on close and on unmount (fake timers); a failed status request shows the warning and keeps polling; no pasted URL or secret in Notify or DOM. Typecheck, build and the whole web suite must pass."
+      "notes": "check-report finding 4 plus the T-029 review note. useApi.ts: add oauthFlowStatus(flowId) -> {status: 'pending'|'ok'|'error'|'expired', reason?} calling GET /oauth/flows/{flow_id} with credentials: 'include' (the nonce cookie), typed like the other calls; add nothing else. OAuthDialog.vue: in callback mode poll oauthFlowStatus every 2 s (same timer hygiene as now: cleared on close, unmount, terminal state and expiry), on ok call listConnections once and finish(view), on error show the fixed message for reason, on expired show the expired state; REMOVE the isSignedIn/baseline/health heuristic entirely. The paste-back path is unchanged. web/tests/OAuthDialog.test.ts: you may rewrite ONLY the tests that faked a health row for polling (they assert the removed heuristic) and replace the vacuous q-btn--loading assertions (Quasar never renders that class) with a check for the spinner element; every other test must pass unchanged. New tests: the poll completes on ok for BOTH providers including a Gmail connection that already had a refresh_token; error reason mapping; expired; polling stops at terminal states, on close and on unmount (fake timers); a failed status request shows the warning and keeps polling; no pasted URL or secret in Notify or DOM. Typecheck, build and the whole web suite must pass. ADDED at build time (from T-037 review): the status route answers 404 code unknown_flow once a flow is unknown, expired-and-purged, or the cookie is gone, and it may return 200 {status:'expired'} only while the pending record is still held: the dialog must treat a 404 from oauthFlowStatus during callback polling as 'ended or expired' (show the expired state and stop polling), never as a transient warning. The 200 body is {status, reason?} with reason present only when status is 'error'; reason codes are the fixed set in api/routers/oauth.py."
     },
     {
       "id": "T-039",
@@ -2721,11 +2854,32 @@
           "timeout": 120
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:26:43Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE -- '--no-access-log' api/Dockerfile",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:26:42Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_dockerfile.py -q",
+            "exit": 0,
+            "duration_ms": 754,
+            "tail": "....                                                                     [100%]\n=============================== warnings summary ===============================\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions\n    warnings.warn(  # deprecated in 14.0 - 2024-11-09\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:16: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated\n    from websockets.server import WebSocketServerProtocol\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n4 passed, 2 warnings in 0.59s",
+            "recorded_at": "2026-09-21T23:26:43Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check-report finding 5, reproduced: uvicorn's default access log prints the full request line including the query string, so GET /api/oauth/callback/google?state=...&code=... puts the OAuth code and state into container logs; README says nothing logs a secret. FIX: add --no-access-log to the uvicorn CMD in api/Dockerfile (keep host, port and every other flag). Also check docker-compose.yml for a command override on the api service and report if one exists (do not edit it). Test tests/test_api_dockerfile.py parses api/Dockerfile and asserts the CMD contains --no-access-log, and also runs a small real experiment: start uvicorn programmatically on an ephemeral port with access_log disabled the way the CMD does, hit a route with ?code=SECRETVALUE&state=STATEVALUE, capture the uvicorn.access logger and assert neither value appears (a scratch FastAPI app is fine; no network beyond 127.0.0.1)."
     },
@@ -2764,11 +2918,53 @@
           "timeout": 600
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:33:20Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def install_host_guard' api/security.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:32:59Z"
+          },
+          {
+            "cmd": "grep -qE 'install_host_guard' api/main.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:32:59Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/security.py api/main.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:32:59Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_host_guard.py tests/test_api_security.py tests/test_api_startup.py tests/test_management_e2e.py -q",
+            "exit": 0,
+            "duration_ms": 1802,
+            "tail": "........................................................................ [ 43%]\n........................................................................ [ 87%]\n.....................                                                    [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n165 passed, 1 warning in 1.55s",
+            "recorded_at": "2026-09-21T23:33:01Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest -q",
+            "exit": 0,
+            "duration_ms": 18771,
+            "tail": "...................................................... [ 74%]\n........................................................................ [ 78%]\n........................................................................ [ 82%]\n........................................................................ [ 85%]\n........................................................................ [ 89%]\n........................................................................ [ 92%]\n........................................................................ [ 96%]\n........................................................................ [ 99%]\n..                                                                       [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions\n    warnings.warn(  # deprecated in 14.0 - 2024-11-09\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:16: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated\n    from websockets.server import WebSocketServerProtocol\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2018 passed, 3 warnings in 18.05s",
+            "recorded_at": "2026-09-21T23:33:20Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check-report finding 6. With no login, a DNS-rebinding page can make the browser send same-origin GETs to the API under the attacker's hostname and READ collected items, config and status; the Origin/header guard only blocks writes, and no Host validation exists. FIX: a pure-ASGI Host guard in api/security.py (install_host_guard(app, allowed_hosts)) answering 400 {detail:{code:'host_not_allowed',message:...}} for an unlisted Host (port ignored, case-insensitive, IPv6 literals handled), with an exemption for nothing else (not even /api/health). api/main.py builds the list from: hostnames of every WEB_ORIGINS entry, the PUBLIC_BASE_URL host, LAN_HOST, localhost, 127.0.0.1, ::1, the compose service name if docker-compose.yml declares one the web container uses to reach the API (READ docker-compose.yml and the web SSR calls in web/nuxt.config.ts to decide; if server-side calls use another hostname, include it and say so), plus a new optional comma-separated ALLOWED_HOSTS setting read from the raw env (document it in your reply; T-030's README/.env.example are not in scope, list what to add). CRITICAL: existing tests build api.main.app with Starlette's TestClient whose Host is testserver, and they must pass UNCHANGED: make tests/conftest.py additively provide testserver through the new setting for the whole suite (add ALLOWED_HOSTS to CONFIG_KEYS and set it in the existing autouse env fixture pattern; do not weaken any existing fixture) and prove it with the full suite. Tests: allowed and unlisted Host on GET and POST (including a Host with a port, mixed case and an IPv6 literal), the guard runs before any router (an unlisted Host cannot read /api/system or an item detail), WEB_ORIGINS / PUBLIC_BASE_URL / LAN_HOST / ALLOWED_HOSTS derive entries, unlisted origin evidence: a rebinding-style request (Host: evil.example:8000, no Origin) is refused; wildcard entries are dropped like the origin list; and the CORS/CSRF suite still passes."
     },
@@ -2807,13 +3003,55 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:41:46Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def rotate_all' pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:41:45Z"
+          },
+          {
+            "cmd": "grep -qE 'pipeline.crypto rotate' README.md",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:41:45Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/crypto.py pipeline/connections.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:41:45Z"
+          },
+          {
+            "cmd": "! grep -nE \"/home/[a-z]|(^|[^0-9])(10\\.[0-9]+\\.[0-9]+\\.[0-9]+|192\\.168\\.[0-9]+\\.[0-9]+)\" README.md",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:41:45Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_crypto_rotate.py tests/test_crypto.py tests/test_connections.py -q",
+            "exit": 0,
+            "duration_ms": 1491,
+            "tail": "........................................................................ [ 41%]\n........................................................................ [ 82%]\n...............................                                          [100%]\n175 passed in 1.27s",
+            "recorded_at": "2026-09-21T23:41:46Z"
+          }
+        ]
+      },
       "origin": "check",
-      "notes": "check-report finding 7. The README tells the owner to rotate by putting the new key first and the old keys after it, but Vault.rotate() is never called: rows stay encrypted under the old key until each is edited, and dropping the old key later makes every untouched secret undecryptable (fail closed, 503). FIX: connections.rotate_all() (pipeline/connections.py) re-encrypts every connection row's secret_ciphertext under the primary key with Vault.rotate inside ONE transaction and returns counts; if any row is unreadable it writes NOTHING and reports which connection IDS (never values) so the owner can fix or re-enter them; python -m pipeline.crypto rotate (extend main() in pipeline/crypto.py: keep genkey behavior and its usage/exit codes so tests/test_crypto.py passes unchanged; rotate opens the DB through the existing init helpers, builds the vault from SIGNALSLATE_SECRET_KEY, prints only counts and ids, exit 0 on success, 1 on an unreadable row, 2 on usage or no key). README.md: replace the rotation bullet with the complete procedure (add the new key first and keep the old one, restart, run the rotate command, verify the connections list still tests ok, then remove the old key), keep the public-repo rules (<your-host>, no real values). Tests: rotate from key A to key B,A re-encrypts (ciphertext changes, decrypts under B alone after dropping A), idempotent second run, an undecryptable row aborts with nothing written and its id reported, no key -> exit 2, output never contains a secret or ciphertext, genkey unchanged, no rows -> 0 rotated."
+      "notes": "check-report finding 7. The README tells the owner to rotate by putting the new key first and the old keys after it, but Vault.rotate() is never called: rows stay encrypted under the old key until each is edited, and dropping the old key later makes every untouched secret undecryptable (fail closed, 503). FIX: connections.rotate_all() (pipeline/connections.py) re-encrypts every connection row's secret_ciphertext under the primary key with Vault.rotate inside ONE transaction and returns counts; if any row is unreadable it writes NOTHING and reports which connection IDS (never values) so the owner can fix or re-enter them; python -m pipeline.crypto rotate (extend main() in pipeline/crypto.py: keep genkey behavior and its usage/exit codes so tests/test_crypto.py passes unchanged; rotate opens the DB through the existing init helpers, builds the vault from SIGNALSLATE_SECRET_KEY, prints only counts and ids, exit 0 on success, 1 on an unreadable row, 2 on usage or no key). README.md: replace the rotation bullet with the complete procedure (add the new key first and keep the old one, restart, run the rotate command, verify the connections list still tests ok, then remove the old key), keep the public-repo rules (<your-host>, no real values). Tests: rotate from key A to key B,A re-encrypts (ciphertext changes, decrypts under B alone after dropping A), idempotent second run, an undecryptable row aborts with nothing written and its id reported, no key -> exit 2, output never contains a secret or ciphertext, genkey unchanged, no rows -> 0 rotated. ADDED at build time (from T-040): README.md and .env.example (scope+.env.example) must ALSO document the new Host allow-list, as an upgrade note for existing installs: the API now answers 400 host_not_allowed for any Host that is not localhost, 127.0.0.1, ::1, LAN_HOST, the hostname of a WEB_ORIGINS entry, the PUBLIC_BASE_URL host or an entry of the new optional comma-separated ALLOWED_HOSTS (hostnames only, no URLs, ports ignored, case-insensitive, IPv6 with or without brackets, wildcards dropped and counted at startup, read once at startup so a change needs a restart, /api/health is not exempt). An install that reaches the API by a name other than LAN_HOST (or a proxy that forwards a different Host, e.g. the compose service name api) must set ALLOWED_HOSTS. Add ALLOWED_HOSTS= with a comment to .env.example, and add it to the README settings text next to WEB_ORIGINS. State that it defends against DNS-rebinding reads and is not authentication. Keep the public-repo rules and the README grep guard clean. Also note in the README that WEB_ORIGINS and ALLOWED_HOSTS need a restart to take effect."
     },
     {
       "id": "T-042",
@@ -2844,11 +3082,46 @@
           "timeout": 600
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:47:12Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'iso_z' api/routers/runs.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:46:51Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/runs.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:46:52Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_runs_timestamps.py -q",
+            "exit": 0,
+            "duration_ms": 579,
+            "tail": "....                                                                     [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n4 passed, 1 warning in 0.34s",
+            "recorded_at": "2026-09-21T23:46:52Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest -q",
+            "exit": 0,
+            "duration_ms": 19568,
+            "tail": "...................................................... [ 72%]\n........................................................................ [ 75%]\n........................................................................ [ 79%]\n........................................................................ [ 82%]\n........................................................................ [ 86%]\n........................................................................ [ 89%]\n........................................................................ [ 93%]\n........................................................................ [ 96%]\n........................................................................ [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions\n    warnings.warn(  # deprecated in 14.0 - 2024-11-09\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:16: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated\n    from websockets.server import WebSocketServerProtocol\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2088 passed, 3 warnings in 18.70s",
+            "recorded_at": "2026-09-21T23:47:12Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check-report finding 8. /api/runs and /api/runs/{id} return run.started_at, finished_at and source_health.checked_at as naive UTC datetimes, which browsers parse as LOCAL time; /status and the new routers already use api.serialize.iso_z. Convert every datetime in api/routers/runs.py through iso_z (None stays None) and change nothing else in the payload shape. Existing tests must pass unchanged: grep the existing tests for these fields first and report if any assert the naive format (then STOP with BLOCKED and the failing assertion instead of editing them). Tests (real router on a temp DB): every timestamp in list and detail ends with Z and parses back to the stored UTC value; a running run has finished_at null; source_health checked_at ends with Z."
     },
@@ -2886,13 +3159,138 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-21T23:50:39Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'parseUtc' web/pages/history.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:50:24Z"
+          },
+          {
+            "cmd": "! grep -nE 'new Date\\(' web/pages/history.vue web/pages/index.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-21T23:50:24Z"
+          },
+          {
+            "cmd": "cd web && npm run typecheck",
+            "exit": 0,
+            "duration_ms": 2828,
+            "tail": "\n> typecheck\n> nuxt typecheck",
+            "recorded_at": "2026-09-21T23:50:26Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run --reporter=dot",
+            "exit": 0,
+            "duration_ms": 4970,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/useApi.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n····························stdout | tests/smoke.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/history.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/OAuthDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/ConnectionDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/collectors.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/connections.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n··································································································································\n\n Test Files  7 passed (7)\n      Tests  158 passed (158)\n   Start at  19:50:28\n   Duration  3.71s (transform 48%, tests 31%, environment 10%, import 9%, setup 2%)\n\n  Transform  transforming modules took 9.24s · 48% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-09-21T23:50:31Z"
+          },
+          {
+            "cmd": "cd web && npm run build",
+            "exit": 0,
+            "duration_ms": 7428,
+            "tail": "tyles.Pd4Strki.mjs (3.83 kB) (1.22 kB gzip)\n  ├─ .output/server/chunks/build/error-404-styles.Pd4Strki.mjs.map (196 B) (155 B gzip)\n  ├─ .output/server/chunks/build/error-500-D5UJ6Lpm.mjs (4.72 kB) (1.94 kB gzip)\n  ├─ .output/server/chunks/build/error-500-D5UJ6Lpm.mjs.map (205 B) (175 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs (2.18 kB) (862 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs.map (196 B) (156 B gzip)\n  ├─ .output/server/chunks/build/history-CY2WfWv0.mjs (80.1 kB) (17.9 kB gzip)\n  ├─ .output/server/chunks/build/history-CY2WfWv0.mjs.map (1.73 kB) (506 B gzip)\n  ├─ .output/server/chunks/build/index-qhSbFqhm.mjs (40.8 kB) (3.6 kB gzip)\n  ├─ .output/server/chunks/build/index-qhSbFqhm.mjs.map (18.3 kB) (2.71 kB gzip)\n  ├─ .output/server/chunks/build/interval-CwAGk-1A.mjs (376 B) (274 B gzip)\n  ├─ .output/server/chunks/build/interval-CwAGk-1A.mjs.map (167 B) (152 B gzip)\n  ├─ .output/server/chunks/build/server.mjs (157 kB) (41.7 kB gzip)\n  ├─ .output/server/chunks/build/server.mjs.map (5.93 kB) (1.33 kB gzip)\n  ├─ .output/server/chunks/build/styles.mjs (497 B) (260 B gzip)\n  ├─ .output/server/chunks/build/styles.mjs.map (395 B) (203 B gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs (167 kB) (41.2 kB gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs.map (3.04 kB) (753 B gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs (14.2 kB) (4.57 kB gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs.map (845 B) (272 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs (94 B) (100 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs.map (88 B) (97 B gzip)\n  ├─ .output/server/index.mjs (353 B) (205 B gzip)\n  └─ .output/server/package.json (723 B) (321 B gzip)\nΣ Total size: 3.25 MB (717 kB gzip)\n[nitro] ✔ You can preview this build using node .output/server/index.mjs\n│\n└  ✨ Build complete!",
+            "recorded_at": "2026-09-21T23:50:39Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check-report finding 8. web/pages/history.vue:46 and web/pages/index.vue:89 render timestamps with new Date(v).toLocaleString(); use parseUtc from ~/composables/useApi (it already treats a Z-suffixed or zone-less string as UTC) and keep the fallback for an unparseable value (show the raw string, not Invalid Date). No other change to either page. Tests (mountSuspended with the real composable, vi.stubGlobal on $fetch): a run with started_at '2026-09-21T12:00:00Z' renders the same instant as parseUtc(...).toLocaleString() under a non-UTC process timezone (set TZ or stub Intl so the test would fail with the old code), a zone-less string is still treated as UTC, and an unparseable value renders as text. Typecheck, build and the whole web suite pass."
+    },
+    {
+      "id": "T-044",
+      "title": "Run detail page parses timestamps with parseUtc (finding 8 residue found while building T-043)",
+      "role": "frontend",
+      "files": [
+        "web/pages/history/[id].vue",
+        "web/tests/history-detail.test.ts"
+      ],
+      "depends_on": [
+        "T-043"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'parseUtc' 'web/pages/history/[id].vue'",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'new Date\\(' 'web/pages/history/[id].vue'",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npm run typecheck",
+          "timeout": 300
+        },
+        {
+          "cmd": "cd web && npx vitest run --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "cd web && npm run build",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-09-22T00:06:27Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'parseUtc' 'web/pages/history/[id].vue'",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:06:11Z"
+          },
+          {
+            "cmd": "! grep -nE 'new Date\\(' 'web/pages/history/[id].vue'",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:06:11Z"
+          },
+          {
+            "cmd": "cd web && npm run typecheck",
+            "exit": 0,
+            "duration_ms": 3033,
+            "tail": "\n> typecheck\n> nuxt typecheck",
+            "recorded_at": "2026-09-22T00:06:14Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run --reporter=dot",
+            "exit": 0,
+            "duration_ms": 4940,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/connections.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/OAuthDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/smoke.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/history-detail.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/useApi.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/collectors.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/history.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/ConnectionDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n···································································································································································\n\n Test Files  8 passed (8)\n      Tests  163 passed (163)\n   Start at  20:06:15\n   Duration  3.68s (transform 49%, tests 29%, environment 10%, import 10%, setup 2%)\n\n  Transform  transforming modules took 10.43s · 49% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-09-22T00:06:19Z"
+          },
+          {
+            "cmd": "cd web && npm run build",
+            "exit": 0,
+            "duration_ms": 7871,
+            "tail": "tyles.Pd4Strki.mjs (3.83 kB) (1.22 kB gzip)\n  ├─ .output/server/chunks/build/error-404-styles.Pd4Strki.mjs.map (196 B) (155 B gzip)\n  ├─ .output/server/chunks/build/error-500-D5UJ6Lpm.mjs (4.72 kB) (1.94 kB gzip)\n  ├─ .output/server/chunks/build/error-500-D5UJ6Lpm.mjs.map (205 B) (175 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs (2.18 kB) (862 B gzip)\n  ├─ .output/server/chunks/build/error-500-styles.BMmh3bAG.mjs.map (196 B) (156 B gzip)\n  ├─ .output/server/chunks/build/history-CY2WfWv0.mjs (80.1 kB) (17.9 kB gzip)\n  ├─ .output/server/chunks/build/history-CY2WfWv0.mjs.map (1.73 kB) (506 B gzip)\n  ├─ .output/server/chunks/build/index-qhSbFqhm.mjs (40.8 kB) (3.6 kB gzip)\n  ├─ .output/server/chunks/build/index-qhSbFqhm.mjs.map (18.3 kB) (2.71 kB gzip)\n  ├─ .output/server/chunks/build/interval-CwAGk-1A.mjs (376 B) (274 B gzip)\n  ├─ .output/server/chunks/build/interval-CwAGk-1A.mjs.map (167 B) (152 B gzip)\n  ├─ .output/server/chunks/build/server.mjs (157 kB) (41.7 kB gzip)\n  ├─ .output/server/chunks/build/server.mjs.map (5.93 kB) (1.33 kB gzip)\n  ├─ .output/server/chunks/build/styles.mjs (497 B) (260 B gzip)\n  ├─ .output/server/chunks/build/styles.mjs.map (395 B) (203 B gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs (167 kB) (41.2 kB gzip)\n  ├─ .output/server/chunks/nitro/nitro.mjs.map (3.04 kB) (753 B gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs (14.2 kB) (4.57 kB gzip)\n  ├─ .output/server/chunks/routes/renderer.mjs.map (845 B) (272 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs (94 B) (100 B gzip)\n  ├─ .output/server/chunks/virtual/_virtual_spa-template.mjs.map (88 B) (97 B gzip)\n  ├─ .output/server/index.mjs (353 B) (205 B gzip)\n  └─ .output/server/package.json (723 B) (321 B gzip)\nΣ Total size: 3.25 MB (717 kB gzip)\n[nitro] ✔ You can preview this build using node .output/server/index.mjs\n│\n└  ✨ Build complete!",
+            "recorded_at": "2026-09-22T00:06:27Z"
+          }
+        ]
+      },
+      "origin": "check",
+      "notes": "T-043 review: web/pages/history/[id].vue formatDate (about line 60) still uses new Date(iso).toLocaleString() for the run's started/finished and source_health checked_at. /api/runs/{id} now sends Z timestamps (T-042) and parseUtc treats Z and zone-less strings as UTC. Replace every new Date( in that page with parseUtc from ~/composables/useApi, keep the unparseable-value fallback (show the raw string, never Invalid Date), change nothing else. Test web/tests/history-detail.test.ts (mountSuspended inside QLayout and QPageContainer, the real composable, vi.stubGlobal on $fetch, route param id stubbed the way web/tests/history.test.ts does it): run under TZ=America/New_York so it FAILS on the old code; a run with started_at '2026-09-21T12:00:00Z' and a source_health checked_at zone-less '2026-09-21T12:00:00' both render parseUtc(iso).toLocaleString(); an unparseable value renders as text. Typecheck, build and the whole web suite pass."
     }
   ]
 }

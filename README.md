@@ -310,6 +310,18 @@ returns or logs a secret after it is saved. Changes are accepted only from the b
 `WEB_ORIGINS` and only with the `X-Requested-With: signalslate` header, which the web app sends, so
 another website cannot drive the API from your browser.
 
+**Upgrading: the API now checks the Host header.** To defend against DNS-rebinding reads (a hostile
+website pointing its own name at your server to read the API from your browser), the API answers
+`400 host_not_allowed`, `/api/health` included, for any `Host` that is not `localhost`,
+`127.0.0.1`, `::1`, `LAN_HOST`, the hostname of an entry in `WEB_ORIGINS`, or the host of
+`PUBLIC_BASE_URL`. If you reach the API by any other name, or a reverse proxy forwards a different
+`Host` (for example the compose service name `api`), list those names in the new optional
+`ALLOWED_HOSTS`. It is not authentication: anyone who can reach the ports can still use the API.
+`ALLOWED_HOSTS` is comma-separated, hostnames only (no scheme, path or port; ports are ignored),
+case-insensitive, and IPv6 works with or without brackets. Wildcards are dropped, and the number
+dropped is logged at startup. `WEB_ORIGINS` and `ALLOWED_HOSTS` are read once at startup, so
+changing either needs a restart.
+
 **Encryption key.** Stored secrets are encrypted at rest with `SIGNALSLATE_SECRET_KEY`:
 
 ```
@@ -318,8 +330,21 @@ python -m pipeline.crypto genkey     # prints one key; put it in .env
 
 - Losing the key loses every stored secret. Back it up separately from `data/`, which holds the
   ciphertext.
-- To rotate, set a comma-separated list with the new primary key first and the old keys after it.
-  The primary key encrypts; the rest only decrypt.
+- `SIGNALSLATE_SECRET_KEY` is a comma-separated list: the first key encrypts, the rest only decrypt.
+  Changing the list does **not** re-encrypt anything by itself, so an old key can be dropped only
+  after the rotation below has run. To rotate:
+  1. `python -m pipeline.crypto genkey`, then put the new key **first** in `SIGNALSLATE_SECRET_KEY`
+     and **keep the old key after it** (`new,old`).
+  2. Restart the app so it reads the new list (`docker compose up -d`).
+  3. Run `python -m pipeline.crypto rotate` where the app's `.env` and `data/` are (in Docker:
+     `docker compose exec api python -m pipeline.crypto rotate`). It re-encrypts every stored secret
+     under the new key in one transaction and prints only counts and connection ids, never a
+     secret or a key. Exit 0 is success, 1 means a connection could not be decrypted (nothing was
+     changed; fix the key list or re-enter the secrets of the ids it names, then run it again),
+     2 means no usable key is set. Running it again is harmless.
+  4. Open the **Connections** page and test each connection; they should all still test ok.
+  5. Only now remove the old key from `SIGNALSLATE_SECRET_KEY` and restart. Keep a backup of the
+     old key until you have confirmed step 4 with the new list alone.
 - With no key set, the app keeps using `.env` exactly as before. The Connections page shows a
   banner and cannot add or edit connections. An unusable key is reported in the API's startup log
   (naming the key's position, never its text) and also falls back to `.env`.
@@ -336,6 +361,7 @@ fallback for signing in without the UI.
 |---|---|
 | `SIGNALSLATE_SECRET_KEY` | Encryption key list, see above. |
 | `WEB_ORIGINS` | Comma-separated browser origins allowed to make changes, written as typed in the address bar. Blank means `http://localhost:3000` plus `http://<LAN_HOST>:3000`. The first entry is where the automatic sign-in callback returns your browser, so make it the address you browse to. |
+| `ALLOWED_HOSTS` | Optional comma-separated extra hostnames the API answers to, on top of `localhost`, `LAN_HOST` and the hosts of `WEB_ORIGINS` and `PUBLIC_BASE_URL`. Hostnames only, no URLs. Read at startup; a change needs a restart, as does `WEB_ORIGINS`. Guards against DNS rebinding; it is not authentication. |
 | `PUBLIC_BASE_URL` | Public `https://<your-host>` address, no path. Needed only for the automatic callback; ignored unless it starts with `https://`. |
 
 #### Signing in from the browser
@@ -399,3 +425,54 @@ npm test
 No auth on the interface or the API — LAN-only by design. Put it behind your network or an
 authenticating reverse proxy before exposing it anywhere else; see the
 [security model](#management-ui).
+
+## Domains
+
+A **Domains** page and daily job give a portfolio view of every domain you own, pulled from
+Namecheap, GoDaddy and WordPress.com plus anything added manually or by CSV import. For any
+domain, owned or not, it shows DNS records, mail posture (SPF/DMARC/DKIM/MTA-STS/BIMI) and RDAP
+registration data, and on demand CT-log subdomains and Wayback URLs. It can generate name ideas,
+check availability, and — only once you enable it — buy through your Namecheap or GoDaddy account.
+A `domains` source feeds the morning digest with what changed: expiry approaching, nameservers or
+mail records changed, lock removed.
+
+Registrar connections are added in the **Connections** page like every other source, not in `.env`.
+`.env` only holds the purchase guardrails and refresh schedule below.
+
+### Namecheap
+
+The API is off for new accounts until the account qualifies: **20 domains**, a **$50 balance**, or
+**$50 spent in the last 2 years** (whichever comes first). Once qualified, generate an API key
+under Profile > Tools > API Access, then whitelist the server's public **IPv4** address — Namecheap
+accepts IPv4 only, and calls silently fail if the whitelist and the server's actual egress address
+drift apart (common on a home connection with a dynamic IP). There is a sandbox
+(`sandbox.namecheap.com`) with its own account and test-registry data; use it to test the purchase
+flow first.
+
+### GoDaddy
+
+Any account with **at least one domain** gets the Domains API (list, detail, DNS, purchase).
+**Availability checks** are a separate, stricter tier: **50 or more domains**, or **average monthly
+spend of $20 or more**. Generate an API key/secret at developer.godaddy.com. GoDaddy also runs a
+test environment, **OTE** (`api.ote-godaddy.com`), with its own account — test purchases there
+before using a production key.
+
+### WordPress.com
+
+WordPress.com has no documented domain API. Signing in creates an OAuth app (developer.wordpress.com
+> Create New Application) with the `global` scope, and the connection calls an **undocumented**
+endpoint (`/rest/v1.1/all-domains`) that may change without notice. WordPress.com also issues no
+refresh token, so a lapsed connection just needs signing in again. If that adapter breaks or the
+account isn't set up for it, add those domains by pasting names or importing a CSV instead — every
+other feature (DNS, RDAP, mail posture, digest alerts) works the same regardless of how a domain
+was added.
+
+### Purchasing
+
+Buying a domain is disabled out of the box (`DOMAINS_PURCHASE_ENABLED=false`) and every purchase
+goes through a server-issued quote, a price cap, a daily spend cap, and retyping the domain name to
+confirm — see `.env.example` for the exact keys. **Test the full quote-then-purchase flow against
+the Namecheap sandbox or GoDaddy OTE connection before pointing it at a production account.** A
+green sandbox/OTE run is necessary but not sufficient: each registrar's test environment has its
+own, different pool of "available" names, so it cannot confirm a specific production domain is
+purchasable — only that the flow itself works.

@@ -33,6 +33,12 @@ Design decisions:
   instead of an env-style overlay key. registrant_contact is a secret (it is PII, not a token) held
   as one JSON envelope entry, so it is validated as a JSON object with its required keys and stored
   as a normalized JSON string, the same shape every other secret already has.
+- health._live_env drops every family key of the raw env once a key is set, so a .env declaration
+  that seed_from_env REJECTED (an alias that fails validation, an over-long label, a Gmail account
+  with no client id) would silently stop being collected. seed_from_env therefore keeps those raw
+  declarations in memory only (never stored, never logged: unseeded_env_keys() hands out the key
+  NAMES) and overlay_provider() adds them back, so they keep running exactly as they did before the
+  key was set. The store still wins: a live row or a tombstone for the same id ends the retention.
 """
 import ipaddress
 import json
@@ -74,7 +80,10 @@ __all__ = [
     "current_version",
     "get_secret",
     "secret_values",
+    "RotationResult",
+    "rotate_all",
     "seed_from_env",
+    "unseeded_env_keys",
     "materialize",
     "zoom_auth_mode",
     "zoom_include_transcripts",
@@ -231,6 +240,27 @@ _version = 0
 
 
 @dataclass(frozen=True)
+class _Unseeded:
+    """
+    A .env declaration seed_from_env could not import. `entries` hold raw VALUES and never leave
+    this module except through the overlay; `names` are the only part callers may see.
+
+    connection_id: what a stored row for it would be called; an id that cannot be stored (a rejected
+    alias) simply never matches a row. m365 entries are keyed by suffix (ALIAS, TENANT_ID,
+    CLIENT_ID) because the org number is reassigned when the overlay is built.
+    """
+
+    connection_id: str
+    names: tuple[str, ...]
+    entries: tuple[tuple[str, str], ...]
+    m365: bool = False
+
+
+_unseeded_lock = threading.Lock()
+_unseeded: dict[str, _Unseeded] = {}  # keyed by the env key that made the declaration
+
+
+@dataclass(frozen=True)
 class ConnectionView:
     """
     What every caller outside this module gets. `secrets_set` is the sorted list of secret names
@@ -251,6 +281,8 @@ def set_vault(vault: Optional[Vault]) -> None:
     """Installs (or, with None, removes) the vault. Loaded elsewhere; this module never reads the environment."""
     global _vault
     _vault = vault
+    if vault is None:
+        _set_unseeded({})
 
 
 def get_vault() -> Optional[Vault]:
@@ -266,6 +298,16 @@ def current_version() -> int:
 def _bump() -> None:
     global _version
     _version += 1
+
+
+def _set_unseeded(records: dict[str, _Unseeded]) -> None:
+    """Replaces the retained declarations; bumps the version only when they changed so the overlay cache rebuilds."""
+    global _unseeded
+    with _unseeded_lock:
+        changed = _unseeded != records
+        _unseeded = records
+    if changed:
+        _bump()
 
 
 def _safe_name(name: object) -> str:
@@ -672,6 +714,65 @@ def secret_values() -> list[str]:
     return found
 
 
+@dataclass(frozen=True)
+class RotationResult:
+    """
+    What rotate_all did, as counts and ids only. A non-empty `unreadable` means nothing was written
+    (and `rotated` is then 0). Connection ids come from validated labels, so they are safe to print.
+    """
+
+    rotated: int
+    without_secrets: int
+    unreadable: tuple[str, ...]
+
+
+def rotate_all(vault: Optional[Vault] = None) -> RotationResult:
+    """
+    Re-encrypts every row's secret envelope under the primary key, so the old keys can be dropped
+    from SIGNALSLATE_SECRET_KEY afterwards. Vault.rotate is only ever called from here: rows
+    otherwise stay under whichever key wrote them until each is edited, and removing the old key
+    then makes every untouched secret undecryptable.
+
+    Every row is handled whatever its kind: the ciphertext is opaque here, never parsed. It is
+    all-or-nothing in ONE transaction: if any row cannot be opened, nothing is written and the
+    offending ids are returned, because a half-rotated store would make "which key can I drop?"
+    unanswerable. BEGIN IMMEDIATE takes SQLite's write lock before the read: _write_lock only
+    serialises writers inside this process, and the CLI runs in another one, so without it an edit
+    made through the running API could land between the read and the write and be overwritten with
+    a stale envelope. updated_at is left alone (nobody edited the connection) and so is the version counter: the
+    decrypted content is unchanged, so a cached overlay stays valid.
+
+    vault: the key list to rotate under; defaults to the installed vault. Old keys must still be in
+    it, or those rows are reported as unreadable.
+    Returns RotationResult. Raises SecretKeyMissing when there is no vault at all.
+    """
+    active = vault if vault is not None else _require_vault()
+    with _write_lock:
+        with db.get_session() as session:
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            rows = session.exec(select(db.Connection).order_by(col(db.Connection.seq), col(db.Connection.id))).all()
+            fresh: dict[str, str] = {}
+            unreadable: list[str] = []
+            without_secrets = 0
+            for row in rows:
+                if not row.secret_ciphertext:
+                    without_secrets += 1
+                    continue
+                try:
+                    fresh[row.id] = active.rotate(row.secret_ciphertext)
+                except SecretDecryptError:
+                    unreadable.append(row.id)
+            if unreadable:
+                session.rollback()
+                return RotationResult(0, without_secrets, tuple(unreadable))
+            for row in rows:
+                if row.id in fresh:
+                    row.secret_ciphertext = fresh[row.id]
+                    session.add(row)
+            session.commit()
+    return RotationResult(len(fresh), without_secrets, ())
+
+
 # Every env-style key a connection owns. is_family_key is what lets the overlay REPLACE these keys
 # from the store instead of merging: a stale SLACK_OLD_TOKEN left in .env after the user deleted
 # that connection in the UI must not resurrect it.
@@ -704,19 +805,34 @@ def _has_tombstone(connection_id: str) -> bool:
         return session.get(db.Tombstone, connection_id) is not None
 
 
-def _seed_one(kind: str, fields: dict[str, str], declared_by: str) -> Optional[str]:
-    """Creates one env-origin connection unless the store already decided this id. Returns the id when seeded."""
+def _seed_one(kind: str, fields: dict[str, str], declared_by: str) -> tuple[Optional[str], bool]:
+    """
+    Creates one env-origin connection unless the store already decided this id.
+
+    Returns (id when seeded, rejected). rejected is True only when validation refused the
+    declaration; an id the store already decided is neither seeded nor rejected.
+    """
     spec = KINDS[kind]
     label = fields.get(spec.label_field) if spec.label_field else kind
     connection_id = f"{kind}_{label}" if spec.label_field else kind
     if exists(connection_id) or _has_tombstone(connection_id):
-        return None
+        return None, False
     try:
-        return create(kind, fields, origin="env").id
+        return create(kind, fields, origin="env").id, False
     except ConnectionError as exc:
         # Field name and generic text only; the exception never carries a submitted value.
         _log.warning("skipped .env connection declared by %s: %s", declared_by, exc)
-        return None
+        return None, True
+
+
+def _pairs(raw_env: Mapping[str, Optional[str]], keys: list[str]) -> tuple[tuple[str, str], ...]:
+    """(key, raw value) for each declared (non-blank) key, in the order given."""
+    found: list[tuple[str, str]] = []
+    for key in keys:
+        value = raw_env.get(key)
+        if value is not None and value.strip():
+            found.append((key, value))
+    return tuple(found)
 
 
 def seed_from_env(raw_env: Mapping[str, Optional[str]]) -> list[str]:
@@ -726,20 +842,30 @@ def seed_from_env(raw_env: Mapping[str, Optional[str]]) -> list[str]:
     A connection is created (origin "env") only when its id has no live row and no tombstone, so
     an existing row is never overwritten and a deleted one never comes back. A declaration that
     cannot become a valid connection (an M365 org without a tenant id, a Gmail account without a
-    client secret) is skipped with a warning naming the env key, never raising. Without a vault
-    nothing is seeded, because Slack, Zoom and Gmail cannot be stored and a partial import would
-    be surprising.
+    client secret, an alias that fails validation) is skipped with a warning naming the env key,
+    never raising, and is kept in memory so overlay_provider() lets it keep running from .env
+    (see unseeded_env_keys). Without a vault nothing is seeded, because Slack, Zoom and Gmail
+    cannot be stored and a partial import would be surprising.
 
     raw_env: the unmerged .env mapping. Returns the ids created, in declaration order.
     """
     if _vault is None:
+        _set_unseeded({})
         return []
     seeded: list[str] = []
+    retained: dict[str, _Unseeded] = {}
 
-    def add(kind: str, fields: dict[str, str], declared_by: str) -> None:
-        created = _seed_one(kind, fields, declared_by)
+    def retain(declared_by: str, record: _Unseeded) -> None:
+        # The store decided this id already (a UI row, or a deletion): .env must not resurrect it.
+        if exists(record.connection_id) or _has_tombstone(record.connection_id):
+            return
+        retained[declared_by] = record
+
+    def add(kind: str, fields: dict[str, str], declared_by: str) -> bool:
+        created, rejected = _seed_one(kind, fields, declared_by)
         if created is not None:
             seeded.append(created)
+        return rejected
 
     orgs = sorted(
         (int(m.group(1)), key)
@@ -751,25 +877,55 @@ def seed_from_env(raw_env: Mapping[str, Optional[str]]) -> list[str]:
         prefix = f"M365_ORG{number}"
         tenant_id = _declared(raw_env, f"{prefix}_TENANT_ID")
         client_id = _declared(raw_env, f"{prefix}_CLIENT_ID") or shared_m365_client
+
+        def retain_org() -> None:
+            # The shared client id is resolved into the org's own entry: the shared key is a family
+            # key of every org, and the retained org is renumbered when the overlay is built.
+            own_client = f"{prefix}_CLIENT_ID"
+            client_key = own_client if _declared(raw_env, own_client) else "M365_CLIENT_ID"
+            keys = [alias_key, f"{prefix}_TENANT_ID", client_key]
+            present = _pairs(raw_env, keys)
+            suffixes = {alias_key: "ALIAS", f"{prefix}_TENANT_ID": "TENANT_ID", client_key: "CLIENT_ID"}
+            retain(
+                alias_key,
+                _Unseeded(
+                    f"m365_{_declared(raw_env, alias_key)}",
+                    tuple(key for key, _ in present),
+                    tuple((suffixes[key], value) for key, value in present),
+                    m365=True,
+                ),
+            )
+
         if not tenant_id or not client_id:
             _log.warning("skipped .env connection declared by %s: tenant id or client id missing", alias_key)
+            retain_org()
             continue
-        add("m365", {"alias": _declared(raw_env, alias_key), "tenant_id": tenant_id, "client_id": client_id}, alias_key)
+        if add("m365", {"alias": _declared(raw_env, alias_key), "tenant_id": tenant_id, "client_id": client_id}, alias_key):
+            retain_org()
 
-    zoom = {name: _declared(raw_env, f"ZOOM_{name.upper()}") for name in ("account_id", "client_id", "client_secret")}
+    zoom_keys = ["ZOOM_ACCOUNT_ID", "ZOOM_CLIENT_ID", "ZOOM_CLIENT_SECRET"]
+    zoom = {key[len("ZOOM_"):].lower(): _declared(raw_env, key) for key in zoom_keys}
+
+    def retain_zoom() -> None:
+        present = _pairs(raw_env, zoom_keys)
+        retain("ZOOM_ACCOUNT_ID", _Unseeded("zoom", tuple(key for key, _ in present), present))
+
     if any(zoom.values()):
         if all(zoom.values()):
             # A declared ZOOM_ACCOUNT_ID/CLIENT_ID/CLIENT_SECRET trio is always s2s, same as before
             # KINDS grew auth_mode; ZOOM_AUTH_MODE is an optional extra key on top, not a gate.
             zoom_auth_mode = _declared(raw_env, "ZOOM_AUTH_MODE")
-            add("zoom", {**zoom, **({"auth_mode": zoom_auth_mode} if zoom_auth_mode else {})}, "ZOOM_ACCOUNT_ID")
+            if add("zoom", {**zoom, **({"auth_mode": zoom_auth_mode} if zoom_auth_mode else {})}, "ZOOM_ACCOUNT_ID"):
+                retain_zoom()
         else:
             _log.warning("skipped .env connection declared by ZOOM_ACCOUNT_ID: not all three Zoom values are set")
+            retain_zoom()
 
     for key in sorted(raw_env):
         match = _SLACK_TOKEN_KEY.fullmatch(key)
         if match and _declared(raw_env, key):
-            add("slack", {"label": match.group(1).lower(), "token": _declared(raw_env, key)}, key)
+            if add("slack", {"label": match.group(1).lower(), "token": _declared(raw_env, key)}, key):
+                retain(key, _Unseeded(f"slack_{match.group(1).lower()}", (key,), _pairs(raw_env, [key])))
 
     shared_gmail_id = _declared(raw_env, "GMAIL_CLIENT_ID")
     shared_gmail_secret = _declared(raw_env, "GMAIL_CLIENT_SECRET")
@@ -780,10 +936,24 @@ def seed_from_env(raw_env: Mapping[str, Optional[str]]) -> list[str]:
         upper = match.group(1)
         client_id = _declared(raw_env, f"GMAIL_{upper}_CLIENT_ID") or shared_gmail_id
         client_secret = _declared(raw_env, f"GMAIL_{upper}_CLIENT_SECRET") or shared_gmail_secret
+
+        def retain_gmail() -> None:
+            # Shared client credentials are resolved into per-account keys for the same reason as M365's.
+            keys = [key]
+            entries = list(_pairs(raw_env, [key]))
+            for name, shared in (("CLIENT_ID", "GMAIL_CLIENT_ID"), ("CLIENT_SECRET", "GMAIL_CLIENT_SECRET")):
+                own = f"GMAIL_{upper}_{name}"
+                source = own if _declared(raw_env, own) else shared
+                if _declared(raw_env, source):
+                    keys.append(source)
+                    entries.append((own, _declared(raw_env, source)))
+            retain(key, _Unseeded(f"gmail_{upper.lower()}", tuple(keys), tuple(entries)))
+
         if not client_id or not client_secret:
             _log.warning("skipped .env connection declared by %s: client id or client secret missing", key)
+            retain_gmail()
             continue
-        add(
+        if add(
             "gmail",
             {
                 "label": upper.lower(),
@@ -792,8 +962,40 @@ def seed_from_env(raw_env: Mapping[str, Optional[str]]) -> list[str]:
                 "refresh_token": _declared(raw_env, key),
             },
             key,
+        ):
+            retain_gmail()
+
+    if retained:
+        # Names only: the values stay in _unseeded and reach nothing but the overlay.
+        _log.warning(
+            "not imported, still running from .env: %s",
+            ", ".join(sorted({name for record in retained.values() for name in record.names})),
         )
+    _set_unseeded(retained)
     return seeded
+
+
+def _live_unseeded() -> list[_Unseeded]:
+    """
+    The retained declarations the store has not since taken over. A live row or a tombstone for the
+    id ends the retention for good: the store is authoritative, and a deleted connection must not
+    come back through the copy kept here.
+    """
+    with _unseeded_lock:
+        for declared_by, record in list(_unseeded.items()):
+            if exists(record.connection_id) or _has_tombstone(record.connection_id):
+                del _unseeded[declared_by]
+        return list(_unseeded.values())
+
+
+def unseeded_env_keys() -> list[str]:
+    """
+    Names (never values) of the .env keys whose declarations seed_from_env rejected and that
+    therefore still run from .env. Empty without a vault: nothing was seeded, so nothing is unseeded.
+    """
+    if _vault is None:
+        return []
+    return sorted({name for record in _live_unseeded() for name in record.names})
 
 
 def materialize(*, pending_gmail_token: bool = False) -> dict[str, str]:
@@ -883,6 +1085,17 @@ def overlay_provider() -> Optional[Mapping[str, str]]:
         cached = _overlay_cache
         if cached is not None and cached[0] == version and cached[1] is vault:
             return cached[2]
-        overlay: Mapping[str, str] = MappingProxyType(materialize(pending_gmail_token=True))
+        merged = materialize(pending_gmail_token=True)
+        # Retained .env declarations are numbered after the stored orgs: materialize numbers the store
+        # 1..N, and reusing an env number would overwrite a stored org's keys.
+        org_number = sum(1 for key in merged if _M365_ALIAS_KEY.fullmatch(key))
+        for record in _live_unseeded():
+            if record.m365:
+                org_number += 1
+                merged.update({f"M365_ORG{org_number}_{suffix}": value for suffix, value in record.entries})
+            else:
+                for key, value in record.entries:
+                    merged.setdefault(key, value)
+        overlay: Mapping[str, str] = MappingProxyType(merged)
         _overlay_cache = (version, vault, overlay)
         return overlay

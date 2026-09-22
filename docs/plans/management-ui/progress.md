@@ -92,3 +92,34 @@ Final sweep: pytest 1597 passed, pyright 54 (baseline, none added), web typechec
 Ruling: defer — check-report findings 9-24 (minors, duplicated router helpers, error-shape inconsistencies, a11y labels, small races) are NOT tasked; findings 1-8 became T-034..T-043 (check)
 ## 2026-09-21T22:50:25Z build T-034 start (attempt 1)
 ## 2026-09-21T22:55:44Z verify T-034 ok=true
+Ruling: accept — T-034 emits the empty GMAIL_<L>_REFRESH_TOKEN via materialize(pending_gmail_token=True) from overlay_provider only, because an existing materialize test asserts the key is absent by default (T-034, round 1)
+## 2026-09-21T22:55:44Z build T-035 start (attempt 1)
+Ruling: accept — T-035 scope expanded to tests/test_tokencache.py (remove the a.b and a_b invalid-alias params: they encoded the stricter rule that broke legacy installs) and pipeline/oauth_m365.py (explicit strict alias check so UI sign-in stays [A-Za-z0-9-]+ and tests/test_oauth_m365.py is untouched) (T-035, round 1)
+## 2026-09-21T23:01:35Z verify T-035 ok=true
+## 2026-09-21T23:01:36Z build T-036 start (attempt 1)
+## 2026-09-21T23:06:39Z verify T-036 ok=true
+## 2026-09-21T23:06:39Z build T-037 start (attempt 1)
+## 2026-09-21T23:12:56Z verify T-037 ok=true
+## 2026-09-21T23:12:56Z build T-038 start (attempt 1)
+## 2026-09-21T23:13:02Z build T-038 start (attempt 1)
+## 2026-09-21T23:22:37Z verify T-038 ok=true
+## 2026-09-21T23:22:37Z build T-039 start (attempt 1)
+## 2026-09-21T23:26:43Z verify T-039 ok=true
+## 2026-09-21T23:26:43Z build T-040 start (attempt 1)
+## 2026-09-21T23:33:20Z verify T-040 ok=true
+## 2026-09-21T23:33:20Z build T-041 start (attempt 1)
+## 2026-09-21T23:33:49Z build T-041 start (attempt 1)
+## 2026-09-21T23:41:46Z verify T-041 ok=true
+## 2026-09-21T23:41:47Z build T-042 start (attempt 1)
+## 2026-09-21T23:47:12Z verify T-042 ok=true
+## 2026-09-21T23:47:12Z build T-043 start (attempt 1)
+## 2026-09-21T23:50:39Z verify T-043 ok=true
+## 2026-09-21T23:50:39Z build T-044 start (attempt 1)
+## 2026-09-22T00:06:27Z verify T-044 ok=true
+
+## 2026-09-22T00:07:33Z build management-ui check-fix batch 11/11 done (T-034..T-044)
+Ruling: defer — web/pages/history/[id].vue renders only started_at; source_health checked_at and finished_at are not shown on the run detail page, so no timestamp test for them (T-044)
+Ruling: defer — branch feat/management-ui also carries 30 unpushed domain-collector commits from a concurrent session; not pushed by this build, owner decides how to publish (build)
+Final sweep: pytest 2095 passed, pyright 54 (baseline, none added), web typecheck clean, web vitest 163 passed, npm run build ok. check-report.md is STALE (FAIL at the earlier ref): re-run /blitz:check --scope plan management-ui
+
+## 2026-09-22T01:51:39Z check PASS check-report.md (re-check after fix batch T-034..T-044)

@@ -41,8 +41,8 @@ export interface DigestConfig {
   active_sources: Record<string, boolean>
 }
 
-export type ConnectionKind = 'm365' | 'zoom' | 'slack' | 'gmail'
-export type OAuthProvider = 'google' | 'microsoft' | 'zoom'
+export type ConnectionKind = 'm365' | 'zoom' | 'slack' | 'gmail' | 'namecheap' | 'godaddy' | 'wordpress'
+export type OAuthProvider = 'google' | 'microsoft' | 'zoom' | 'wordpress'
 export type OAuthMode = 'paste_back' | 'callback'
 
 // Create payloads mirror api/routers/connections.py. Secrets are write-only: they appear here and
@@ -76,7 +76,45 @@ export interface GmailCreate {
   redirect_mode?: OAuthMode
 }
 
-export type ConnectionCreate = M365Create | ZoomCreate | SlackCreate | GmailCreate
+// registrant_contact is PII, not a token, but is a secret too (module docstring, pipeline/connections.py):
+// it is write-only, sent as a JSON-object string, and never appears in a ConnectionView.
+export interface NamecheapCreate {
+  kind: 'namecheap'
+  label: string
+  api_user: string
+  username: string
+  client_ip: string
+  api_key: string
+  sandbox?: string
+  registrant_contact?: string
+}
+
+export interface GodaddyCreate {
+  kind: 'godaddy'
+  label: string
+  api_key: string
+  api_secret: string
+  environment?: string
+  registrant_contact?: string
+}
+
+export interface WordpressCreate {
+  kind: 'wordpress'
+  label: string
+  client_id: string
+  client_secret: string
+  redirect_mode?: OAuthMode
+  access_token?: string
+}
+
+export type ConnectionCreate =
+  | M365Create
+  | ZoomCreate
+  | SlackCreate
+  | GmailCreate
+  | NamecheapCreate
+  | GodaddyCreate
+  | WordpressCreate
 
 // An update replaces the config fields sent and only the secrets sent. The label field (alias,
 // label) is immutable, and an empty-string secret means "leave as is".
@@ -98,7 +136,29 @@ export interface GmailUpdate {
   secrets?: { client_secret?: string; refresh_token?: string }
 }
 
-export type ConnectionUpdate = M365Update | ZoomUpdate | SlackUpdate | GmailUpdate
+export interface NamecheapUpdate {
+  config?: { api_user?: string; username?: string; client_ip?: string; sandbox?: string }
+  secrets?: { api_key?: string; registrant_contact?: string }
+}
+
+export interface GodaddyUpdate {
+  config?: { environment?: string }
+  secrets?: { api_key?: string; api_secret?: string; registrant_contact?: string }
+}
+
+export interface WordpressUpdate {
+  config?: { client_id?: string; redirect_mode?: OAuthMode }
+  secrets?: { client_secret?: string; access_token?: string }
+}
+
+export type ConnectionUpdate =
+  | M365Update
+  | ZoomUpdate
+  | SlackUpdate
+  | GmailUpdate
+  | NamecheapUpdate
+  | GodaddyUpdate
+  | WordpressUpdate
 
 export interface ConnectionHealth {
   status: string
@@ -128,6 +188,7 @@ export const PROVIDER_FOR_KIND: Partial<Record<ConnectionKind, OAuthProvider>> =
   gmail: 'google',
   m365: 'microsoft',
   zoom: 'zoom',
+  wordpress: 'wordpress',
 }
 
 /**
@@ -148,7 +209,8 @@ export interface SystemInfo {
   store_active: boolean
   public_base_url_configured: boolean
   web_origins: string[]
-  oauth: Record<OAuthProvider, { modes: OAuthMode[] }>
+  // Partial: existing fixtures (tests, older servers) may not list every provider.
+  oauth: Partial<Record<OAuthProvider, { modes: OAuthMode[] }>>
 }
 
 export interface CollectorAttempt {
@@ -239,6 +301,13 @@ export interface OAuthPasteResult {
   account: string | null
 }
 
+// GET /oauth/flows/{flow_id}: `reason` is one of the fixed codes in api/routers/oauth.py and is only
+// present when status is 'error'.
+export interface OAuthFlowStatus {
+  status: 'pending' | 'ok' | 'error' | 'expired'
+  reason?: string
+}
+
 /**
  * A failed API call. `message` is built only from the response's `detail` (its `msg` / `message`
  * text), never from the request or from the underlying fetch error, so a submitted secret cannot
@@ -316,7 +385,7 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   body?: unknown
   params?: Query
-  // Only the OAuth start/paste calls set this: the nonce cookie set by start must round-trip
+  // Only the OAuth start/paste/flow-status calls set this: the nonce cookie set by start must round-trip
   // cross-origin, and every other call is cookie-free so no ambient credential can ride along.
   credentials?: 'include'
 }
@@ -409,5 +478,7 @@ export function useApi() {
         body: payload,
         credentials: 'include',
       }),
+    oauthFlowStatus: (flowId: string) =>
+      request<OAuthFlowStatus>(url(`/oauth/flows/${seg(flowId)}`), { credentials: 'include' }),
   }
 }
