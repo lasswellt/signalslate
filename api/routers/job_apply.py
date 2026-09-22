@@ -1,8 +1,8 @@
 """
 Apply-assist routes: the user's own JobsProfile, resume upload, the reusable AnswerBank, and
-JobApplication create/list/status/packet (T-023; docs/_research/2026-09-21_jobs-collector.md
-"Apply Assist"). Mirrors api/routers/domain_buy.py's structure; T-024 adds the assist queue/claim/
-progress/file-download routes to this same file later.
+JobApplication create/list/status/packet (T-023), plus the assist queue/claim/progress/file-download
+routes the desktop runner polls (T-024; docs/_research/2026-09-21_jobs-collector.md "Apply Assist"
+§Where it runs). Mirrors api/routers/domain_buy.py's structure.
 
 Design decisions:
 
@@ -51,15 +51,44 @@ Design decisions:
   pipeline.jobs.seeds/resolve/research/ats.
 - Every handler here is plain `def`: all DB access and packet.prepare_packet()'s LLM call are
   blocking I/O, matching every other router in this codebase.
+- POST /jobs/applications/{id}/assist only queues from status == "ready" (the task notes'
+  "only from ready" — the application's overall `status`, not `assist_state`): a 422 not_ready
+  otherwise. It also refuses to re-queue an application whose assist_state is already
+  queued/claimed/running (409 assist_already_active), so a second click can't spawn two runner
+  sessions for the same application; queued/idle/paused/done/failed all remain fine ready-state
+  applications to (re)queue.
+- GET /jobs/assist/queue returns the single oldest queued application, ordered by ascending `id`:
+  JobApplication has no dedicated "queued_at" column (T-016's schema), and ids only increase, so
+  ascending id is a stable proxy for "oldest queued" without a migration. Returns null (not 404)
+  when nothing is queued — polling an empty queue is the expected steady state, not an error.
+- POST /jobs/assist/queue/{id}/claim does its queued -> claimed check-then-set inside one
+  db.get_session() transaction (read the row, verify assist_state == "queued", flip it, commit) —
+  never trusting a value read in an earlier request/session — so two concurrent claims on the same
+  row can't both succeed; the loser gets 409 not_queued.
+- PATCH /jobs/assist/sessions/{session_id} looks the application up by assist_session_id, never by
+  application id, since it's the runner's session token, not something the runner necessarily
+  tracks the application row for. assist_state is validated against the same idle/queued/claimed/
+  running/paused/done/failed set as pipeline.db.JobApplication's own comment (422
+  unknown_assist_state otherwise); there is deliberately no `status` field on this body at all, so
+  this route can never reach JobApplication.status, let alone "submitted" (pipeline.jobs.apply's own
+  contract — see PATCH /jobs/applications/{id} above). filled_fields are appended to the assist_log
+  JSON array (loading, extending, re-serializing — never replacing it), tagged with `step` when
+  given, keeping the full audit trail the research doc's "Data model additions" describes.
+  approved_answers reuse _insert_answer(), the same insert path POST /jobs/answers uses, so the
+  normalization is defined once.
+- GET /jobs/applications/{id}/files/{kind} mirrors runs.py's two-stage check (path unset -> 404,
+  path set but missing on disk -> 404) before FileResponse, rather than trusting the DB column alone.
 """
 import base64
 import binascii
 import json
 import logging
 import uuid
+from pathlib import Path
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import col, select
 
@@ -328,18 +357,30 @@ def list_answers(q: Optional[str] = None) -> list[AnswerOut]:
         return [_answer_out(row) for row in rows]
 
 
+def _insert_answer(
+    session, question_raw: str, answer: str, source_application_id: Optional[int] = None
+) -> AnswerBank:
+    """Shared insert path for AnswerBank rows: POST /jobs/answers and PATCH
+    /jobs/assist/sessions/{session_id}'s approved_answers both go through here so the
+    normalize_title normalization is defined once. Always inserts — AnswerBank is not deduped by
+    design (see its own docstring)."""
+    row = AnswerBank(
+        question_norm=normalize_title(question_raw),
+        question_raw=question_raw,
+        answer=answer,
+        source_application_id=source_application_id,
+    )
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
 @router.post("/jobs/answers", status_code=201, response_model=AnswerOut)
 def create_answer(body: AnswerCreateBody) -> AnswerOut:
     """Always inserts a new row — AnswerBank is not deduped by design (see its own docstring)."""
     with db.get_session() as session:
-        row = AnswerBank(
-            question_norm=normalize_title(body.question_raw),
-            question_raw=body.question_raw,
-            answer=body.answer,
-        )
-        session.add(row)
-        session.commit()
-        session.refresh(row)
+        row = _insert_answer(session, body.question_raw, body.answer)
         return _answer_out(row)
 
 
@@ -481,3 +522,153 @@ def edit_application_packet(id: int, body: PacketEditBody) -> ApplicationOut:
         session.commit()
         session.refresh(row)
         return _application_out(row)
+
+
+# --- Apply assist: queue / claim / progress / files (T-024) ---------------------------------------
+
+_ASSIST_STATES = frozenset({"idle", "queued", "claimed", "running", "paused", "done", "failed"})
+_ASSIST_ACTIVE_STATES = frozenset({"queued", "claimed", "running"})
+
+_FILE_PATH_FIELDS = {"cover_letter": "cover_letter_path", "resume": "resume_path"}
+
+
+class FilledFieldBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    field_id: str = Field(max_length=_MAX_TEXT_CHARS)
+    value: str = Field(max_length=_MAX_TEXT_CHARS)
+    source: str = Field(max_length=_MAX_TEXT_CHARS)
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class ApprovedAnswerBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(max_length=_MAX_TEXT_CHARS)
+    answer: str = Field(max_length=_MAX_TEXT_CHARS)
+
+
+class AssistSessionUpdateBody(BaseModel):
+    """PATCH body for the desktop runner's progress reports (see module docstring). assist_state is
+    a plain str, validated against _ASSIST_STATES inside the handler (422 unknown_assist_state)
+    rather than a Literal, mirroring ApplicationStatusBody's own "reach the handler, name the
+    reason" convention. There is deliberately no `status` field: this body can never touch
+    JobApplication.status."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    step: Optional[str] = Field(default=None, max_length=_MAX_TEXT_CHARS)
+    assist_state: Optional[str] = Field(default=None, max_length=_MAX_TEXT_CHARS)
+    filled_fields: Optional[list[FilledFieldBody]] = Field(default=None, max_length=_MAX_LIST_ITEMS)
+    approved_answers: Optional[list[ApprovedAnswerBody]] = Field(default=None, max_length=_MAX_LIST_ITEMS)
+
+
+@router.post("/jobs/applications/{id}/assist", response_model=ApplicationOut)
+def queue_assist(id: int) -> ApplicationOut:
+    """Queues an assist session for this application: legal only when status == "ready" (422
+    not_ready otherwise; see module docstring for why status, not assist_state, gates this). Also
+    refuses to queue on top of an already-active session (409 assist_already_active)."""
+    with db.get_session() as session:
+        row = session.get(JobApplication, id)
+        if row is None:
+            raise _coded(404, "application_not_found", "Application not found")
+        if row.status != "ready":
+            raise _coded(422, "not_ready", "Application status must be 'ready' to queue assist")
+        if row.assist_state in _ASSIST_ACTIVE_STATES:
+            raise _coded(409, "assist_already_active", "An assist session is already active for this application")
+        row.assist_state = "queued"
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return _application_out(row)
+
+
+@router.get("/jobs/assist/queue", response_model=Optional[ApplicationOut])
+def get_assist_queue_head() -> Optional[ApplicationOut]:
+    """The next application for the desktop runner to claim: the oldest queued row by ascending id
+    (see module docstring). Null, not 404, when nothing is queued."""
+    with db.get_session() as session:
+        row = session.exec(
+            select(JobApplication)
+            .where(JobApplication.assist_state == "queued")
+            .order_by(col(JobApplication.id).asc())
+        ).first()
+        if row is None:
+            return None
+        return _application_out(row)
+
+
+@router.post("/jobs/assist/queue/{id}/claim", response_model=ApplicationOut)
+def claim_assist(id: int) -> ApplicationOut:
+    """Atomic queued -> claimed transition with a freshly generated assist_session_id (see module
+    docstring for why the check-then-set happens inside one transaction). 409 not_queued if the
+    application isn't currently queued (already claimed by another poll, or never queued)."""
+    with db.get_session() as session:
+        row = session.get(JobApplication, id)
+        if row is None:
+            raise _coded(404, "application_not_found", "Application not found")
+        if row.assist_state != "queued":
+            raise _coded(409, "not_queued", "Application is not currently queued for assist")
+        row.assist_state = "claimed"
+        row.assist_session_id = uuid.uuid4().hex
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return _application_out(row)
+
+
+@router.patch("/jobs/assist/sessions/{session_id}", response_model=ApplicationOut)
+def update_assist_session(session_id: str, body: AssistSessionUpdateBody) -> ApplicationOut:
+    """The desktop runner's progress report for one assist session, looked up by
+    assist_session_id (404 session_not_found if no application currently holds it). Updates only
+    the fields provided: assist_state (validated), filled_fields (appended to assist_log, never
+    replacing it) and approved_answers (upserted into AnswerBank via _insert_answer)."""
+    if body.assist_state is not None and body.assist_state not in _ASSIST_STATES:
+        raise _coded(422, "unknown_assist_state", f"assist_state must be one of {sorted(_ASSIST_STATES)}")
+    with db.get_session() as session:
+        row = session.exec(
+            select(JobApplication).where(JobApplication.assist_session_id == session_id)
+        ).first()
+        if row is None:
+            raise _coded(404, "session_not_found", "No application has this assist session id")
+
+        if body.assist_state is not None:
+            row.assist_state = body.assist_state
+
+        if body.step is not None or body.filled_fields is not None:
+            log = _json_list(row.assist_log)
+            if body.filled_fields:
+                for field in body.filled_fields:
+                    entry = field.model_dump()
+                    if body.step is not None:
+                        entry["step"] = body.step
+                    log.append(entry)
+            else:
+                log.append({"step": body.step})
+            row.assist_log = json.dumps(log, ensure_ascii=False)
+
+        if body.approved_answers is not None:
+            for approved in body.approved_answers:
+                _insert_answer(session, approved.question, approved.answer, source_application_id=row.id)
+
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return _application_out(row)
+
+
+@router.get("/jobs/applications/{id}/files/{kind}")
+def get_application_file(id: int, kind: Literal["cover_letter", "resume"]):
+    """Streams the application's cover letter or resume PDF (see module docstring for the
+    two-stage 404 check mirroring runs.py's GET /runs/{run_id}/pdf)."""
+    with db.get_session() as session:
+        row = session.get(JobApplication, id)
+        if row is None:
+            raise _coded(404, "application_not_found", "Application not found")
+        stored_path = getattr(row, _FILE_PATH_FIELDS[kind])
+    if not stored_path:
+        raise _coded(404, "file_not_set", f"No {kind} file recorded for this application")
+    path = Path(stored_path)
+    if not path.exists():
+        raise _coded(404, "file_missing", f"{kind} file missing on disk")
+    return FileResponse(path, media_type="application/pdf", filename=path.name)
