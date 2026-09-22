@@ -121,3 +121,5 @@ Ruling: accept — T-035 scope expanded to tests/test_tokencache.py (remove the 
 Ruling: defer — web/pages/history/[id].vue renders only started_at; source_health checked_at and finished_at are not shown on the run detail page, so no timestamp test for them (T-044)
 Ruling: defer — branch feat/management-ui also carries 30 unpushed domain-collector commits from a concurrent session; not pushed by this build, owner decides how to publish (build)
 Final sweep: pytest 2095 passed, pyright 54 (baseline, none added), web typecheck clean, web vitest 163 passed, npm run build ok. check-report.md is STALE (FAIL at the earlier ref): re-run /blitz:check --scope plan management-ui
+
+## 2026-09-22T01:51:39Z check PASS check-report.md (re-check after fix batch T-034..T-044)

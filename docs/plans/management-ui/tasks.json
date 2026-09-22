@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "management-ui",
-  "updated": "2026-09-22T00:06:27Z",
+  "updated": "2026-09-22T01:42:34Z",
   "tasks": [
     {
       "id": "T-001",
@@ -2514,7 +2514,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-21T22:55:44Z",
+        "ts": "2026-09-22T01:42:34Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -2524,28 +2524,28 @@
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T22:55:40Z"
+            "recorded_at": "2026-09-22T01:42:28Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/connections.py pipeline/health.py",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-21T22:55:40Z"
+            "recorded_at": "2026-09-22T01:42:28Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_gmail_pending_connection.py -q",
             "exit": 0,
-            "duration_ms": 758,
-            "tail": ".........                                                                [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n9 passed, 1 warning in 0.53s",
-            "recorded_at": "2026-09-21T22:55:41Z"
+            "duration_ms": 1532,
+            "tail": ".........                                                                [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n9 passed, 1 warning in 1.05s",
+            "recorded_at": "2026-09-22T01:42:30Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_connections.py tests/test_connection_materialize.py tests/test_env_overlay.py tests/test_api_connections.py tests/test_management_e2e.py -q",
             "exit": 0,
-            "duration_ms": 3285,
-            "tail": "........................................................................ [ 26%]\n........................................................................ [ 53%]\n........................................................................ [ 79%]\n.......................................................                  [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n271 passed, 1 warning in 3.01s",
-            "recorded_at": "2026-09-21T22:55:44Z"
+            "duration_ms": 3997,
+            "tail": "........................................................................ [ 26%]\n........................................................................ [ 53%]\n........................................................................ [ 79%]\n.......................................................                  [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n271 passed, 1 warning in 3.55s",
+            "recorded_at": "2026-09-22T01:42:34Z"
           }
         ]
       },

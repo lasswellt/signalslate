@@ -1,92 +1,54 @@
 {
   "$schema": "blitz-check-report/1.0",
-  "result": "FAIL",
-  "ts": "2026-09-21T22:26:40Z",
-  "ref": "8868e477f2cd2a426807da572baa1385e38b109b",
+  "result": "PASS",
+  "ts": "2026-09-22T01:51:39Z",
+  "ref": "133668f8283aad19b56126c9ac5a0bb8093d8196",
   "scope": "plan",
   "plan": "management-ui",
   "stacks": [
-    "python"
+    "python",
+    "node"
   ],
   "lanes": {
     "deterministic": {
       "selected": 16,
-      "ran": 12,
-      "pass": 11,
-      "finding": 1,
-      "error": 0,
-      "note": "registry rows adapted from src/ to api pipeline auth web; det-11/12/14/16/17/18/19/20 not applicable or covered by gates"
+      "ran": 16,
+      "pass": 16,
+      "finding": 0,
+      "error": 0
     },
     "semantic": {
-      "selected": 4,
-      "ran": 4,
-      "pass": 0,
-      "finding": 4,
+      "selected": 2,
+      "ran": 2,
+      "pass": 2,
+      "finding": 1,
       "error": 0
     }
   },
   "findings": [
     {
-      "id": "spec",
-      "severity": "P0",
-      "where": "api/routers/connections.py:260",
-      "what": "Gmail create always 503 store_inactive: token-less Gmail row invisible to known_sources(); browser Gmail sign-in unreachable"
-    },
-    {
-      "id": "spec",
-      "severity": "P2",
-      "where": "pipeline/tokencache.py:65",
-      "what": "M365 alias outside [A-Za-z0-9-]+ now raises ValueError and crashes runs on no-key installs"
-    },
-    {
-      "id": "survey:backend",
-      "severity": "P2",
-      "where": "pipeline/health.py:_live_env",
-      "what": "sources that fail seeding or decrypt vanish once a key is set"
-    },
-    {
-      "id": "survey:frontend",
-      "severity": "P2",
-      "where": "web/components/OAuthDialog.vue:267",
-      "what": "callback poll cannot detect M365 sign-in or Gmail re-sign-in"
-    },
-    {
-      "id": "survey:security",
-      "severity": "P2",
-      "where": "api/Dockerfile:10",
-      "what": "uvicorn access log records OAuth callback code and state"
-    },
-    {
-      "id": "survey:security",
-      "severity": "P2",
-      "where": "api/security.py:156",
-      "what": "no Host validation, DNS rebinding can read GET data"
-    },
-    {
-      "id": "survey:security",
-      "severity": "P2",
-      "where": "pipeline/crypto.py:104",
-      "what": "Vault.rotate never called: key rotation cannot complete"
-    },
-    {
-      "id": "survey:frontend",
-      "severity": "P2",
-      "where": "api/routers/runs.py:17",
-      "what": "naive datetimes without Z; History renders local time"
+      "id": "survey:security-backend",
+      "severity": "P3",
+      "where": "pipeline/oauth_flows.py:250",
+      "what": "outcome table evicts oldest-inserted not oldest-unpolled at 100-entry cap; low exploitability, pre-existing"
     }
   ],
   "cannot_verify": [
-    "web and API one-site cookie behavior",
-    "Secure cookie with http UI and https PUBLIC_BASE_URL",
     "real Google/Entra sign-in",
-    "SQLite concurrent writers"
+    "reverse-proxy one-site cookie behavior",
+    "popup-blocker path"
   ],
   "critic": {
     "mode": "reject",
-    "verdict": "REJECT"
+    "verdict": "LGTM",
+    "panel": {
+      "copilot": "LGTM",
+      "agy": "no_answer"
+    }
   },
   "tasks": {
-    "verified": 32,
-    "failed": 0
+    "verified": 43,
+    "failed": 0,
+    "blocked": 1
   }
 }
