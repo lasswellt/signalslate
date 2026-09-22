@@ -401,6 +401,32 @@ def test_sync_lists_domains_from_both_registrars(env):
     env.capture.assert_items_clean()
 
 
+# --- scenario: NS change -> domain_alert via the "domains" collector -------------------------------
+
+
+def test_ns_change_produces_domain_alert_via_domains_collector(env):
+    env.nc_state.domains = {"nc-ns.com": {}}
+    env.resolver.records[("nc-ns.com", "NS")] = ["ns1.example.com.", "ns2.example.com."]
+    with env.app() as client:
+        assert create_namecheap(client).status_code == 201
+        assert client.post("/api/domains/sync").status_code == 200
+
+        # A new NS answer changes the DNS section's data_hash, so the next sync's refresh_snapshots
+        # stores a second DomainSnapshot rather than treating the day-old snapshot as unchanged.
+        env.resolver.records[("nc-ns.com", "NS")] = ["ns3.other.com.", "ns4.other.com."]
+        assert client.post("/api/domains/sync").status_code == 200
+
+        run = client.post("/api/collectors/domains/run")
+        assert run.status_code == 202, run.text
+
+        page = client.get("/api/collectors/domains/items").json()
+        assert page["total"] >= 1
+        payloads = [client.get(f"/api/collectors/domains/items/{row['id']}").json()["payload"] for row in page["items"]]
+        assert any("ns_changed" in payload and "nc-ns.com" in payload for payload in payloads)
+    env.capture.assert_clean()
+    env.capture.assert_items_clean()
+
+
 # --- scenario: purchase disabled by default -------------------------------------------------------
 
 
