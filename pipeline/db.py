@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from sqlalchemy import event
+from sqlalchemy import UniqueConstraint, event
 from sqlmodel import Field, Session, SQLModel, col, create_engine, func, select
 
 from pipeline.clock import utcnow
@@ -182,6 +182,70 @@ class DomainPurchase(SQLModel, table=True):
     price: str  # decimal as str, what was actually charged/attempted
     created_at: datetime = Field(default_factory=utcnow)
     detail: Optional[str] = None  # redacted registrar response/error — never a raw credential
+
+
+class JobCompany(SQLModel, table=True):
+    """
+    A company worth polling for job postings — the seed list behind JobBoard resolution. Mirrors
+    Domain: a state row, not an event, so `status` can mute a company (no open board found, or the
+    user asked to stop watching it) without losing the history of boards/postings resolved against it.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    domain: Optional[str] = Field(default=None, index=True)
+    source: str  # watchlist | yc | hn | email | manual
+    status: str = "active"  # active | muted
+    first_seen: datetime = Field(default_factory=utcnow)
+    last_seen: datetime = Field(default_factory=utcnow)
+
+
+class JobBoard(SQLModel, table=True):
+    """
+    One resolved ATS board for a company. `resolved_by`/`confidence`/`verified_at` record how the
+    resolver ladder (URL pattern -> slug probe -> HTML fingerprint -> LLM web research -> JSON-LD)
+    found this board, so the UI can show provenance and let the user correct a low-confidence guess.
+    UNIQUE(ats_kind, board_id): the same ATS board is resolved at most once, even if two companies'
+    resolution attempts land on the same token/slug.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    company_id: int = Field(foreign_key="jobcompany.id", index=True)
+    ats_kind: str  # greenhouse | lever | ashby | workday | smartrecruiters | workable | rippling | bamboohr | recruitee | personio
+    board_id: str  # token/site/slug; workday: "tenant|wdN|site"
+    resolved_by: str  # pattern | slug_probe | html | llm | manual
+    confidence: float
+    verified_at: Optional[datetime] = None
+    last_polled_at: Optional[datetime] = None
+    last_error: Optional[str] = None
+
+    __table_args__ = (UniqueConstraint("ats_kind", "board_id"),)
+
+
+class JobPosting(SQLModel, table=True):
+    """
+    One posting on one board — state, not an event, like Domain. `first_seen`/`last_seen`/
+    `closed_at`/`missed_polls` track its lifecycle without deleting a row that disappears: closed
+    means missing from several consecutive polls, not one, to absorb a transient ATS error.
+    `content_hash` excludes description whitespace/tracking-param noise (ATS rewrite both on every
+    poll) so a refresh can skip a full diff when nothing meaningful changed. UNIQUE(board_id,
+    external_id): the ATS's own job id, scoped to the board it came from, dedupes repeated polls.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    board_id: int = Field(foreign_key="jobboard.id", index=True)
+    external_id: str  # the ATS's own job id
+    title: str
+    location: Optional[str] = None
+    remote: Optional[bool] = None
+    comp_text: Optional[str] = None
+    apply_url: str
+    content_hash: str  # hash of description/comp with whitespace/tracking noise excluded
+    first_seen: datetime = Field(default_factory=utcnow)
+    last_seen: datetime = Field(default_factory=utcnow)
+    closed_at: Optional[datetime] = None
+    missed_polls: int = 0
+    fit_score: Optional[int] = None  # 0-100
+    fit_reason: Optional[str] = None
+
+    __table_args__ = (UniqueConstraint("board_id", "external_id"),)
 
 
 def _add_missing_columns() -> None:
