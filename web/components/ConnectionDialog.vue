@@ -62,6 +62,27 @@
             </div>
 
             <q-input
+              v-else-if="field.secret && field.textarea"
+              type="textarea"
+              autogrow
+              :model-value="secrets[field.name] ?? ''"
+              :label="isEdit ? `New ${field.label}` : field.label"
+              :hint="field.hint"
+              outlined
+              dense
+              :disable="busy"
+              :rules="[(value: string) => checkSecretJson(field, value)]"
+              :error="!!fieldErrors[field.name]"
+              :error-message="fieldErrors[field.name]"
+              :data-testid="`field-${field.name}`"
+              @update:model-value="(value: string | number | null) => onSecretInput(field.name, value)"
+            >
+              <template v-if="isEdit && isSaved(field.name)" #append>
+                <q-btn flat dense no-caps label="Keep saved" :data-testid="`keep-${field.name}`" @click="keepSaved(field.name)" />
+              </template>
+            </q-input>
+
+            <q-input
               v-else-if="field.secret"
               type="password"
               autocomplete="new-password"
@@ -128,14 +149,20 @@ interface FieldDef {
   name: string
   label: string
   secret?: boolean
+  // A secret field rendered as a textarea (registrant_contact: a JSON object, not a token).
+  textarea?: boolean
+  // Not in the kind's required_secrets/required config (pipeline/connections.py KINDS): may be left blank on create.
+  optional?: boolean
   // The immutable name that becomes part of the connection id; only asked for on create.
   isLabel?: boolean
   hint?: string
   options?: Array<{ label: string; value: string }>
+  // The value defaultValues() fills in for a select field; '' for a plain text field.
+  default?: string
 }
 
 // Field names, order and which ones are secret mirror api/routers/connections.py exactly. The gmail
-// refresh token is not asked for here: the browser sign-in stores it.
+// refresh token and the wordpress access token are not asked for here: browser sign-in stores them.
 const KIND_FIELDS: Record<ConnectionKind, FieldDef[]> = {
   m365: [
     { name: 'alias', label: 'Alias', isLabel: true, hint: 'Letters, digits and - (max 40)' },
@@ -158,6 +185,53 @@ const KIND_FIELDS: Record<ConnectionKind, FieldDef[]> = {
     {
       name: 'redirect_mode',
       label: 'Redirect mode',
+      default: 'paste_back',
+      options: [
+        { label: 'Paste back', value: 'paste_back' },
+        { label: 'Callback', value: 'callback' },
+      ],
+    },
+  ],
+  namecheap: [
+    { name: 'label', label: 'Label', isLabel: true, hint: 'Lowercase letters and digits (max 32)' },
+    { name: 'api_user', label: 'API user' },
+    { name: 'username', label: 'Username' },
+    { name: 'client_ip', label: 'Client IP', hint: 'public IPv4 of this server' },
+    { name: 'api_key', label: 'API key', secret: true },
+    {
+      name: 'sandbox',
+      label: 'Sandbox',
+      default: 'false',
+      options: [
+        { label: 'Production', value: 'false' },
+        { label: 'Sandbox', value: 'true' },
+      ],
+    },
+    { name: 'registrant_contact', label: 'Registrant contact', secret: true, textarea: true, optional: true, hint: 'JSON object' },
+  ],
+  godaddy: [
+    { name: 'label', label: 'Label', isLabel: true, hint: 'Lowercase letters and digits (max 32)' },
+    { name: 'api_key', label: 'API key', secret: true },
+    { name: 'api_secret', label: 'API secret', secret: true },
+    {
+      name: 'environment',
+      label: 'Environment',
+      default: 'production',
+      options: [
+        { label: 'Production', value: 'production' },
+        { label: 'OTE', value: 'ote' },
+      ],
+    },
+    { name: 'registrant_contact', label: 'Registrant contact', secret: true, textarea: true, optional: true, hint: 'JSON object' },
+  ],
+  wordpress: [
+    { name: 'label', label: 'Label', isLabel: true, hint: 'Lowercase letters and digits (max 32)' },
+    { name: 'client_id', label: 'Client ID' },
+    { name: 'client_secret', label: 'Client secret', secret: true },
+    {
+      name: 'redirect_mode',
+      label: 'Redirect mode',
+      default: 'paste_back',
       options: [
         { label: 'Paste back', value: 'paste_back' },
         { label: 'Callback', value: 'callback' },
@@ -166,7 +240,7 @@ const KIND_FIELDS: Record<ConnectionKind, FieldDef[]> = {
   ],
 }
 
-const KIND_OPTIONS = (['m365', 'zoom', 'slack', 'gmail'] as const).map((value) => ({
+const KIND_OPTIONS = (['m365', 'zoom', 'slack', 'gmail', 'namecheap', 'godaddy', 'wordpress'] as const).map((value) => ({
   label: value,
   value,
   attrs: { 'data-testid': `kind-${value}` },
@@ -177,6 +251,9 @@ const LABEL_RULES: Partial<Record<ConnectionKind, { pattern: RegExp; max: number
   m365: { pattern: /^[A-Za-z0-9-]+$/, max: 40, text: 'letters, digits and -' },
   slack: { pattern: /^[a-z0-9]+$/, max: 32, text: 'lowercase letters and digits' },
   gmail: { pattern: /^[a-z0-9]+$/, max: 32, text: 'lowercase letters and digits' },
+  namecheap: { pattern: /^[a-z0-9]+$/, max: 32, text: 'lowercase letters and digits' },
+  godaddy: { pattern: /^[a-z0-9]+$/, max: 32, text: 'lowercase letters and digits' },
+  wordpress: { pattern: /^[a-z0-9]+$/, max: 32, text: 'lowercase letters and digits' },
 }
 const IDENTIFIER = /^[A-Za-z0-9._~@:-]+$/
 const IDENTIFIER_MAX = 128
@@ -218,7 +295,7 @@ function isSaved(name: string): boolean {
 
 function defaultValues(forKind: ConnectionKind): Record<string, string> {
   return Object.fromEntries(
-    KIND_FIELDS[forKind].filter((field) => !field.secret).map((field) => [field.name, field.options ? 'paste_back' : '']),
+    KIND_FIELDS[forKind].filter((field) => !field.secret).map((field) => [field.name, field.default ?? '']),
   )
 }
 
@@ -296,6 +373,26 @@ function checkSecret(field: FieldDef, value: string): true | string {
   return true
 }
 
+// registrant_contact: same JSON-object shape pipeline.connections._validate_registrant_contact
+// requires server-side (docs/plans/domain-collector); checked here only to fail fast, not to
+// replace that validation.
+function checkSecretJson(field: FieldDef, value: string): true | string {
+  if (!value) return isEdit.value || field.optional ? true : 'Required'
+  if (value.length > SECRET_MAX || CONTROL_CHARS.test(value)) {
+    return `At most ${SECRET_MAX} characters with no control characters`
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    return `${field.label} must be valid JSON`
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return `${field.label} must be a JSON object`
+  }
+  return true
+}
+
 const providedSecrets = computed(() =>
   Object.entries(secrets.value).filter(([, value]) => value !== ''),
 )
@@ -305,7 +402,11 @@ const hasChanges = computed(() => touched.value.size > 0 || providedSecrets.valu
 function buildCreate(): ConnectionCreate {
   const body: Record<string, string> = { kind: kind.value }
   for (const field of fields.value) {
-    body[field.name] = field.secret ? (secrets.value[field.name] ?? '') : (values.value[field.name] ?? '')
+    const value = field.secret ? (secrets.value[field.name] ?? '') : (values.value[field.name] ?? '')
+    // An optional secret left blank (registrant_contact) must be omitted, not sent as '': the server
+    // validates whatever it receives, and '' does not parse as the JSON object the field expects.
+    if (field.optional && value === '') continue
+    body[field.name] = value
   }
   // The body is assembled from KIND_FIELDS, which is the API contract, so it is exactly one member of
   // the ConnectionCreate union for the selected kind.

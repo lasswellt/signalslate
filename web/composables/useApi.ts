@@ -41,7 +41,7 @@ export interface DigestConfig {
   active_sources: Record<string, boolean>
 }
 
-export type ConnectionKind = 'm365' | 'zoom' | 'slack' | 'gmail'
+export type ConnectionKind = 'm365' | 'zoom' | 'slack' | 'gmail' | 'namecheap' | 'godaddy' | 'wordpress'
 export type OAuthProvider = 'google' | 'microsoft'
 export type OAuthMode = 'paste_back' | 'callback'
 
@@ -76,7 +76,45 @@ export interface GmailCreate {
   redirect_mode?: OAuthMode
 }
 
-export type ConnectionCreate = M365Create | ZoomCreate | SlackCreate | GmailCreate
+// registrant_contact is PII, not a token, but is a secret too (module docstring, pipeline/connections.py):
+// it is write-only, sent as a JSON-object string, and never appears in a ConnectionView.
+export interface NamecheapCreate {
+  kind: 'namecheap'
+  label: string
+  api_user: string
+  username: string
+  client_ip: string
+  api_key: string
+  sandbox?: string
+  registrant_contact?: string
+}
+
+export interface GodaddyCreate {
+  kind: 'godaddy'
+  label: string
+  api_key: string
+  api_secret: string
+  environment?: string
+  registrant_contact?: string
+}
+
+export interface WordpressCreate {
+  kind: 'wordpress'
+  label: string
+  client_id: string
+  client_secret: string
+  redirect_mode?: OAuthMode
+  access_token?: string
+}
+
+export type ConnectionCreate =
+  | M365Create
+  | ZoomCreate
+  | SlackCreate
+  | GmailCreate
+  | NamecheapCreate
+  | GodaddyCreate
+  | WordpressCreate
 
 // An update replaces the config fields sent and only the secrets sent. The label field (alias,
 // label) is immutable, and an empty-string secret means "leave as is".
@@ -98,7 +136,29 @@ export interface GmailUpdate {
   secrets?: { client_secret?: string; refresh_token?: string }
 }
 
-export type ConnectionUpdate = M365Update | ZoomUpdate | SlackUpdate | GmailUpdate
+export interface NamecheapUpdate {
+  config?: { api_user?: string; username?: string; client_ip?: string; sandbox?: string }
+  secrets?: { api_key?: string; registrant_contact?: string }
+}
+
+export interface GodaddyUpdate {
+  config?: { environment?: string }
+  secrets?: { api_key?: string; api_secret?: string; registrant_contact?: string }
+}
+
+export interface WordpressUpdate {
+  config?: { client_id?: string; redirect_mode?: OAuthMode }
+  secrets?: { client_secret?: string; access_token?: string }
+}
+
+export type ConnectionUpdate =
+  | M365Update
+  | ZoomUpdate
+  | SlackUpdate
+  | GmailUpdate
+  | NamecheapUpdate
+  | GodaddyUpdate
+  | WordpressUpdate
 
 export interface ConnectionHealth {
   status: string
