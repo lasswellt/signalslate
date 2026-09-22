@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "zoom-collector",
-  "updated": "2026-09-21T23:46:27Z",
+  "updated": "2026-09-22T00:07:04Z",
   "tasks": [
     {
       "id": "T-001",
@@ -498,11 +498,46 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-22T00:07:04Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '/transcript' pipeline/collectors/zoom.py",
+            "exit": 0,
+            "duration_ms": 27,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:07:02Z"
+          },
+          {
+            "cmd": "grep -qE 'include_transcripts' pipeline/collectors/zoom.py",
+            "exit": 0,
+            "duration_ms": 7,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:07:02Z"
+          },
+          {
+            "cmd": "grep -qE 'TRANSCRIPT_MAX' pipeline/collectors/zoom.py",
+            "exit": 0,
+            "duration_ms": 20,
+            "tail": "",
+            "recorded_at": "2026-09-22T00:07:02Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collectors.py -q",
+            "exit": 0,
+            "duration_ms": 1670,
+            "tail": "........................................................................ [ 35%]\n........................................................................ [ 70%]\n.............................................................            [100%]\n205 passed in 1.14s",
+            "recorded_at": "2026-09-22T00:07:04Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Finding 6. On by default (owner decision 2026-09-21); include_transcripts=false turns it off. Only for hosted meetings. GET /meetings/{uuid}/transcript returns download_url, can_download, download_restriction_reason; download with Bearer token; cap text at TRANSCRIPT_MAX = 200_000 chars with a transcript_truncated flag; 404 or can_download false -> transcript_available False plus reason, never a failure. Transcripts need cloud recording per Zoom staff; do not treat absence as an error."
     },
