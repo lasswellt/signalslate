@@ -50,3 +50,4 @@ Concern (T-014, low): DomainTable mobile uses horizontal scroll, not grid mode; 
 Concern (T-020, low): screening answers stay read-only; API only saves cover_letter_text.
 ## 2026-09-23T03:19:03Z verify T-013 ok=true
 Concern (T-013, med): item type filter derives counts client-side by paging full history (cap 5000); a server by_type aggregate would scale better.
+Note (2026-09-23T03:19:24Z): main has 1 failing test (jobs.test.ts 'job-title' testid removed by T-020); T-018 rewrites jobs.test.ts and was told to use dialog-title.
