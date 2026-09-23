@@ -3,8 +3,8 @@ import { defineComponent, h } from 'vue'
 import type { VueWrapper } from '@vue/test-utils'
 import { flushPromises } from '@vue/test-utils'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
+import { RouterView } from 'vue-router'
 import { QLayout, QPageContainer } from 'quasar'
-import DomainsPage from '~/pages/domains.vue'
 import type { DomainOut, ImportOut, PurchaseOut } from '~/composables/useDomainsApi'
 
 function domain(overrides: Partial<DomainOut> = {}): DomainOut {
@@ -109,13 +109,16 @@ function apiFailure(status: number, detail: string): Error {
   return Object.assign(new Error('fetch failed'), { status, data: { detail } })
 }
 
-// QPage renders nothing outside a QLayout, so the page is mounted in the same shell app.vue gives it.
+// domains.vue (the parent) is resolved from the real, file-based router by path — not imported and
+// rendered directly — so its own <NuxtPage/> sees the correct nested-route depth and mounts the
+// matching child (pages/domains/index.vue, watchlist.vue, ideas.vue, purchases.vue). QPage renders
+// nothing outside a QLayout, so the tree is mounted in the same shell app.vue gives it.
 const Harness = defineComponent({
-  render: () => h(QLayout, null, () => h(QPageContainer, null, () => h(DomainsPage))),
+  render: () => h(QLayout, null, () => h(QPageContainer, null, () => h(RouterView))),
 })
 
-// q-dialog content teleports to document.body, outside the mounted wrapper's element tree, so
-// dialog interactions go through the body (mirrors tests/DomainIdeasPanel.test.ts).
+// q-dialog/q-menu content teleports to document.body, outside the mounted wrapper's element tree, so
+// interactions go through the body (mirrors tests/DomainIdeasPanel.test.ts).
 const body = document.body
 const $ = <T extends Element = HTMLElement>(testid: string) => body.querySelector<T>(`[data-testid="${testid}"]`)
 
@@ -136,8 +139,8 @@ async function setInput(testid: string, value: string) {
 
 let mounted: Array<VueWrapper<unknown>> = []
 
-async function mountPage() {
-  const wrapper = await mountSuspended(Harness, { attachTo: document.body })
+async function mountPage(route = '/domains') {
+  const wrapper = await mountSuspended(Harness, { attachTo: document.body, route })
   mounted.push(wrapper as VueWrapper<unknown>)
   await flushPromises()
   return wrapper
@@ -153,15 +156,110 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('domains page', () => {
-  it('shows a loading state until the requests settle', async () => {
+describe('domains parent (header, tabs, dialogs)', () => {
+  it('shows the page header and tabs for every route', async () => {
+    const wrapper = await mountPage()
+    expect(wrapper.get('[data-testid="page-header-title"]').text()).toBe('Domains')
+    expect(wrapper.find('[data-testid="tab-portfolio"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="tab-watchlist"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="tab-ideas"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="tab-purchases"]').exists()).toBe(true)
+  })
+
+  it('adds a domain with the CSRF header and reloads the active list', async () => {
+    stubApi({ domains: [] })
+    await mountPage()
+
+    await click('domains-add-open')
+    await setInput('add-name', 'newco.com')
+
+    stubApi({ domains: [domain({ name: 'newco.com' })] })
+    await click('add-submit')
+    await flushPromises()
+
+    const post = calls.find((call) => call.method === 'POST' && call.path === '/api/domains')
+    expect(post?.headers?.['X-Requested-With']).toBe('signalslate')
+    expect(post?.body).toEqual({ name: 'newco.com', ownership: 'owned' })
+    expect($('add-dialog')).toBeNull()
+    expect($('domain-row-newco.com')).not.toBeNull()
+  })
+
+  it('shows the add error inline when the API rejects it', async () => {
+    stubApi({ domains: [], addDomain: () => apiFailure(422, 'name: invalid domain') })
+    await mountPage()
+
+    await click('domains-add-open')
+    await setInput('add-name', 'bad')
+    await click('add-submit')
+
+    expect($('add-error')?.textContent).toBe('name: invalid domain')
+    expect($('add-dialog')).not.toBeNull()
+  })
+
+  it('imports a CSV from the overflow menu and shows added/rejected results', async () => {
+    const result: ImportOut = { added: ['a.com'], rejected: [{ line: 2, reason: 'invalid ownership' }] }
+    stubApi({ domains: [], importDomains: () => result })
+    await mountPage()
+
+    await click('domains-more')
+    await click('domains-import-open')
+    await setInput('import-csv', 'a.com\nb.com,bogus')
+
+    stubApi({ domains: [domain({ name: 'a.com' })], importDomains: () => result })
+    await click('import-submit')
+    await flushPromises()
+
+    const post = calls.find((call) => call.method === 'POST' && call.path === '/api/domains/import')
+    expect(post?.body).toEqual({ csv: 'a.com\nb.com,bogus' })
+    expect($('import-result')?.textContent).toContain('Added 1 domain(s)')
+    expect($('import-result')?.textContent).toContain('Line 2: invalid ownership')
+  })
+
+  it('syncs now, notifies and reloads the portfolio', async () => {
+    const syncResult = { sync: [{ connection_id: 'namecheap_main', kind: 'namecheap', status: 'ok', detail: 'ok', domain_count: 1 }], refresh: [] }
+    stubApi({ domains: [], sync: () => syncResult })
+    await mountPage()
+
+    stubApi({ domains: [domain()], sync: () => syncResult })
+    await click('domains-sync')
+    await flushPromises()
+
+    const post = calls.find((call) => call.method === 'POST' && call.path === '/api/domains/sync')
+    expect(post?.headers?.['X-Requested-With']).toBe('signalslate')
+    expect($('domain-row-acme.com')).not.toBeNull()
+  })
+
+  it('opens the detail dialog on row click', async () => {
+    stubApi({ domains: [domain()] })
+    const wrapper = await mountPage()
+
+    await wrapper.get('[data-testid="domain-row-acme.com"]').trigger('click')
+    await flushPromises()
+
+    expect($('dialog-title')?.textContent).toBe('acme.com')
+    expect(calls.some((call) => call.method === 'GET' && call.path === '/api/domains/acme.com')).toBe(true)
+  })
+
+  it('inspects an ad-hoc domain name that is not in the portfolio, from the overflow menu', async () => {
+    stubApi({ domains: [], getDomain: () => apiFailure(404, 'not found') })
+    await mountPage()
+
+    await click('domains-more')
+    await click('domains-inspect-open')
+    await setInput('inspect-name', 'nottracked.com')
+    await click('inspect-submit')
+
+    expect($('inspect-dialog')).toBeNull()
+    expect($('dialog-title')?.textContent).toBe('nottracked.com')
+    expect($('domain-adhoc-note')).not.toBeNull()
+  })
+})
+
+describe('portfolio route (/domains)', () => {
+  it('shows a loading state until the request settles', async () => {
     let release: (value: DomainOut[]) => void = () => {}
     const gate = new Promise<DomainOut[]>((resolve) => (release = resolve))
-    vi.stubGlobal('$fetch', async (url: string) => {
-      const path = new URL(url).pathname
-      if (path === '/api/domains/purchases') return []
-      return gate
-    })
+    vi.stubGlobal('$fetch', async () => gate)
     const wrapper = await mountPage()
     expect(wrapper.find('[data-testid="loading"]').exists()).toBe(true)
 
@@ -178,25 +276,10 @@ describe('domains page', () => {
     expect(wrapper.get('[data-testid="load-error"]').text()).toContain('The store is unavailable')
 
     stubApi({ domains: [domain()] })
-    await wrapper.get('[data-testid="load-error"] button').trigger('click')
-    await flushPromises()
+    await click('retry')
 
     expect(wrapper.find('[data-testid="load-error"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="portfolio-table"]').exists()).toBe(true)
-  })
-
-  it('still shows a successfully synced portfolio when the sibling purchases fetch fails', async () => {
-    // Regression: domains and purchases used to load with Promise.all, so a failure on either one
-    // discarded BOTH — a real bug (api/main.py route-ordering) made GET /domains/purchases 404,
-    // which made a fully synced 47-domain portfolio render as "no domains yet". They must load
-    // independently, and the error must show ALONGSIDE the data that did load, not hide it.
-    stubApi({ domains: [domain({ name: 'acme.com' }), domain({ name: 'beta.com' })], purchases: apiFailure(404, 'Domain not found') })
-    const wrapper = await mountPage()
-
-    expect(wrapper.get('[data-testid="load-error"]').text()).toContain('Domain not found')
-    expect(wrapper.find('[data-testid="portfolio-empty"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="portfolio-table"]').text()).toContain('acme.com')
-    expect(wrapper.get('[data-testid="portfolio-table"]').text()).toContain('beta.com')
   })
 
   it('renders the Mail column from DomainOut.mail with no per-row snapshot fetch', async () => {
@@ -212,10 +295,11 @@ describe('domains page', () => {
     const wrapper = await mountPage()
     const table = wrapper.get('[data-testid="portfolio-table"]')
 
-    expect(table.get('[data-testid="mail-badge-acme.com-spf"]').text()).toBe('SPF')
+    expect(table.get('[data-testid="mail-badge-acme.com-spf"]').text()).toBe('SPF present')
     expect(table.get('[data-testid="mail-badge-acme.com-spf"]').classes().join(' ')).toContain('bg-positive')
-    expect(table.get('[data-testid="mail-badge-acme.com-dmarc"]').text()).toBe('DMARC')
+    expect(table.get('[data-testid="mail-badge-acme.com-dmarc"]').text()).toBe('DMARC enforced')
     expect(table.get('[data-testid="mail-badge-acme.com-dmarc"]').classes().join(' ')).toContain('bg-positive')
+    expect(table.get('[data-testid="mail-badge-acme.com-dkim"]').text()).toBe('DKIM missing')
     expect(table.get('[data-testid="mail-badge-acme.com-dkim"]').classes().join(' ')).toContain('bg-negative')
     expect(table.get('[data-testid="mail-badge-acme.com-mta-sts"]').classes().join(' ')).toContain('bg-negative')
     expect(table.get('[data-testid="mail-badge-acme.com-bimi"]').classes().join(' ')).toContain('bg-negative')
@@ -231,7 +315,7 @@ describe('domains page', () => {
     expect(wrapper.get('[data-testid="portfolio-empty-link"]').attributes('href')).toBe('/connections')
   })
 
-  it('renders owned domains in Portfolio and highlights expiry within 30 days', async () => {
+  it('renders owned domains and shows a text expiry chip within 30 days (never colour alone)', async () => {
     stubApi({
       domains: [
         domain({ name: 'soon.com', expires_at: new Date(Date.now() + 5 * 86_400_000).toISOString() }),
@@ -246,10 +330,10 @@ describe('domains page', () => {
     expect(wrapper.find('[data-testid="domain-row-watched.com"]').exists()).toBe(false)
 
     const soonRow = wrapper.get('[data-testid="domain-row-soon.com"]')
-    expect(soonRow.html()).toContain('text-negative')
+    expect(soonRow.text()).toContain('Expires in 5 days')
 
     const laterRow = wrapper.get('[data-testid="domain-row-later.com"]')
-    expect(laterRow.html()).not.toContain('text-negative')
+    expect(laterRow.text()).not.toContain('Expires in')
   })
 
   it('hides expired owned domains by default, unhides on toggle', async () => {
@@ -301,40 +385,6 @@ describe('domains page', () => {
     expect(wrapper.get('[data-testid="missing-count"]').text()).toContain('1 missing domain shown')
   })
 
-  it('hides missing watched domains by default, unhides on toggle, independently of the Portfolio toggle instance', async () => {
-    stubApi({
-      domains: [
-        domain({ name: 'watched-gone.com', ownership: 'watched', missing_since: '2026-09-22T00:00:00Z' }),
-        domain({ name: 'watched-alive.com', ownership: 'watched', missing_since: null }),
-      ],
-    })
-    const wrapper = await mountPage()
-    await click('tab-watchlist')
-
-    expect(wrapper.find('[data-testid="domain-row-watched-gone.com"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="domain-row-watched-alive.com"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="watchlist-missing-count"]').text()).toContain('1 missing domain hidden')
-
-    await click('watchlist-hide-missing-toggle')
-
-    expect(wrapper.find('[data-testid="domain-row-watched-gone.com"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="watchlist-missing-count"]').text()).toContain('1 missing domain shown')
-  })
-
-  it('shows an all-missing Watchlist message distinct from the empty-watchlist state', async () => {
-    stubApi({ domains: [domain({ name: 'watched-gone.com', ownership: 'watched', missing_since: '2026-09-22T00:00:00Z' })] })
-    const wrapper = await mountPage()
-    await click('tab-watchlist')
-
-    expect(wrapper.find('[data-testid="watchlist-empty"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="watchlist-all-missing"]').text()).toContain('All 1 watched domain is missing and hidden')
-
-    await click('show-missing-watchlist-link')
-
-    expect(wrapper.find('[data-testid="watchlist-all-missing"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="domain-row-watched-gone.com"]').exists()).toBe(true)
-  })
-
   it('shows an all-expired message with a way to reveal them, distinct from the connect-a-registrar empty state', async () => {
     stubApi({
       domains: [
@@ -376,122 +426,79 @@ describe('domains page', () => {
     expect(wrapper.find('[data-testid="domain-row-dead.com"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="domain-row-gone.com"]').exists()).toBe(true)
   })
+})
+
+describe('watchlist route (/domains/watchlist)', () => {
+  it('renders watched domains', async () => {
+    stubApi({ domains: [domain({ name: 'idea.com', ownership: 'watched', connection_id: null, source: 'manual' })] })
+    await mountPage('/domains/watchlist')
+
+    expect($('watchlist-table')?.textContent).toContain('idea.com')
+  })
 
   it('does not apply the hide-expired filter to the Watchlist tab', async () => {
     stubApi({
       domains: [domain({ name: 'watched-expired.com', ownership: 'watched', expires_at: new Date(Date.now() - 10 * 86_400_000).toISOString() })],
     })
-    const wrapper = await mountPage()
-    await click('tab-watchlist')
-    expect(wrapper.find('[data-testid="domain-row-watched-expired.com"]').exists()).toBe(true)
+    await mountPage('/domains/watchlist')
+    expect($('domain-row-watched-expired.com')).not.toBeNull()
   })
 
-  it('renders watched domains in the Watchlist tab', async () => {
-    stubApi({ domains: [domain({ name: 'idea.com', ownership: 'watched', connection_id: null, source: 'manual' })] })
-    const wrapper = await mountPage()
+  it('hides missing watched domains by default, unhides on toggle, independently of the Portfolio toggle instance', async () => {
+    stubApi({
+      domains: [
+        domain({ name: 'watched-gone.com', ownership: 'watched', missing_since: '2026-09-22T00:00:00Z' }),
+        domain({ name: 'watched-alive.com', ownership: 'watched', missing_since: null }),
+      ],
+    })
+    await mountPage('/domains/watchlist')
 
-    await wrapper.get('[data-testid="tab-watchlist"]').trigger('click')
-    await flushPromises()
+    expect($('domain-row-watched-gone.com')).toBeNull()
+    expect($('domain-row-watched-alive.com')).not.toBeNull()
+    expect($('watchlist-missing-count')?.textContent).toContain('1 missing domain hidden')
 
-    expect(wrapper.get('[data-testid="watchlist-table"]').text()).toContain('idea.com')
+    await click('watchlist-hide-missing-toggle')
+
+    expect($('domain-row-watched-gone.com')).not.toBeNull()
+    expect($('watchlist-missing-count')?.textContent).toContain('1 missing domain shown')
   })
 
-  it('shows the Purchases tab list and empty state', async () => {
+  it('shows an all-missing message distinct from the empty-watchlist state', async () => {
+    stubApi({ domains: [domain({ name: 'watched-gone.com', ownership: 'watched', missing_since: '2026-09-22T00:00:00Z' })] })
+    await mountPage('/domains/watchlist')
+
+    expect($('watchlist-empty')).toBeNull()
+    expect($('watchlist-all-missing')?.textContent).toContain('All 1 watched domain is missing and hidden')
+
+    await click('show-missing-watchlist-link')
+
+    expect($('watchlist-all-missing')).toBeNull()
+    expect($('domain-row-watched-gone.com')).not.toBeNull()
+  })
+
+  it('shows the empty-watchlist state', async () => {
+    await mountPage('/domains/watchlist')
+    expect($('watchlist-empty')?.textContent).toContain('No watched domains yet')
+  })
+})
+
+describe('purchases route (/domains/purchases)', () => {
+  it('shows the purchases list', async () => {
     stubApi({ purchases: [purchase()] })
-    const wrapper = await mountPage()
+    await mountPage('/domains/purchases')
+    expect($('purchases-table')?.textContent).toContain('quote-1')
+  })
 
-    await wrapper.get('[data-testid="tab-purchases"]').trigger('click')
-    await flushPromises()
-    expect(wrapper.get('[data-testid="purchases-table"]').text()).toContain('quote-1')
-
+  it('shows the purchases empty state', async () => {
     stubApi({ purchases: [] })
-    const empty = await mountPage()
-    await empty.get('[data-testid="tab-purchases"]').trigger('click')
-    await flushPromises()
-    expect(empty.get('[data-testid="purchases-empty"]').text()).toBe('No purchases yet.')
+    await mountPage('/domains/purchases')
+    expect($('purchases-empty')?.textContent).toBe('No purchases yet.')
   })
+})
 
-  it('adds a domain with the CSRF header and reloads the list', async () => {
-    stubApi({ domains: [] })
-    await mountPage()
-
-    await click('domains-add-open')
-    await setInput('add-name', 'newco.com')
-
-    stubApi({ domains: [domain({ name: 'newco.com' })] })
-    await click('add-submit')
-
-    const post = calls.find((call) => call.method === 'POST' && call.path === '/api/domains')
-    expect(post?.headers?.['X-Requested-With']).toBe('signalslate')
-    expect(post?.body).toEqual({ name: 'newco.com', ownership: 'owned' })
-    expect($('add-dialog')).toBeNull()
-    expect($('domain-row-newco.com')).not.toBeNull()
-  })
-
-  it('shows the add error inline when the API rejects it', async () => {
-    stubApi({ domains: [], addDomain: () => apiFailure(422, 'name: invalid domain') })
-    await mountPage()
-
-    await click('domains-add-open')
-    await setInput('add-name', 'bad')
-    await click('add-submit')
-
-    expect($('add-error')?.textContent).toBe('name: invalid domain')
-    expect($('add-dialog')).not.toBeNull()
-  })
-
-  it('imports a CSV and shows added/rejected results', async () => {
-    const result: ImportOut = { added: ['a.com'], rejected: [{ line: 2, reason: 'invalid ownership' }] }
-    stubApi({ domains: [], importDomains: () => result })
-    await mountPage()
-
-    await click('domains-import-open')
-    await setInput('import-csv', 'a.com\nb.com,bogus')
-
-    stubApi({ domains: [domain({ name: 'a.com' })], importDomains: () => result })
-    await click('import-submit')
-
-    const post = calls.find((call) => call.method === 'POST' && call.path === '/api/domains/import')
-    expect(post?.body).toEqual({ csv: 'a.com\nb.com,bogus' })
-    expect($('import-result')?.textContent).toContain('Added 1 domain(s)')
-    expect($('import-result')?.textContent).toContain('Line 2: invalid ownership')
-  })
-
-  it('syncs now, notifies and reloads the portfolio', async () => {
-    const syncResult = { sync: [{ connection_id: 'namecheap_main', kind: 'namecheap', status: 'ok', detail: 'ok', domain_count: 1 }], refresh: [] }
-    stubApi({ domains: [], sync: () => syncResult })
-    const wrapper = await mountPage()
-
-    stubApi({ domains: [domain()], sync: () => syncResult })
-    await click('domains-sync')
-
-    const post = calls.find((call) => call.method === 'POST' && call.path === '/api/domains/sync')
-    expect(post?.headers?.['X-Requested-With']).toBe('signalslate')
-    expect(wrapper.find('[data-testid="domain-row-acme.com"]').exists()).toBe(true)
-  })
-
-  it('opens the detail dialog on row click', async () => {
-    stubApi({ domains: [domain()] })
-    const wrapper = await mountPage()
-
-    await wrapper.get('[data-testid="domain-row-acme.com"]').trigger('click')
-    await flushPromises()
-
-    expect($('domain-detail-dialog')).not.toBeNull()
-    expect($('dialog-title')?.textContent).toBe('acme.com')
-    expect(calls.some((call) => call.method === 'GET' && call.path === '/api/domains/acme.com')).toBe(true)
-  })
-
-  it('inspects an ad-hoc domain name that is not in the portfolio', async () => {
-    stubApi({ domains: [], getDomain: () => apiFailure(404, 'not found') })
-    await mountPage()
-
-    await click('domains-inspect-open')
-    await setInput('inspect-name', 'nottracked.com')
-    await click('inspect-submit')
-
-    expect($('inspect-dialog')).toBeNull()
-    expect($('dialog-title')?.textContent).toBe('nottracked.com')
-    expect($('domain-adhoc-note')).not.toBeNull()
+describe('ideas route (/domains/ideas)', () => {
+  it('mounts the ideas panel', async () => {
+    await mountPage('/domains/ideas')
+    expect($('domain-ideas-panel')).not.toBeNull()
   })
 })
