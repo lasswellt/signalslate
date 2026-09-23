@@ -1,5 +1,6 @@
 <template>
-  <q-page class="page-container q-pa-md">
+  <NuxtPage v-if="$route.params.source" />
+  <q-page v-else class="page-container q-pa-md">
     <PageHeader title="Collectors" subtitle="Each source SignalSlate collects from" />
 
     <AsyncState
@@ -87,7 +88,7 @@
             icon="inbox"
             label="Items"
             data-testid="collector-browse"
-            @click="openItems(c)"
+            :to="`/collectors/${c.source}`"
           />
           <q-space />
           <q-toggle
@@ -284,89 +285,6 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
-
-    <!-- Items -->
-    <q-dialog :model-value="itemsSource !== null" @update:model-value="(open: boolean) => { if (!open) closeItems() }">
-      <q-card style="min-width: 360px; max-width: 760px; width: 100%" data-testid="items-dialog">
-        <q-card-section>
-          <div class="text-h6">Items: {{ itemsSource ? humanize(itemsSource) : '' }}</div>
-          <q-banner dense class="bg-warning text-black q-mt-sm" data-testid="items-notice">
-            Items contain private message content. Do not share what is shown here.
-          </q-banner>
-        </q-card-section>
-
-        <q-card-section v-if="detailRow === null" class="q-gutter-sm">
-          <q-form class="row items-center q-gutter-sm" autocomplete="off" @submit="applyFilter">
-            <q-input
-              v-model="filterText"
-              label="Item type"
-              outlined
-              dense
-              clearable
-              data-testid="items-filter"
-            />
-            <q-btn type="submit" flat no-caps color="primary" label="Filter" data-testid="items-filter-apply" />
-          </q-form>
-
-          <div v-if="itemsLoading" class="row justify-center q-pa-md" data-testid="items-loading">
-            <q-spinner size="md" color="primary" />
-          </div>
-          <q-banner v-else-if="itemsError && !items.length" dense class="bg-negative text-white" data-testid="items-error">
-            {{ itemsError }}
-            <template #action>
-              <q-btn flat label="Retry" @click="loadItems(true)" />
-            </template>
-          </q-banner>
-          <div v-else-if="!items.length" class="text-grey" data-testid="items-empty">No items</div>
-          <template v-else>
-            <div class="text-grey-8" data-testid="items-total">Showing {{ items.length }} of {{ itemsTotal }}</div>
-            <q-list separator bordered>
-              <q-item v-for="item in items" :key="item.id" clickable data-testid="item-row" @click="openItem(item)">
-                <q-item-section>
-                  <q-item-label caption>{{ humanize(item.item_type) }} · {{ formatDate(item.occurred_at) }}</q-item-label>
-                  <q-item-label style="white-space: pre-wrap; overflow-wrap: anywhere">{{ item.preview }}</q-item-label>
-                </q-item-section>
-              </q-item>
-            </q-list>
-            <div v-if="itemsError" class="text-negative" data-testid="items-more-error">{{ itemsError }}</div>
-            <div v-if="nextBeforeId !== null" class="row justify-center">
-              <q-btn
-                flat
-                no-caps
-                color="primary"
-                label="Load more"
-                :loading="itemsMoreLoading"
-                data-testid="items-more"
-                @click="loadItems(false)"
-              />
-            </div>
-          </template>
-        </q-card-section>
-
-        <q-card-section v-else class="q-gutter-sm">
-          <div class="row items-center q-gutter-sm">
-            <q-btn flat dense no-caps icon="arrow_back" label="Back to the list" data-testid="detail-back" @click="closeDetail" />
-            <span class="text-grey-8">{{ humanize(detailRow.item_type) }} · {{ formatDate(detailRow.occurred_at) }}</span>
-          </div>
-          <div v-if="detailLoading" class="row justify-center q-pa-md" data-testid="detail-loading">
-            <q-spinner size="md" color="primary" />
-          </div>
-          <q-banner v-else-if="detailError" dense class="bg-negative text-white" data-testid="detail-error">
-            {{ detailError }}
-          </q-banner>
-          <template v-else-if="detail">
-            <div v-if="detail.truncated" class="text-warning" data-testid="detail-truncated">
-              The payload is longer than 20 KB and is cut here.
-            </div>
-            <pre class="q-pa-sm bg-grey-2" style="white-space: pre-wrap; overflow-wrap: anywhere" data-testid="detail-payload">{{ detail.payload }}</pre>
-          </template>
-        </q-card-section>
-
-        <q-card-actions align="right">
-          <q-btn flat no-caps label="Close" data-testid="items-close" @click="closeItems" />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
   </q-page>
 </template>
 
@@ -376,7 +294,7 @@ import PageHeader from '~/components/ui/PageHeader.vue'
 import AsyncState from '~/components/ui/AsyncState.vue'
 import StatusChip from '~/components/ui/StatusChip.vue'
 import { ApiError } from '~/composables/useApi'
-import type { CollectorState, DryRunResult, ItemDetail, ItemRow, ResetResult } from '~/composables/useApi'
+import type { CollectorState, DryRunResult, ResetResult } from '~/composables/useApi'
 
 const api = useApi()
 const $q = useQuasar()
@@ -398,7 +316,6 @@ const DRY_POLL_MS = 2000
 // Mirror pipeline/collect.py MAX_HOURS / MAX_LIMIT; the API rejects anything larger.
 const DRY_MAX_HOURS = 168
 const DRY_MAX_LIMIT = 50
-const ITEMS_PAGE = 50
 
 const WATERMARK_TOOLTIP =
   'If a collector has not run in about a day, the next run collects the last 24 hours instead of resuming here.'
@@ -716,114 +633,6 @@ function confirmClear(c: CollectorState) {
   })
 }
 
-// --- items ---------------------------------------------------------------------------------------
-
-const itemsSource = ref<string | null>(null)
-const items = ref<ItemRow[]>([])
-const itemsTotal = ref(0)
-const nextBeforeId = ref<number | null>(null)
-const itemsLoading = ref(false)
-const itemsMoreLoading = ref(false)
-const itemsError = ref<string | null>(null)
-const filterText = ref<string | null>('')
-const appliedType = ref<string | undefined>(undefined)
-
-const detailRow = ref<ItemRow | null>(null)
-const detail = ref<ItemDetail | null>(null)
-const detailLoading = ref(false)
-const detailError = ref<string | null>(null)
-
-// Bumped on every reset of the browser, so a response for a source, filter or item that is no longer
-// on screen is dropped.
-let itemsSession = 0
-let detailSession = 0
-
-async function loadItems(first: boolean) {
-  const source = itemsSource.value
-  if (!source) return
-  const session = itemsSession
-  itemsError.value = null
-  if (first) {
-    items.value = []
-    nextBeforeId.value = null
-    itemsLoading.value = true
-  } else {
-    itemsMoreLoading.value = true
-  }
-  try {
-    const page = await api.listItems(source, {
-      limit: ITEMS_PAGE,
-      beforeId: first ? undefined : (nextBeforeId.value ?? undefined),
-      itemType: appliedType.value,
-    })
-    if (session !== itemsSession) return
-    items.value = first ? page.items : [...items.value, ...page.items]
-    nextBeforeId.value = page.next_before_id
-    itemsTotal.value = page.total
-  } catch (error) {
-    if (session !== itemsSession) return
-    itemsError.value = errorText(error)
-  } finally {
-    if (session === itemsSession) {
-      itemsLoading.value = false
-      itemsMoreLoading.value = false
-    }
-  }
-}
-
-function openItems(c: CollectorState) {
-  itemsSession += 1
-  detailSession += 1
-  filterText.value = ''
-  appliedType.value = undefined
-  detailRow.value = null
-  detail.value = null
-  itemsSource.value = c.source
-  void loadItems(true)
-}
-
-function closeItems() {
-  itemsSession += 1
-  detailSession += 1
-  itemsSource.value = null
-  detailRow.value = null
-  detail.value = null
-  items.value = []
-}
-
-function applyFilter() {
-  itemsSession += 1
-  appliedType.value = filterText.value?.trim() || undefined
-  void loadItems(true)
-}
-
-async function openItem(row: ItemRow) {
-  const source = itemsSource.value
-  if (!source) return
-  const session = ++detailSession
-  detailRow.value = row
-  detail.value = null
-  detailError.value = null
-  detailLoading.value = true
-  try {
-    const result = await api.getItem(source, row.id)
-    if (session !== detailSession) return
-    detail.value = result
-  } catch (error) {
-    if (session !== detailSession) return
-    detailError.value = errorText(error)
-  } finally {
-    if (session === detailSession) detailLoading.value = false
-  }
-}
-
-function closeDetail() {
-  detailSession += 1
-  detailRow.value = null
-  detail.value = null
-  detailError.value = null
-}
-
 onMounted(() => load())
 
 onBeforeUnmount(() => {
@@ -831,7 +640,5 @@ onBeforeUnmount(() => {
   runWatch.clear()
   drySession += 1
   stopDryTimer()
-  itemsSession += 1
-  detailSession += 1
 })
 </script>
