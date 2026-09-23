@@ -64,7 +64,6 @@ import type { QTableColumn } from 'quasar'
 import AsyncState from '~/components/ui/AsyncState.vue'
 import StatusChip from '~/components/ui/StatusChip.vue'
 import JobApplyDialog from '~/components/JobApplyDialog.vue'
-import { ApiError } from '~/composables/useApi'
 import { useJobsApi } from '~/composables/useJobsApi'
 import type { ApplicationOut } from '~/composables/useJobsApi'
 
@@ -84,17 +83,13 @@ const columns: QTableColumn[] = [
   { name: 'created_at', label: 'Created', field: 'created_at', align: 'left' },
 ]
 
-function errorText(error: unknown): string {
-  return error instanceof ApiError ? error.message : 'Something went wrong'
-}
-
 async function load(silent = false) {
   if (!silent) loading.value = true
   loadError.value = null
   try {
     applications.value = await api.listApplications()
   } catch (error) {
-    loadError.value = errorText(error)
+    loadError.value = errorText(error, 'Could not load applications')
   } finally {
     loading.value = false
   }
