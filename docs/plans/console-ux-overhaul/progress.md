@@ -35,3 +35,5 @@ Concern (T-010, high): duplicate 'connections page' block in web/tests/Connectio
 ## 2026-09-23T03:03:01Z verify T-011 ok=false (only the connections-page integration block in ConnectionDialog.test.ts; 6 tests pin pre-T-010/T-011 UI)
 Ruling: integration — reconcile ConnectionDialog.test.ts 'connections page' block with merged T-010+T-011 UI via one integration dev (T-011, round 2)
 ## 2026-09-23T03:03:01Z build T-016 start (attempt 1) wave 3
+## 2026-09-23T03:07:05Z verify T-011 ok=true (after integration round)
+## 2026-09-23T03:07:05Z build wave 2 4/4 done
