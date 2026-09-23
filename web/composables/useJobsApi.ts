@@ -172,6 +172,8 @@ export interface PacketEditBody {
 export interface ApplicationOut {
   id: number
   posting_id: number
+  posting_title?: string | null
+  company_name?: string | null
   status: string
   packet: Record<string, unknown> | null
   cover_letter_path: string | null
