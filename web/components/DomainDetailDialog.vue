@@ -1,164 +1,219 @@
 <template>
-  <!-- Not persistent: this dialog is read-only (no in-progress input to lose), so a click outside or
-       Esc closes it the same as the Close button. -->
-  <q-dialog :model-value="open" @update:model-value="onModelUpdate">
-    <q-card style="min-width: 360px; max-width: 720px; width: 100%" data-testid="domain-detail-dialog">
-      <q-card-section>
-        <div class="text-h6" data-testid="dialog-title">{{ name }}</div>
-      </q-card-section>
-
-      <q-card-section v-if="loading" data-testid="domain-detail-loading">
+  <DialogShell
+    :model-value="open"
+    :title="name"
+    :subtitle="dialogSubtitle"
+    width="640px"
+    @update:model-value="onModelUpdate"
+    @close="onDialogClose"
+  >
+    <div data-testid="domain-detail-dialog">
+      <div v-if="loading" data-testid="domain-detail-loading">
         <q-skeleton type="text" width="60%" />
         <q-skeleton type="text" width="40%" />
         <q-skeleton type="text" width="80%" />
-      </q-card-section>
+      </div>
 
-      <q-card-section v-else-if="error" data-testid="domain-detail-error">
+      <div v-else-if="error" data-testid="domain-detail-error">
         <q-banner dense class="bg-negative text-white">{{ error }}</q-banner>
         <q-btn flat no-caps label="Retry" data-testid="domain-detail-retry" @click="load" />
-      </q-card-section>
+      </div>
 
       <template v-else>
-        <q-card-section v-if="isAdHoc" data-testid="domain-adhoc-note">
-          <q-banner dense class="bg-grey-3">This domain is not tracked. Showing a live lookup only.</q-banner>
-        </q-card-section>
+        <q-banner v-if="isAdHoc" dense class="bg-grey-3 q-mb-md" data-testid="domain-adhoc-note">
+          This domain is not tracked. Showing a live lookup only.
+        </q-banner>
 
-        <q-card-section data-testid="domain-dns">
-          <div class="text-subtitle2">DNS records</div>
-          <div v-if="dnsStatus !== 'ok'" class="text-grey-8" data-testid="domain-dns-unavailable">
-            DNS records unavailable<template v-if="dnsError">: {{ dnsError }}</template>
+        <div class="q-mb-md" data-testid="domain-summary">
+          <div class="row items-center q-gutter-sm q-mb-xs">
+            <StatusChip kind="health" :value="rdapStatus" />
+            <span data-testid="domain-expiry">{{ expiryText }}</span>
           </div>
-          <q-markup-table v-else dense flat data-testid="domain-dns-table">
-            <thead>
-              <tr>
-                <th class="text-left">Type</th>
-                <th class="text-left">Values</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(record, rtype) in dnsRecords" :key="rtype">
-                <td>{{ rtype }}</td>
-                <td>
-                  <span v-if="!record.ok" class="text-negative">unavailable<template v-if="record.error">: {{ record.error }}</template></span>
-                  <span v-else-if="record.values.length === 0" class="text-grey-8">none</span>
-                  <span v-else>{{ record.values.join(', ') }}</span>
-                </td>
-              </tr>
-            </tbody>
-          </q-markup-table>
-        </q-card-section>
+          <div class="text-body2 text-grey-8">Registrar: {{ rdapRegistrar ?? '—' }}</div>
+          <div class="text-body2 text-grey-8">Nameservers: {{ nameserversText }}</div>
+        </div>
 
-        <q-card-section data-testid="domain-mail-posture">
-          <div class="text-subtitle2">Mail posture</div>
-          <div v-if="mailStatus !== 'ok'" class="text-grey-8" data-testid="domain-mail-unavailable">
-            Mail posture unavailable<template v-if="mailError">: {{ mailError }}</template>
-          </div>
-          <template v-else>
-            <q-banner v-if="isParked" dense class="bg-warning text-black" data-testid="domain-parked-warning">
-              Parked domain without a strict SPF/DMARC policy: mail can be spoofed for this domain.
-            </q-banner>
-            <div class="row q-gutter-sm">
-              <q-badge
-                v-for="badge in mailBadges"
-                :key="badge.key"
-                :color="badge.color"
-                :data-testid="`mail-badge-${badge.key}`"
-              >
-                {{ badge.label }}
-              </q-badge>
-            </div>
-          </template>
-        </q-card-section>
-
-        <q-card-section data-testid="domain-rdap">
-          <div class="text-subtitle2">Registration (RDAP)</div>
-          <div v-if="rdapStatus === 'unsupported'" class="text-grey-8" data-testid="domain-rdap-unsupported">
-            RDAP is not supported for this TLD.
-          </div>
-          <div v-else-if="rdapStatus === 'not_found'" class="text-grey-8" data-testid="domain-rdap-not-found">
-            No RDAP record found.
-          </div>
-          <div v-else-if="rdapStatus !== 'ok'" class="text-grey-8" data-testid="domain-rdap-unavailable">
-            RDAP data unavailable<template v-if="rdapError">: {{ rdapError }}</template>
-          </div>
-          <div v-else data-testid="domain-rdap-details">
-            <div>Registrar: {{ rdapRegistrar ?? 'Unknown' }}</div>
-            <div>Created: {{ formatDate(rdapCreated) }}</div>
-            <div>Expires: {{ formatDate(rdapExpires) }}</div>
-            <div class="row items-center q-gutter-xs">
-              <span>Locked:</span>
-              <q-badge :color="rdapLocked ? 'positive' : 'negative'" data-testid="domain-rdap-locked">
-                {{ rdapLocked ? 'Yes' : 'No' }}
-              </q-badge>
-            </div>
-            <div v-if="rdapStatuses.length">Statuses: {{ rdapStatuses.join(', ') }}</div>
-          </div>
-        </q-card-section>
-
-        <q-card-section v-if="!isAdHoc" data-testid="domain-history">
-          <div class="text-subtitle2">Snapshot history</div>
-          <div v-if="history.length === 0" class="text-grey-8" data-testid="domain-history-empty">No snapshots yet.</div>
-          <ul v-else>
-            <li v-for="entry in history" :key="`${entry.taken_at ?? 'unknown'}-${entry.data_hash}`">
-              {{ entry.taken_at ? formatDate(entry.taken_at) : 'unknown time' }} ({{ entry.data_hash.slice(0, 8) }})
-            </li>
-          </ul>
-        </q-card-section>
-
-        <q-card-section data-testid="domain-intel">
-          <div class="text-subtitle2">Subdomains &amp; archived URLs</div>
-          <q-btn
-            v-if="!intel && !intelLoading"
-            flat
-            no-caps
-            color="primary"
-            label="Load subdomains & URLs"
-            data-testid="domain-load-intel"
-            @click="loadIntel"
-          />
-          <div v-if="intelLoading" class="row items-center q-gutter-sm" data-testid="domain-intel-loading">
-            <q-spinner size="sm" color="primary" />
-            <span>Loading subdomains and archived URLs&hellip;</span>
-          </div>
-          <q-banner v-if="intelError" dense class="bg-negative text-white" data-testid="domain-intel-error">
-            {{ intelError }}
-          </q-banner>
-          <template v-if="intel">
-            <div data-testid="domain-subdomains">
-              <div class="text-body2">Subdomains</div>
-              <div v-if="intel.subdomains.status !== 'ok'" class="text-grey-8" data-testid="domain-subdomains-unavailable">
-                Unavailable<template v-if="intel.subdomains.error">: {{ intel.subdomains.error }}</template>
+        <q-list bordered class="rounded-borders">
+          <q-expansion-item default-opened label="DNS records" data-testid="domain-dns">
+            <q-card-section>
+              <div v-if="dnsStatus !== 'ok'" class="text-grey-8" data-testid="domain-dns-unavailable">
+                DNS records unavailable<template v-if="dnsError">: {{ dnsError }}</template>
               </div>
-              <div v-else-if="intel.subdomains.names.length === 0" class="text-grey-8">None found.</div>
-              <ul v-else>
-                <li v-for="sub in intel.subdomains.names" :key="sub">{{ sub }}</li>
-              </ul>
-            </div>
-            <div data-testid="domain-archived-urls">
-              <div class="text-body2">Archived URLs</div>
-              <div v-if="intel.archived_urls.status !== 'ok'" class="text-grey-8" data-testid="domain-archived-urls-unavailable">
-                Unavailable<template v-if="intel.archived_urls.error">: {{ intel.archived_urls.error }}</template>
+              <q-markup-table v-else dense flat data-testid="domain-dns-table">
+                <thead>
+                  <tr>
+                    <th class="text-left">Type</th>
+                    <th class="text-left">Values</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(record, rtype) in dnsRecords" :key="rtype">
+                    <td>
+                      {{ humanizeDnsType(rtype) }}
+                      <q-tooltip>{{ rtype }}</q-tooltip>
+                    </td>
+                    <td>
+                      <span v-if="!record.ok" class="text-negative">unavailable<template v-if="record.error">: {{ record.error }}</template></span>
+                      <span v-else-if="record.values.length === 0" class="text-grey-8">none</span>
+                      <span v-else>{{ record.values.join(', ') }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </q-markup-table>
+            </q-card-section>
+          </q-expansion-item>
+
+          <q-expansion-item default-opened label="Mail security" data-testid="domain-mail-posture">
+            <q-card-section>
+              <div v-if="mailStatus !== 'ok'" class="text-grey-8" data-testid="domain-mail-unavailable">
+                Mail security unavailable<template v-if="mailError">: {{ mailError }}</template>
               </div>
-              <div v-else-if="intel.archived_urls.urls.length === 0" class="text-grey-8">None found.</div>
+              <template v-else>
+                <q-banner v-if="isParked" dense class="bg-warning text-black" data-testid="domain-parked-warning">
+                  Parked domain without a strict SPF/DMARC policy: mail can be spoofed for this domain.
+                </q-banner>
+                <div class="row q-gutter-sm">
+                  <q-badge
+                    v-for="badge in mailBadges"
+                    :key="badge.key"
+                    :color="badge.color"
+                    :data-testid="`mail-badge-${badge.key}`"
+                  >
+                    {{ badge.label }}
+                  </q-badge>
+                </div>
+              </template>
+            </q-card-section>
+          </q-expansion-item>
+
+          <q-expansion-item label="Registration (RDAP)" data-testid="domain-rdap">
+            <q-card-section>
+              <div v-if="rdapStatus === 'unsupported'" class="text-grey-8" data-testid="domain-rdap-unsupported">
+                RDAP is not supported for this TLD.
+              </div>
+              <div v-else-if="rdapStatus === 'not_found'" class="text-grey-8" data-testid="domain-rdap-not-found">
+                No RDAP record found.
+              </div>
+              <div v-else-if="rdapStatus !== 'ok'" class="text-grey-8" data-testid="domain-rdap-unavailable">
+                RDAP data unavailable<template v-if="rdapError">: {{ rdapError }}</template>
+              </div>
+              <div v-else data-testid="domain-rdap-details">
+                <div>Registrar: {{ rdapRegistrar ?? '—' }}</div>
+                <div>Created: {{ formatDate(rdapCreated) }}</div>
+                <div>Expires: {{ formatDate(rdapExpires) }}</div>
+                <div class="row items-center q-gutter-xs">
+                  <span>Locked:</span>
+                  <q-badge :color="rdapLocked ? 'positive' : 'negative'" data-testid="domain-rdap-locked">
+                    {{ rdapLocked ? 'Yes' : 'No' }}
+                  </q-badge>
+                </div>
+                <div v-if="rdapStatuses.length" class="row items-center q-gutter-xs q-mt-xs">
+                  <span>Statuses:</span>
+                  <q-chip v-for="status in rdapStatuses" :key="status" dense outline>
+                    {{ humanizeRdapStatus(status) }}
+                    <q-tooltip>{{ status }}</q-tooltip>
+                  </q-chip>
+                </div>
+              </div>
+            </q-card-section>
+          </q-expansion-item>
+
+          <q-expansion-item label="Subdomains" data-testid="domain-intel">
+            <q-card-section>
+              <q-btn
+                v-if="!intel && !intelLoading"
+                flat
+                no-caps
+                color="primary"
+                label="Load subdomains & URLs"
+                data-testid="domain-load-intel"
+                @click="loadIntel"
+              />
+              <div v-if="intelLoading" class="row items-center q-gutter-sm" data-testid="domain-intel-loading">
+                <q-spinner size="sm" color="primary" />
+                <span>Loading subdomains and archived URLs&hellip;</span>
+              </div>
+              <q-banner v-if="intelError" dense class="bg-negative text-white" data-testid="domain-intel-error">
+                {{ intelError }}
+              </q-banner>
+              <template v-if="intel">
+                <div data-testid="domain-subdomains">
+                  <div class="text-body2">Subdomains</div>
+                  <div v-if="intel.subdomains.status !== 'ok'" class="text-grey-8" data-testid="domain-subdomains-unavailable">
+                    Unavailable<template v-if="intel.subdomains.error">: {{ intel.subdomains.error }}</template>
+                  </div>
+                  <div v-else-if="subdomainNames.length === 0" class="text-grey-8">None found.</div>
+                  <template v-else>
+                    <ul>
+                      <li v-for="sub in visibleSubdomains" :key="sub">{{ sub }}</li>
+                    </ul>
+                    <q-btn
+                      v-if="subdomainNames.length > LIST_LIMIT"
+                      flat
+                      dense
+                      no-caps
+                      color="primary"
+                      :label="subdomainsExpanded ? 'Show fewer' : `Show all ${subdomainNames.length}`"
+                      data-testid="domain-subdomains-show-all"
+                      @click="subdomainsExpanded = !subdomainsExpanded"
+                    />
+                  </template>
+                </div>
+                <div class="q-mt-md" data-testid="domain-archived-urls">
+                  <div class="text-body2">Archived URLs</div>
+                  <div v-if="intel.archived_urls.status !== 'ok'" class="text-grey-8" data-testid="domain-archived-urls-unavailable">
+                    Unavailable<template v-if="intel.archived_urls.error">: {{ intel.archived_urls.error }}</template>
+                  </div>
+                  <div v-else-if="archivedUrls.length === 0" class="text-grey-8">None found.</div>
+                  <template v-else>
+                    <ul>
+                      <li v-for="entry in visibleArchivedUrls" :key="entry">
+                        <a :href="entry" target="_blank" rel="noopener">{{ entry }}</a>
+                      </li>
+                    </ul>
+                    <q-btn
+                      v-if="archivedUrls.length > LIST_LIMIT"
+                      flat
+                      dense
+                      no-caps
+                      color="primary"
+                      :label="archivedExpanded ? 'Show fewer' : `Show all ${archivedUrls.length}`"
+                      data-testid="domain-archived-urls-show-all"
+                      @click="archivedExpanded = !archivedExpanded"
+                    />
+                  </template>
+                </div>
+              </template>
+            </q-card-section>
+          </q-expansion-item>
+
+          <q-expansion-item v-if="!isAdHoc" label="Archive history" data-testid="domain-history">
+            <q-card-section>
+              <div v-if="history.length === 0" class="text-grey-8" data-testid="domain-history-empty">No snapshots yet.</div>
               <ul v-else>
-                <li v-for="entry in intel.archived_urls.urls" :key="entry">{{ entry }}</li>
+                <li v-for="(entry, index) in history" :key="`${entry.taken_at ?? 'unknown'}-${index}`">
+                  {{ entry.taken_at ? formatDate(entry.taken_at) : 'Unknown time' }}
+                </li>
               </ul>
-            </div>
-          </template>
-        </q-card-section>
+            </q-card-section>
+          </q-expansion-item>
+        </q-list>
       </template>
+    </div>
 
-      <q-card-actions align="right">
-        <q-btn flat no-caps label="Close" data-testid="domain-detail-close" @click="close" />
-      </q-card-actions>
-    </q-card>
-  </q-dialog>
+    <template #actions>
+      <q-btn flat no-caps icon="open_in_new" label="Open website" data-testid="domain-open-website" @click="openWebsite" />
+      <q-btn flat no-caps label="Close" data-testid="domain-detail-close" @click="close" />
+    </template>
+  </DialogShell>
 </template>
 
 <script setup lang="ts">
-import { ApiError, parseUtc } from '~/composables/useApi'
+import { ApiError } from '~/composables/useApi'
 import { useDomainsApi } from '~/composables/useDomainsApi'
 import type { InspectOut, SnapshotSummary } from '~/composables/useDomainsApi'
+import DialogShell from '~/components/ui/DialogShell.vue'
+import StatusChip from '~/components/ui/StatusChip.vue'
 
 const props = defineProps<{
   open: boolean
@@ -171,6 +226,54 @@ const emit = defineEmits<{
 }>()
 
 const api = useDomainsApi()
+
+const LIST_LIMIT = 10
+
+// clientTransferProhibited etc. (RFC 7483 EPP status vocabulary): the handful that show up in
+// practice get a plain-language label; anything else falls back to humanize(), with the raw
+// value always available in a tooltip.
+const RDAP_STATUS_LABELS: Record<string, string> = {
+  clienttransferprohibited: 'Transfer locked',
+  clientdeleteprohibited: 'Delete locked',
+  clientupdateprohibited: 'Update locked',
+  clienthold: 'On hold',
+  clientrenewprohibited: 'Renewal locked',
+  servertransferprohibited: 'Transfer locked (registry)',
+  serverdeleteprohibited: 'Delete locked (registry)',
+  serverupdateprohibited: 'Update locked (registry)',
+  serverrenewprohibited: 'Renewal locked (registry)',
+  serverhold: 'On hold (registry)',
+  pendingdelete: 'Pending deletion',
+  pendingtransfer: 'Pending transfer',
+  pendingrenew: 'Pending renewal',
+  redemptionperiod: 'Redemption period',
+  autorenewperiod: 'Auto-renew grace period',
+  active: 'Active',
+  inactive: 'Inactive',
+  ok: 'Active',
+}
+
+// Common DNS record types shown with a plain-language description; the raw type still appears in
+// a tooltip. Anything not listed here (rare record types) is shown as-is.
+const DNS_TYPE_LABELS: Record<string, string> = {
+  a: 'IPv4 address (A)',
+  aaaa: 'IPv6 address (AAAA)',
+  mx: 'Mail exchange (MX)',
+  txt: 'Text (TXT)',
+  ns: 'Name server (NS)',
+  cname: 'Alias (CNAME)',
+  soa: 'Start of authority (SOA)',
+  caa: 'Certificate authority (CAA)',
+  srv: 'Service (SRV)',
+}
+
+function humanizeRdapStatus(status: string): string {
+  return RDAP_STATUS_LABELS[status.toLowerCase()] ?? humanize(status)
+}
+
+function humanizeDnsType(rtype: string): string {
+  return DNS_TYPE_LABELS[rtype.toLowerCase()] ?? rtype
+}
 
 interface DnsRecordView {
   ok: boolean
@@ -198,6 +301,8 @@ const snapshot = ref<Snapshot | null>(null)
 const intel = ref<InspectOut['intel']>(null)
 const intelLoading = ref(false)
 const intelError = ref<string | null>(null)
+const subdomainsExpanded = ref(false)
+const archivedExpanded = ref(false)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -267,16 +372,25 @@ const rdapCreated = computed(() => asString(rdapSection.value?.created))
 const rdapExpires = computed(() => asString(rdapSection.value?.expires))
 const rdapLocked = computed(() => asBool(rdapSection.value?.locked))
 const rdapStatuses = computed(() => asStringArray(rdapSection.value?.statuses))
+const rdapNameservers = computed(() => asStringArray(rdapSection.value?.nameservers))
+const nameserversText = computed(() => (rdapNameservers.value.length ? rdapNameservers.value.join(', ') : '—'))
 
-function formatDate(value: string | null): string {
-  if (!value) return 'Unknown'
-  const date = parseUtc(value)
-  return Number.isNaN(date.getTime()) ? 'Unknown' : date.toLocaleDateString()
-}
+const dialogSubtitle = computed(() => {
+  if (loading.value || error.value) return undefined
+  if (isAdHoc.value) return 'Not in your portfolio'
+  return rdapRegistrar.value ?? undefined
+})
 
-function errorMessage(err: unknown): string {
-  return err instanceof ApiError ? err.message : 'Something went wrong'
-}
+const expiryText = computed(() => {
+  if (loading.value || error.value) return ''
+  if (!rdapExpires.value) return 'Expiry unknown'
+  return `Expires ${formatDate(rdapExpires.value)} · ${relativeTime(rdapExpires.value)}`
+})
+
+const subdomainNames = computed(() => intel.value?.subdomains.names ?? [])
+const archivedUrls = computed(() => intel.value?.archived_urls.urls ?? [])
+const visibleSubdomains = computed(() => (subdomainsExpanded.value ? subdomainNames.value : subdomainNames.value.slice(0, LIST_LIMIT)))
+const visibleArchivedUrls = computed(() => (archivedExpanded.value ? archivedUrls.value : archivedUrls.value.slice(0, LIST_LIMIT)))
 
 /**
  * Loads the domain's stored detail (owned/watched domains). A 404 means name is not tracked (an
@@ -291,6 +405,8 @@ async function load() {
   snapshot.value = null
   intel.value = null
   intelError.value = null
+  subdomainsExpanded.value = false
+  archivedExpanded.value = false
   try {
     const detail = await api.getDomain(props.name)
     history.value = detail.history
@@ -307,10 +423,10 @@ async function load() {
         const inspected = await api.inspectDomain({ name: props.name })
         snapshot.value = { dns: inspected.dns, mail: inspected.mail, rdap: inspected.rdap }
       } catch (inspectErr) {
-        error.value = errorMessage(inspectErr)
+        error.value = errorText(inspectErr)
       }
     } else {
-      error.value = errorMessage(err)
+      error.value = errorText(err)
     }
   } finally {
     loading.value = false
@@ -326,10 +442,14 @@ async function loadIntel() {
     intel.value = result.intel
     if (!result.intel) intelError.value = 'No subdomain or archived-URL data available'
   } catch (err) {
-    intelError.value = errorMessage(err)
+    intelError.value = errorText(err)
   } finally {
     intelLoading.value = false
   }
+}
+
+function openWebsite() {
+  window.open(`https://${props.name}`, '_blank', 'noopener')
 }
 
 function close() {
@@ -339,7 +459,10 @@ function close() {
 
 function onModelUpdate(value: boolean) {
   emit('update:open', value)
-  if (!value) emit('closed')
+}
+
+function onDialogClose() {
+  emit('closed')
 }
 
 watch(

@@ -176,10 +176,14 @@ describe('loaded domain', () => {
 
     expect($('domain-rdap-details')?.textContent).toContain('Example Registrar')
     expect($('domain-rdap-locked')?.textContent?.trim()).toBe('Yes')
-    expect($('domain-rdap-details')?.textContent).toContain('clientTransferProhibited')
+    expect($('domain-rdap-details')?.textContent).toContain('Transfer locked')
+    expect($('domain-rdap-details')?.textContent).not.toContain('clientTransferProhibited')
+
+    expect($('domain-summary')?.textContent).toContain('ns1.example.com')
 
     expect($('domain-history')).not.toBeNull()
     expect($('domain-history-empty')).toBeNull()
+    expect($('domain-history')?.textContent).not.toContain('abcdef12')
     expect($('domain-adhoc-note')).toBeNull()
   })
 
@@ -273,6 +277,31 @@ describe('subdomains and archived URLs', () => {
     expect($('domain-intel-error')?.textContent).toContain('inspect failed')
     expect($('domain-load-intel')).not.toBeNull()
   })
+
+  it('bounds long lists to the first 10 with a show-all toggle', async () => {
+    await mountDialog()
+    const names = Array.from({ length: 12 }, (_, i) => `sub${i}.example.com`)
+    const urls = Array.from({ length: 11 }, (_, i) => `https://web.archive.org/example.com/${i}`)
+    inspectResult = () => inspectOut({
+      intel: {
+        subdomains: { status: 'ok', names, error: null },
+        archived_urls: { status: 'ok', urls, error: null },
+      },
+    })
+    await click('domain-load-intel')
+
+    expect($('domain-subdomains')?.querySelectorAll('li')).toHaveLength(10)
+    expect($('domain-archived-urls')?.querySelectorAll('li')).toHaveLength(10)
+    expect($('domain-subdomains-show-all')?.textContent).toContain('Show all 12')
+    expect($('domain-archived-urls-show-all')?.textContent).toContain('Show all 11')
+
+    await click('domain-subdomains-show-all')
+    expect($('domain-subdomains')?.querySelectorAll('li')).toHaveLength(12)
+
+    const link = $('domain-archived-urls')?.querySelector('a')
+    expect(link?.getAttribute('target')).toBe('_blank')
+    expect(link?.getAttribute('rel')).toBe('noopener')
+  })
 })
 
 describe('closing', () => {
@@ -281,5 +310,15 @@ describe('closing', () => {
     await click('domain-detail-close')
     expect(wrapper.emitted('update:open')?.at(-1)).toEqual([false])
     expect(wrapper.emitted('closed')).toHaveLength(1)
+  })
+})
+
+describe('actions', () => {
+  it('opens the website in a new tab from the Open website action', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+    await mountDialog()
+    await click('domain-open-website')
+    expect(openSpy).toHaveBeenCalledWith('https://example.com', '_blank', 'noopener')
+    openSpy.mockRestore()
   })
 })
