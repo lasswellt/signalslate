@@ -51,3 +51,6 @@ Concern (T-020, low): screening answers stay read-only; API only saves cover_let
 ## 2026-09-23T03:19:03Z verify T-013 ok=true
 Concern (T-013, med): item type filter derives counts client-side by paging full history (cap 5000); a server by_type aggregate would scale better.
 Note (2026-09-23T03:19:24Z): main has 1 failing test (jobs.test.ts 'job-title' testid removed by T-020); T-018 rewrites jobs.test.ts and was told to use dialog-title.
+## 2026-09-23T03:20:42Z verify T-018 ok=true (after main-thread fix)
+Ruling: regression-fix — T-018 dropped the open/closed status filter and 3-way remote filter; restored as q-btn-toggles, closed postings marked; job-title → dialog-title after T-020 (T-018, round 2)
+## 2026-09-23T03:20:42Z build T-019 start (attempt 1) wave 5
