@@ -92,7 +92,7 @@ afterEach(() => {
 })
 
 describe('connections page', () => {
-  it('renders one card per connection with origin, kind, health and secret names only', async () => {
+  it('renders one card per connection, grouped by kind, with label, origin, health and a credentials summary', async () => {
     stubApi({
       connections: [
         connection(),
@@ -109,25 +109,29 @@ describe('connections page', () => {
     })
     const wrapper = await mountPage()
 
+    // Group order follows the fixed kind order (m365, zoom, slack, gmail, ...), not insertion order.
+    expect(wrapper.findAll('[data-testid="kind-group-title"]').map((el) => el.text())).toEqual(['Zoom', 'Slack', 'Gmail'])
+
     const cards = wrapper.findAll('[data-testid="connection"]')
     expect(cards).toHaveLength(3)
+    const [zoom, slack, gmail] = cards
 
-    const [slack, zoom, gmail] = cards
+    expect(slack.get('[data-testid="conn-label"]').text()).toBe('acme')
     expect(slack.get('[data-testid="conn-id"]').text()).toBe('slack_acme')
-    expect(slack.get('[data-testid="conn-kind"]').text()).toBe('slack')
-    expect(slack.get('[data-testid="conn-origin"]').text()).toBe('ui')
+    expect(slack.get('[data-testid="conn-origin"]').text()).toBe('Added here')
     expect(slack.get('[data-testid="conn-health"]').text()).toContain('Authenticated as example-bot')
-    expect(slack.get('[data-testid="conn-health"]').text()).toContain('5 minutes ago')
-    expect(slack.get('[data-testid="health-dot"]').classes()).toContain('bg-positive')
-    expect(slack.findAll('[data-testid="secret-chip"]').map((chip) => chip.text())).toEqual(['token'])
+    expect(slack.get('[data-testid="conn-health"]').text()).toContain('5 min ago')
+    expect(slack.get('[data-testid="conn-health"] [data-testid="status-chip"]').classes()).toContain('bg-positive')
+    expect(slack.get('[data-testid="conn-secrets"]').text()).toBe('Credentials saved: Token')
 
-    expect(zoom.get('[data-testid="conn-origin"]').text()).toBe('env')
+    expect(zoom.get('[data-testid="conn-origin"]').text()).toBe('Set in .env')
     expect(zoom.get('[data-testid="conn-health"]').text()).toContain('Token request rejected')
-    expect(zoom.get('[data-testid="health-dot"]').classes()).toContain('bg-negative')
+    expect(zoom.get('[data-testid="conn-health"] [data-testid="status-chip"]').classes()).toContain('bg-negative')
+    expect(zoom.get('[data-testid="conn-secrets"]').text()).toBe('Credentials saved: Client secret')
 
-    expect(gmail.get('[data-testid="conn-health"]').text()).toContain('not checked yet')
-    expect(gmail.get('[data-testid="health-dot"]').classes()).toContain('bg-grey')
-    expect(gmail.findAll('[data-testid="secret-chip"]')).toHaveLength(0)
+    expect(gmail.get('[data-testid="conn-health"]').text()).toContain('Not checked yet')
+    expect(gmail.get('[data-testid="conn-health"] [data-testid="status-chip"]').classes()).toContain('bg-grey')
+    expect(gmail.find('[data-testid="conn-secrets"]').exists()).toBe(false)
   })
 
   it('renders server strings as text, never as markup', async () => {
@@ -144,13 +148,14 @@ describe('connections page', () => {
     expect(health.find('b').exists()).toBe(false)
   })
 
-  it('shows the key banner when SIGNALSLATE_SECRET_KEY is not configured', async () => {
+  it('shows the key banner, with plain-language copy and the env-var instruction tucked in a detail', async () => {
     stubApi({ system: { ...SYSTEM, secret_key_configured: false }, connections: [connection({ origin: 'env' })] })
     const wrapper = await mountPage()
 
-    expect(wrapper.get('[data-testid="key-banner"]').text()).toBe(
-      'Set SIGNALSLATE_SECRET_KEY in .env to manage connections here; env-only mode keeps working',
-    )
+    const banner = wrapper.get('[data-testid="key-banner"]')
+    expect(banner.text()).toContain('one-time setup')
+    expect(banner.text()).not.toContain('watermark')
+    expect(banner.get('code').text()).toBe('SIGNALSLATE_SECRET_KEY')
     // Env connections stay listed: env-only mode keeps working.
     expect(wrapper.findAll('[data-testid="connection"]')).toHaveLength(1)
   })
@@ -162,7 +167,8 @@ describe('connections page', () => {
 
   it('shows the empty state', async () => {
     const wrapper = await mountPage()
-    expect(wrapper.get('[data-testid="empty"]').text()).toBe('No connections yet')
+    expect(wrapper.get('[data-testid="empty-state-title"]').text()).toBe('No accounts yet')
+    expect(wrapper.get('[data-testid="empty-state-message"]').text()).toBe('Add an account to start collecting from it.')
     expect(wrapper.find('[data-testid="connection"]').exists()).toBe(false)
   })
 
@@ -177,7 +183,7 @@ describe('connections page', () => {
     const wrapper = await mountSuspended(Harness)
     await flushPromises()
     expect(wrapper.find('[data-testid="loading"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="empty"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="empty-state"]').exists()).toBe(false)
 
     release([connection()])
     await flushPromises()
@@ -190,17 +196,17 @@ describe('connections page', () => {
     const wrapper = await mountPage()
 
     expect(wrapper.get('[data-testid="load-error"]').text()).toContain('The store is unavailable')
-    expect(wrapper.find('[data-testid="empty"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="empty-state"]').exists()).toBe(false)
 
     stubApi({ connections: [connection()] })
-    await wrapper.get('[data-testid="load-error"] button').trigger('click')
+    await wrapper.get('[data-testid="retry"]').trigger('click')
     await flushPromises()
 
     expect(wrapper.find('[data-testid="load-error"]').exists()).toBe(false)
     expect(wrapper.findAll('[data-testid="connection"]')).toHaveLength(1)
   })
 
-  it('Test posts with the CSRF header and shows the result inline and in a notification', async () => {
+  it('Test posts with the CSRF header and shows the result inline only, with no duplicate toast', async () => {
     stubApi({
       connections: [connection()],
       test: { status: 'error', detail: 'Slack rejected the token' },
@@ -214,10 +220,10 @@ describe('connections page', () => {
     expect(post?.path).toBe('/api/connections/slack_acme/test')
     expect(post?.headers?.['X-Requested-With']).toBe('signalslate')
     expect(wrapper.get('[data-testid="test-result"]').text()).toBe('error: Slack rejected the token')
-    await vi.waitFor(() => expect(document.body.textContent).toContain('slack_acme: Slack rejected the token'))
+    expect(document.body.textContent).not.toContain('slack_acme: Slack rejected the token')
   })
 
-  it('Test shows an ok result and reports a failed call as an error result', async () => {
+  it('Test shows an ok result and reports a failed call as an error result, with a toast for the failed call', async () => {
     stubApi({ connections: [connection()], test: { status: 'ok', detail: 'Authenticated' } })
     const wrapper = await mountPage()
     await wrapper.get('[data-testid="conn-test"]').trigger('click')
@@ -229,6 +235,7 @@ describe('connections page', () => {
     await wrapper.get('[data-testid="conn-test"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-testid="test-result"]').text()).toBe('error: Unknown connection')
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Unknown connection'))
   })
 
   it('the active toggle reads the config, writes the merged active_sources and keeps the new state', async () => {
@@ -285,5 +292,12 @@ describe('connections page', () => {
     const cards = wrapper.findAll('[data-testid="connection"]')
     expect(cards[0]?.find('[data-testid="conn-signin"]').exists()).toBe(true)
     expect(cards[1]?.find('[data-testid="conn-signin"]').exists()).toBe(false)
+  })
+
+  it('hides Edit and Delete together when the secret key is not configured', async () => {
+    stubApi({ system: { ...SYSTEM, secret_key_configured: false }, connections: [connection({ origin: 'env' })] })
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('[data-testid="conn-menu"]').exists()).toBe(false)
   })
 })
