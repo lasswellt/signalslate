@@ -208,14 +208,35 @@ describe('jobs postings page', () => {
     expect(call).toBeDefined()
   })
 
-  it('re-fetches postings when the remote toggle is switched on', async () => {
+  it('re-fetches postings when the Remote location filter is chosen', async () => {
     stubApi({ postings: [posting()] })
     await mount(IndexHarness)
 
-    await click('postings-filter-remote')
+    await click('postings-filter-remote-remote')
 
     const call = calls.find((c) => c.method === 'GET' && c.path === '/api/jobs/postings' && c.params?.remote === 'true')
     expect(call).toBeDefined()
+  })
+
+  it('re-fetches on-site postings with remote=false', async () => {
+    stubApi({ postings: [posting()] })
+    await mount(IndexHarness)
+
+    await click('postings-filter-remote-onsite')
+
+    const call = calls.find((c) => c.method === 'GET' && c.path === '/api/jobs/postings' && c.params?.remote === 'false')
+    expect(call).toBeDefined()
+  })
+
+  it('re-fetches postings filtered to closed ones and marks them Closed', async () => {
+    stubApi({ postings: [posting({ closed_at: '2026-09-21T00:00:00Z' })] })
+    await mount(IndexHarness)
+
+    await click('postings-filter-status-closed')
+
+    const call = calls.find((c) => c.method === 'GET' && c.path === '/api/jobs/postings' && c.params?.status === 'closed')
+    expect(call).toBeDefined()
+    expect($('postings-table')?.textContent).toContain('Closed')
   })
 
   it('shows the never-ingested empty state with a CTA to Companies when there are no filters', async () => {
@@ -249,7 +270,7 @@ describe('jobs postings page', () => {
     await click('posting-row-5')
 
     expect($('job-detail-dialog')).not.toBeNull()
-    expect($('job-title')?.textContent).toContain('Clickable Role')
+    expect($('dialog-title')?.textContent).toContain('Clickable Role')
   })
 
   it('flows from starting an application into JobApplyDialog, with only one dialog open', async () => {

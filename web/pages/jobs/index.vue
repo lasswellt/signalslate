@@ -24,8 +24,29 @@
           data-testid="postings-filter-min-score"
         />
       </div>
-      <div class="col-6 col-sm-3 col-md-2">
-        <q-toggle v-model="remoteOnly" label="Remote only" data-testid="postings-filter-remote" />
+      <div class="col-12 col-sm-auto">
+        <q-btn-toggle
+          v-model="remoteFilter"
+          dense
+          no-caps
+          unelevated
+          toggle-color="primary"
+          :options="remoteOptions"
+          aria-label="Filter by work location"
+          data-testid="postings-filter-remote"
+        />
+      </div>
+      <div class="col-12 col-sm-auto">
+        <q-btn-toggle
+          v-model="statusFilter"
+          dense
+          no-caps
+          unelevated
+          toggle-color="primary"
+          :options="statusOptions"
+          aria-label="Filter by posting status"
+          data-testid="postings-filter-status"
+        />
       </div>
     </div>
 
@@ -81,7 +102,10 @@
               @click="openDetail(rowProps.row)"
               @keyup.enter="openDetail(rowProps.row)"
             >
-              <q-td key="title" :props="rowProps">{{ rowProps.row.title }}</q-td>
+              <q-td key="title" :props="rowProps">
+                {{ rowProps.row.title }}
+                <q-chip v-if="rowProps.row.closed_at" dense size="sm" icon="lock" label="Closed" class="q-ml-xs" />
+              </q-td>
               <q-td key="company_name" :props="rowProps">{{ rowProps.row.company_name }}</q-td>
               <q-td key="fit_score" :props="rowProps">
                 <StatusChip kind="fit" :value="rowProps.row.fit_score" />
@@ -124,7 +148,7 @@ import EmptyState from '~/components/ui/EmptyState.vue'
 import StatusChip from '~/components/ui/StatusChip.vue'
 import JobDetailDialog from '~/components/JobDetailDialog.vue'
 import JobApplyDialog from '~/components/JobApplyDialog.vue'
-import { ApiError, parseUtc } from '~/composables/useApi'
+import { parseUtc } from '~/composables/useApi'
 import { useJobsApi } from '~/composables/useJobsApi'
 import type { ApplicationOut, PostingOut } from '~/composables/useJobsApi'
 
@@ -136,16 +160,31 @@ const loadError = ref<string | null>(null)
 
 const textFilter = ref('')
 const minScoreFilter = ref('')
-const remoteOnly = ref(false)
+const remoteFilter = ref<'any' | 'remote' | 'onsite'>('any')
+const statusFilter = ref<'all' | 'open' | 'closed'>('all')
+
+const remoteOptions = [
+  { label: 'Any location', value: 'any', attrs: { 'data-testid': 'postings-filter-remote-any' } },
+  { label: 'Remote', value: 'remote', attrs: { 'data-testid': 'postings-filter-remote-remote' } },
+  { label: 'On-site', value: 'onsite', attrs: { 'data-testid': 'postings-filter-remote-onsite' } },
+]
+const statusOptions = [
+  { label: 'All', value: 'all', attrs: { 'data-testid': 'postings-filter-status-all' } },
+  { label: 'Open', value: 'open', attrs: { 'data-testid': 'postings-filter-status-open' } },
+  { label: 'Closed', value: 'closed', attrs: { 'data-testid': 'postings-filter-status-closed' } },
+]
 
 // Whether any filter is currently narrowing the list — distinguishes "nothing collected yet" from
 // "nothing matches these filters" without a second, unfiltered request.
-const filtersActive = computed(() => textFilter.value.trim() !== '' || minScoreFilter.value.trim() !== '' || remoteOnly.value)
+const filtersActive = computed(
+  () => textFilter.value.trim() !== '' || minScoreFilter.value.trim() !== '' || remoteFilter.value !== 'any' || statusFilter.value !== 'all',
+)
 
 function clearFilters() {
   textFilter.value = ''
   minScoreFilter.value = ''
-  remoteOnly.value = false
+  remoteFilter.value = 'any'
+  statusFilter.value = 'all'
 }
 
 const pagination = ref({ sortBy: 'fit_score', descending: true, rowsPerPage: 25, page: 1 })
@@ -168,20 +207,11 @@ const columns: QTableColumn[] = [
   { name: 'first_seen', label: 'First seen', field: 'first_seen', align: 'left', sortable: true },
 ]
 
-function errorText(error: unknown): string {
-  return error instanceof ApiError ? error.message : 'Something went wrong'
-}
-
-function formatDate(value: string | null): string {
-  if (!value) return '—'
-  const date = parseUtc(value)
-  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString()
-}
-
 async function fetchPostings(): Promise<PostingOut[]> {
   return api.listPostings({
     minScore: minScoreFilter.value.trim() ? Number(minScoreFilter.value) : undefined,
-    remote: remoteOnly.value ? true : undefined,
+    remote: remoteFilter.value === 'any' ? undefined : remoteFilter.value === 'remote',
+    status: statusFilter.value === 'all' ? undefined : statusFilter.value,
     text: textFilter.value.trim() || undefined,
   })
 }
@@ -192,7 +222,7 @@ async function load(silent = false) {
   try {
     postings.value = await fetchPostings()
   } catch (error) {
-    loadError.value = errorText(error)
+    loadError.value = errorText(error, 'Could not load postings')
   } finally {
     loading.value = false
   }
@@ -200,7 +230,7 @@ async function load(silent = false) {
 
 // Filters re-fetch (server-side filtering); the text input's own :debounce="300" already delays
 // this watch firing while the user is still typing.
-watch([textFilter, minScoreFilter, remoteOnly], () => {
+watch([textFilter, minScoreFilter, remoteFilter, statusFilter], () => {
   void load(true)
 })
 
