@@ -1,0 +1,52 @@
+// Calm ops console theme: neutral surfaces, border-based separation, compact
+// density. See web/DESIGN.md for the full rationale behind these tokens.
+
+:root {
+  --ss-border-light: #e3e6ea;
+  --ss-border-dark: #2a2e35;
+}
+
+body.body--light {
+  --ss-surface-bg: #f6f7f9;
+  --ss-surface-card: #ffffff;
+  --ss-border: var(--ss-border-light);
+  background: var(--ss-surface-bg);
+}
+
+body.body--dark {
+  --ss-surface-bg: #121417;
+  --ss-surface-card: #1b1e23;
+  --ss-border: var(--ss-border-dark);
+  background: var(--ss-surface-bg);
+}
+
+// Page anatomy: PageHeader sits above content; content is centered with a
+// max-width and a mobile-friendly gutter (DESIGN.md "Page anatomy").
+.page-container {
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 16px;
+
+  @media (min-width: 600px) {
+    padding-inline: 24px;
+  }
+}
+
+// Cards use a border instead of a heavy shadow to separate content from the
+// page background (DESIGN.md palette / density notes).
+.q-card {
+  border: 1px solid var(--ss-border);
+  box-shadow: none;
+}
+
+// Dense table header: quieter than the Quasar default, aligned with the
+// compact-density direction (25 rows/page, dense rows).
+.q-table {
+  thead tr th {
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--q-secondary);
+  }
+}
