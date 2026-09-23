@@ -641,8 +641,10 @@ describe('connections page: add, edit, delete', () => {
     list = [connection({ origin: 'env' })]
     await mountPage()
     expect($('conn-add')).toBeNull()
+    // The overflow menu (Edit + Delete) is gated the same way: no secret store, no menu at all.
+    expect($('conn-menu')).toBeNull()
     expect($('conn-edit')).toBeNull()
-    expect($('conn-delete')).not.toBeNull()
+    expect($('conn-delete')).toBeNull()
   })
 
   it('Add creates the connection, says it starts inactive and never shows or notifies the secret', async () => {
@@ -655,9 +657,10 @@ describe('connections page: add, edit, delete', () => {
       return undefined
     })
     await mountPage()
-    expect($('empty')?.textContent).toBe('No connections yet')
+    expect($('empty-state-title')?.textContent).toBe('No accounts yet')
 
     await click('conn-add')
+    await click('kind-slack')
     await type('label', 'acme')
     await type('token', SECRET)
     expect(body.textContent).not.toContain(SECRET)
@@ -676,6 +679,7 @@ describe('connections page: add, edit, delete', () => {
     stubApi((call) => (call.method === 'POST' ? apiFailure(500, 'The store is unavailable') : undefined))
     await mountPage()
     await click('conn-add')
+    await click('kind-slack')
     await type('label', 'acme')
     await type('token', SECRET)
     await submit()
@@ -696,6 +700,7 @@ describe('connections page: add, edit, delete', () => {
     })
     await mountPage()
 
+    await click('conn-menu')
     await click('conn-edit')
     expect($('dialog-title')?.textContent).toBe('Edit zoom')
     await click('replace-client_secret')
@@ -712,7 +717,7 @@ describe('connections page: add, edit, delete', () => {
     expect(JSON.stringify(notify.mock.calls)).not.toContain(OTHER_SECRET)
   })
 
-  it('Delete asks first, naming the id and what is removed and kept, then deletes and refreshes', async () => {
+  it('Delete asks first, naming the account and what is removed and kept, then deletes and refreshes', async () => {
     list = [connection()]
     stubApi((call) => {
       if (call.method === 'DELETE') {
@@ -723,12 +728,14 @@ describe('connections page: add, edit, delete', () => {
     })
     await mountPage()
 
+    await click('conn-menu')
     await click('conn-delete')
     const text = $('delete-confirm')?.textContent ?? ''
-    expect(text).toContain('Delete slack_acme?')
+    // The card shows the label ("acme"), so the confirm names the same title, not the raw id.
+    expect(text).toContain('Delete acme?')
     expect(text).toContain('credentials')
-    expect(text).toContain('watermark')
-    expect(text).toContain('active toggle')
+    expect(text).toContain('sync position')
+    expect(text).toContain('on/off setting')
     expect(text).toContain('Items already collected are kept')
     expect(text).toContain('A .env entry will NOT bring it back')
     expect(calls.some((call) => call.method === 'DELETE')).toBe(false)
@@ -739,7 +746,7 @@ describe('connections page: add, edit, delete', () => {
     const del = calls.find((call) => call.method === 'DELETE')
     expect(del?.path).toBe('/api/connections/slack_acme')
     expect(del?.headers?.['X-Requested-With']).toBe('signalslate')
-    expect($('empty')?.textContent).toBe('No connections yet')
+    expect($('empty-state-title')?.textContent).toBe('No accounts yet')
   })
 
   it('Cancel on the delete confirm deletes nothing; a failed delete shows the error and keeps the card', async () => {
@@ -747,10 +754,12 @@ describe('connections page: add, edit, delete', () => {
     stubApi((call) => (call.method === 'DELETE' ? apiFailure(404, 'Connection not found') : undefined))
     await mountPage()
 
+    await click('conn-menu')
     await click('conn-delete')
     await click('delete-cancel')
     expect(calls.some((call) => call.method === 'DELETE')).toBe(false)
 
+    await click('conn-menu')
     await click('conn-delete')
     await click('delete-confirm-btn')
     await vi.waitFor(() => expect($('delete-error')?.textContent).toBe('Connection not found'))
