@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "console-ux-overhaul",
-  "updated": "2026-09-23T02:47:53Z",
+  "updated": "2026-09-23T03:00:47Z",
   "tasks": [
     {
       "id": "T-001",
@@ -468,11 +468,46 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "in_progress",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-23T03:00:31Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "cd web && npx vitest run tests/index.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3533,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/index.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n················\n\n Test Files  1 passed (1)\n      Tests  16 passed (16)\n   Start at  23:00:28\n   Duration  2.22s (transform 51%, tests 30%, import 9%, environment 9%, setup 2%)",
+            "recorded_at": "2026-09-23T03:00:31Z"
+          },
+          {
+            "cmd": "grep -q 'HealthList' web/pages/index.vue",
+            "exit": 0,
+            "duration_ms": 3,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:00:31Z"
+          },
+          {
+            "cmd": "grep -q '/history/' web/pages/index.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:00:31Z"
+          },
+          {
+            "cmd": "! grep -nE 'function (formatDate|statusColor)' web/pages/index.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:00:31Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Audit: empty-state shows while loading (:22,:38); trigger error leaves spinner (:72-85); polling stops on stale run (:80). Uses existing /status, /connections, /collectors."
     },
@@ -508,7 +543,7 @@
         }
       ],
       "passes": false,
-      "status": "open",
+      "status": "in_progress",
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": null,
@@ -542,11 +577,39 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "in_progress",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-23T03:00:35Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "cd web && npx vitest run tests/config.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3822,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/config.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n··stderr | tests/config.test.ts > preset -> cron mapping > a known preset maps straight to its cron and description\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\nstderr | tests/config.test.ts > custom cron validation > disables Save on an invalid cron and enables it once valid\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\nstderr | tests/config.test.ts > save > saves successfully, notifies and clears the dirty state\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\nstderr | tests/config.test.ts > save > shows the API error and leaves Save clickable (not stuck) on failure\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\nstderr | tests/config.test.ts > dirty guard > blocks navigation until Discard is confirmed, and stays put on Keep editing\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n········\n\n Test Files  1 passed (1)\n      Tests  10 passed (10)\n   Start at  23:00:32\n   Duration  2.55s (tests 45%, transform 39%, environment 7%, import 7%, setup 2%)",
+            "recorded_at": "2026-09-23T03:00:35Z"
+          },
+          {
+            "cmd": "grep -q 'PageHeader' web/pages/config.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:00:35Z"
+          },
+          {
+            "cmd": "! grep -q \"'mstodo'\" web/pages/config.vue || grep -q 'label' web/pages/config.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:00:35Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": ""
     },
@@ -584,11 +647,53 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "in_progress",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-23T03:00:39Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "cd web && npx vitest run tests/connections.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3693,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/connections.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·············\n\n Test Files  1 passed (1)\n      Tests  13 passed (13)\n   Start at  23:00:36\n   Duration  2.37s (transform 54%, tests 27%, import 9%, environment 8%, setup 2%)",
+            "recorded_at": "2026-09-23T03:00:38Z"
+          },
+          {
+            "cmd": "grep -q 'conn.label' web/pages/connections.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:00:38Z"
+          },
+          {
+            "cmd": "grep -q 'q-menu' web/pages/connections.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:00:38Z"
+          },
+          {
+            "cmd": "! grep -nE 'function (errorText|relativeTime)' web/pages/connections.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:00:39Z"
+          },
+          {
+            "cmd": "! grep -q 'watermark' web/pages/connections.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:00:39Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": ""
     },
@@ -662,7 +767,7 @@
         }
       ],
       "passes": false,
-      "status": "open",
+      "status": "in_progress",
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": null,
@@ -738,7 +843,7 @@
         }
       ],
       "passes": false,
-      "status": "open",
+      "status": "in_progress",
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": null,

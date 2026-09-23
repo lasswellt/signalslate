@@ -23,3 +23,12 @@ Concern (T-002, low): domains.vue purchaseStatusColor uses submitted/confirmed/f
 ## 2026-09-23T02:46:47Z build T-009 start (attempt 1) wave 2
 ## 2026-09-23T02:46:47Z build T-010 start (attempt 1) wave 2
 ## 2026-09-23T02:46:47Z build T-011 start (attempt 1) wave 2
+## 2026-09-23T03:00:47Z verify T-007 ok=true
+Concern (T-007, high→resolved in T-008): stale 'dashboard page' block in web/tests/history.test.ts asserts old Overview copy; handed to T-008 (owns that file).
+## 2026-09-23T03:00:47Z verify T-009 ok=true
+Concern (T-009, low): dirty guard uses router.beforeEach because onBeforeRouteLeave no-ops without RouterView in the test harness.
+## 2026-09-23T03:00:47Z verify T-010 ok=true
+Concern (T-010, high): duplicate 'connections page' block in web/tests/ConnectionDialog.test.ts pins pre-T-010 UI; main thread reconciles after T-011 merges.
+## 2026-09-23T03:00:47Z build T-008 start (attempt 1) wave 3
+## 2026-09-23T03:00:47Z build T-012 start (attempt 1) wave 3
+## 2026-09-23T03:00:47Z build T-014 start (attempt 1) wave 3
