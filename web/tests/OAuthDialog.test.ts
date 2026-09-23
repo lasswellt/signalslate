@@ -339,7 +339,7 @@ describe('paste-back', () => {
     await click('oauth-start')
     await typePaste(PASTED)
     expect($<HTMLInputElement>('oauth-paste')?.value).toBe(PASTED)
-    expect($<HTMLInputElement>('oauth-paste')?.type).toBe('password')
+    expect($<HTMLInputElement>('oauth-paste')?.type).toBe('text')
 
     await submitPaste()
 

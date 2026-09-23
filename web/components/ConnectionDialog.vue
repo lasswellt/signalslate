@@ -1,225 +1,290 @@
 <template>
   <!-- persistent: a click outside or Esc must not throw away what was typed (and a half-typed secret
-       is not recoverable from the form afterwards). Closing is Cancel or a saved connection. -->
-  <q-dialog persistent :model-value="modelValue" @update:model-value="(value: boolean) => emit('update:modelValue', value)">
-    <q-card style="min-width: 360px; max-width: 520px; width: 100%" data-testid="connection-dialog">
-      <q-form greedy autocomplete="off" @submit="onSubmit">
-        <q-card-section>
-          <div class="text-h6" data-testid="dialog-title">{{ isEdit ? `Edit ${connection?.id}` : 'Add connection' }}</div>
-        </q-card-section>
+       is not recoverable from the form afterwards). Closing is Cancel, the header close, or a saved
+       connection. DialogShell's dirty guard (title/close button + confirm) covers the header close. -->
+  <DialogShell
+    persistent
+    :model-value="modelValue"
+    :title="isEdit ? `Edit ${connection?.id}` : 'Add connection'"
+    :busy="busy"
+    :dirty="hasChanges"
+    @update:model-value="(value: boolean) => emit('update:modelValue', value)"
+  >
+    <div data-testid="connection-dialog">
+      <q-form id="connection-form" greedy autocomplete="off" class="q-gutter-md" @submit="onSubmit">
+        <q-banner
+          v-if="isEdit && connection?.origin === 'env'"
+          dense
+          class="bg-grey-3"
+          data-testid="env-note"
+        >
+          This connection was seeded from .env. Saving here stores the change in the UI store, which is
+          authoritative from now on: the .env value is no longer read for it.
+        </q-banner>
 
-        <q-card-section class="q-gutter-md">
-          <q-banner
-            v-if="isEdit && connection?.origin === 'env'"
-            dense
-            class="bg-grey-3"
-            data-testid="env-note"
-          >
-            This connection was seeded from .env. Saving here stores the change in the UI store, which is
-            authoritative from now on: the .env value is no longer read for it.
-          </q-banner>
+        <template v-if="!isEdit && !kind">
+          <div class="text-caption text-grey-7">Choose what to connect</div>
+          <div class="row q-col-gutter-sm">
+            <div v-for="opt in KIND_OPTIONS" :key="opt.value" class="col-12 col-sm-6">
+              <q-card flat bordered>
+                <q-item clickable v-ripple :disable="busy" :data-testid="`kind-${opt.value}`" @click="selectKind(opt.value)">
+                  <q-item-section avatar>
+                    <q-icon :name="opt.icon" size="28px" color="primary" />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>{{ opt.label }}</q-item-label>
+                    <q-item-label caption>{{ opt.description }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-card>
+            </div>
+          </div>
+        </template>
 
+        <template v-else-if="!isEdit && selectedKindMeta">
+          <div class="row items-center justify-between">
+            <div class="row items-center q-gutter-sm">
+              <q-icon :name="selectedKindMeta.icon" color="primary" />
+              <div class="text-body1">{{ selectedKindMeta.label }}</div>
+            </div>
+            <q-btn flat dense no-caps label="Change" :disable="busy" data-testid="kind-change" @click="kind = null" />
+          </div>
+        </template>
+
+        <template v-if="kind === 'zoom'">
           <q-btn-toggle
-            v-if="!isEdit"
-            v-model="kind"
+            :model-value="zoomAuthMode"
             no-caps
             unelevated
             toggle-color="primary"
-            :options="KIND_OPTIONS"
+            :options="ZOOM_AUTH_MODE_OPTIONS"
             :disable="busy"
-            data-testid="kind-selector"
+            data-testid="zoom-auth-mode"
+            @update:model-value="onZoomAuthModeInput"
           />
 
-          <template v-if="kind === 'zoom'">
-            <q-btn-toggle
-              :model-value="zoomAuthMode"
-              no-caps
-              unelevated
-              toggle-color="primary"
-              :options="ZOOM_AUTH_MODE_OPTIONS"
-              :disable="busy"
-              data-testid="zoom-auth-mode"
-              @update:model-value="onZoomAuthModeInput"
-            />
-
-            <template v-if="zoomAuthMode === 'oauth'">
-              <div class="text-body2" data-testid="zoom-redirect-uri">
-                Add this as the OAuth redirect URL (and to the allow list) in your Zoom General app,
-                replacing &lt;PUBLIC_BASE_URL&gt; with this app's public https address:
-                &lt;PUBLIC_BASE_URL&gt;/api/oauth/callback/zoom
-              </div>
-              <q-banner
-                v-if="systemInfo && !systemInfo.public_base_url_configured"
+          <template v-if="zoomAuthMode === 'oauth'">
+            <div class="text-body2" data-testid="zoom-redirect-uri">
+              Add this app's public https address followed by <code>{{ ZOOM_REDIRECT_PATH }}</code> as the OAuth
+              redirect URL (and to the allow list) in your Zoom General app.
+            </div>
+            <div class="row items-center q-gutter-sm no-wrap">
+              <q-input
+                class="col"
+                readonly
                 dense
-                class="bg-warning text-black"
-                data-testid="zoom-callback-missing"
+                outlined
+                label="Redirect path"
+                :model-value="ZOOM_REDIRECT_PATH"
+                data-testid="zoom-redirect-path"
+              />
+              <q-btn
+                flat
+                round
+                dense
+                icon="content_copy"
+                aria-label="Copy redirect path"
+                data-testid="copy-zoom-redirect"
+                @click="copyZoomRedirectPath"
               >
-                Zoom sign-in needs an https PUBLIC_BASE_URL configured for this app.
-              </q-banner>
-            </template>
-          </template>
-
-          <template v-if="kind === 'godaddy'">
-            <q-btn-toggle
-              :model-value="godaddyAuthMode"
-              no-caps
-              unelevated
-              toggle-color="primary"
-              :options="GODADDY_AUTH_MODE_OPTIONS"
-              :disable="busy"
-              data-testid="godaddy-auth-mode"
-              @update:model-value="onGodaddyAuthModeInput"
-            />
-            <div v-if="godaddyAuthMode === 'pat'" class="text-body2" data-testid="godaddy-pat-hint">
-              developer.godaddy.com issues a single Personal Access Token now — paste it here.
+                <q-tooltip>Copy redirect path</q-tooltip>
+              </q-btn>
             </div>
-            <div v-else class="text-body2" data-testid="godaddy-classic-hint">
-              The classic key+secret pair comes from classic-developer.godaddy.com, not
-              developer.godaddy.com; that portal is deprecated and being phased out by GoDaddy.
-            </div>
-          </template>
-
-          <template v-for="field in visibleFields" :key="`${kind}-${field.name}`">
-            <q-select
-              v-if="field.options"
-              :model-value="values[field.name]"
-              :options="field.options"
-              :label="field.label"
-              outlined
+            <q-banner
+              v-if="systemInfo && !systemInfo.public_base_url_configured"
               dense
-              emit-value
-              map-options
-              :disable="busy"
-              :error="!!fieldErrors[field.name]"
-              :error-message="fieldErrors[field.name]"
-              :data-testid="`field-${field.name}`"
-              @update:model-value="(value: string) => onConfigInput(field.name, value)"
-            />
+              class="bg-warning text-black"
+              data-testid="zoom-callback-missing"
+            >
+              Zoom sign-in needs an https PUBLIC_BASE_URL configured for this app.
+            </q-banner>
+          </template>
+        </template>
 
-            <div v-else-if="field.secret && isEdit && !replacing[field.name] && isSaved(field.name)" class="row items-center q-gutter-sm">
-              <div class="text-body2">{{ field.label }}</div>
-              <q-chip dense color="positive" text-color="white" data-testid="saved-chip">Saved</q-chip>
+        <template v-if="kind === 'godaddy'">
+          <q-btn-toggle
+            :model-value="godaddyAuthMode"
+            no-caps
+            unelevated
+            toggle-color="primary"
+            :options="GODADDY_AUTH_MODE_OPTIONS"
+            :disable="busy"
+            data-testid="godaddy-auth-mode"
+            @update:model-value="onGodaddyAuthModeInput"
+          />
+          <div v-if="godaddyAuthMode === 'pat'" class="text-body2" data-testid="godaddy-pat-hint">
+            developer.godaddy.com issues a single Personal Access Token now — paste it here.
+          </div>
+          <div v-else class="text-body2" data-testid="godaddy-classic-hint">
+            The classic key+secret pair comes from classic-developer.godaddy.com, not
+            developer.godaddy.com; that portal is deprecated and being phased out by GoDaddy.
+          </div>
+        </template>
+
+        <template v-for="field in visibleFields" :key="`${kind}-${field.name}`">
+          <q-select
+            v-if="field.options"
+            :model-value="values[field.name]"
+            :options="field.options"
+            :label="field.label"
+            outlined
+            dense
+            emit-value
+            map-options
+            :disable="busy"
+            :error="!!fieldErrors[field.name]"
+            :error-message="fieldErrors[field.name]"
+            :data-testid="`field-${field.name}`"
+            @update:model-value="(value: string) => onConfigInput(field.name, value)"
+          />
+
+          <div v-else-if="field.secret && isEdit && !replacing[field.name] && isSaved(field.name)" class="row items-center q-gutter-sm">
+            <div class="text-body2">{{ field.label }}</div>
+            <q-chip dense color="positive" text-color="white" data-testid="saved-chip">Saved</q-chip>
+            <q-btn
+              flat
+              dense
+              no-caps
+              label="Replace"
+              :disable="busy"
+              :data-testid="`replace-${field.name}`"
+              @click="replacing[field.name] = true"
+            />
+          </div>
+
+          <q-input
+            v-else-if="field.secret && field.textarea"
+            type="textarea"
+            autogrow
+            :model-value="secrets[field.name] ?? ''"
+            :label="isEdit ? `New ${field.label}` : field.label"
+            :hint="field.hint"
+            :placeholder="REGISTRANT_CONTACT_PLACEHOLDER"
+            outlined
+            dense
+            :disable="busy"
+            :rules="[(value: string) => checkSecretJson(field, value)]"
+            :error="!!fieldErrors[field.name]"
+            :error-message="fieldErrors[field.name]"
+            :data-testid="`field-${field.name}`"
+            @update:model-value="(value: string | number | null) => onSecretInput(field.name, value)"
+          >
+            <template v-if="isEdit && isSaved(field.name)" #append>
+              <q-btn flat dense no-caps label="Keep saved" :data-testid="`keep-${field.name}`" @click="keepSaved(field.name)" />
+            </template>
+          </q-input>
+
+          <q-input
+            v-else-if="field.secret"
+            :type="revealed[field.name] ? 'text' : 'password'"
+            autocomplete="new-password"
+            :model-value="secrets[field.name] ?? ''"
+            :label="isEdit ? `New ${field.label}` : field.label"
+            :hint="field.hint"
+            outlined
+            dense
+            :disable="busy"
+            :rules="[(value: string) => checkSecret(field, value)]"
+            :error="!!fieldErrors[field.name]"
+            :error-message="fieldErrors[field.name]"
+            :data-testid="`field-${field.name}`"
+            @update:model-value="(value: string | number | null) => onSecretInput(field.name, value)"
+          >
+            <template #append>
+              <q-btn
+                v-if="isEdit && isSaved(field.name)"
+                flat
+                dense
+                no-caps
+                label="Keep saved"
+                :data-testid="`keep-${field.name}`"
+                @click="keepSaved(field.name)"
+              />
+              <q-btn
+                flat
+                round
+                dense
+                :icon="revealed[field.name] ? 'visibility_off' : 'visibility'"
+                :aria-label="revealed[field.name] ? 'Hide secret' : 'Show secret'"
+                :data-testid="`reveal-${field.name}`"
+                @click="toggleReveal(field.name)"
+              >
+                <q-tooltip>{{ revealed[field.name] ? 'Hide secret' : 'Show secret' }}</q-tooltip>
+              </q-btn>
+            </template>
+          </q-input>
+
+          <q-input
+            v-else
+            :model-value="values[field.name]"
+            :label="field.label"
+            :hint="field.hint"
+            outlined
+            dense
+            autocomplete="off"
+            :disable="busy"
+            :rules="[(value: string) => checkConfig(field, value)]"
+            :error="!!fieldErrors[field.name] || (field.name === 'client_ip' && !!detectIpError)"
+            :error-message="field.name === 'client_ip' && detectIpError ? detectIpError : fieldErrors[field.name]"
+            :data-testid="`field-${field.name}`"
+            @update:model-value="(value: string | number | null) => onConfigInput(field.name, String(value ?? ''))"
+          >
+            <template v-if="field.name === 'client_ip'" #append>
               <q-btn
                 flat
                 dense
                 no-caps
-                label="Replace"
+                label="Detect"
+                :loading="detectingIp"
                 :disable="busy"
-                :data-testid="`replace-${field.name}`"
-                @click="replacing[field.name] = true"
+                data-testid="detect-client-ip"
+                @click="detectClientIp"
               />
-            </div>
+            </template>
+          </q-input>
+        </template>
 
-            <q-input
-              v-else-if="field.secret && field.textarea"
-              type="textarea"
-              autogrow
-              :model-value="secrets[field.name] ?? ''"
-              :label="isEdit ? `New ${field.label}` : field.label"
-              :hint="field.hint"
-              outlined
-              dense
-              :disable="busy"
-              :rules="[(value: string) => checkSecretJson(field, value)]"
-              :error="!!fieldErrors[field.name]"
-              :error-message="fieldErrors[field.name]"
-              :data-testid="`field-${field.name}`"
-              @update:model-value="(value: string | number | null) => onSecretInput(field.name, value)"
-            >
-              <template v-if="isEdit && isSaved(field.name)" #append>
-                <q-btn flat dense no-caps label="Keep saved" :data-testid="`keep-${field.name}`" @click="keepSaved(field.name)" />
-              </template>
-            </q-input>
-
-            <q-input
-              v-else-if="field.secret"
-              type="password"
-              autocomplete="new-password"
-              :model-value="secrets[field.name] ?? ''"
-              :label="isEdit ? `New ${field.label}` : field.label"
-              outlined
-              dense
-              :disable="busy"
-              :rules="[(value: string) => checkSecret(field, value)]"
-              :error="!!fieldErrors[field.name]"
-              :error-message="fieldErrors[field.name]"
-              :data-testid="`field-${field.name}`"
-              @update:model-value="(value: string | number | null) => onSecretInput(field.name, value)"
-            >
-              <template v-if="isEdit && isSaved(field.name)" #append>
-                <q-btn flat dense no-caps label="Keep saved" :data-testid="`keep-${field.name}`" @click="keepSaved(field.name)" />
-              </template>
-            </q-input>
-
-            <q-input
-              v-else
-              :model-value="values[field.name]"
-              :label="field.label"
-              :hint="field.hint"
-              outlined
-              dense
-              autocomplete="off"
-              :disable="busy"
-              :rules="[(value: string) => checkConfig(field, value)]"
-              :error="!!fieldErrors[field.name] || (field.name === 'client_ip' && !!detectIpError)"
-              :error-message="field.name === 'client_ip' && detectIpError ? detectIpError : fieldErrors[field.name]"
-              :data-testid="`field-${field.name}`"
-              @update:model-value="(value: string | number | null) => onConfigInput(field.name, String(value ?? ''))"
-            >
-              <template v-if="field.name === 'client_ip'" #append>
-                <q-btn
-                  flat
-                  dense
-                  no-caps
-                  label="Detect"
-                  :loading="detectingIp"
-                  :disable="busy"
-                  data-testid="detect-client-ip"
-                  @click="detectClientIp"
-                />
-              </template>
-            </q-input>
-          </template>
-
-          <template v-if="kind === 'zoom'">
-            <q-toggle
-              :model-value="zoomIncludeTranscripts"
-              label="Include transcripts"
-              :disable="busy"
-              data-testid="zoom-include-transcripts"
-              @update:model-value="onZoomTranscriptsInput"
-            />
-            <div class="text-caption text-grey-7">
-              Needs Zoom cloud recording; meetings without a recording simply have no transcript.
-            </div>
-          </template>
-
-          <q-banner v-if="formError" dense class="bg-negative text-white" data-testid="form-error">
-            {{ formError }}
-          </q-banner>
-        </q-card-section>
-
-        <q-card-actions align="right">
-          <q-btn flat no-caps label="Cancel" :disable="busy" data-testid="dialog-cancel" @click="close" />
-          <q-btn
-            type="submit"
-            color="primary"
-            no-caps
-            :label="isEdit ? 'Save' : 'Add'"
-            :loading="busy"
-            :disable="isEdit && !hasChanges"
-            data-testid="dialog-submit"
+        <template v-if="kind === 'zoom'">
+          <q-toggle
+            :model-value="zoomIncludeTranscripts"
+            label="Include transcripts"
+            :disable="busy"
+            data-testid="zoom-include-transcripts"
+            @update:model-value="onZoomTranscriptsInput"
           />
-        </q-card-actions>
+          <div class="text-caption text-grey-7">
+            Needs Zoom cloud recording; meetings without a recording simply have no transcript.
+          </div>
+        </template>
+
+        <q-banner v-if="formError" dense class="bg-negative text-white" data-testid="form-error">
+          {{ formError }}
+        </q-banner>
       </q-form>
-    </q-card>
-  </q-dialog>
+    </div>
+
+    <template #actions>
+      <q-btn flat no-caps label="Cancel" :disable="busy" data-testid="dialog-cancel" @click="close" />
+      <q-btn
+        type="submit"
+        form="connection-form"
+        color="primary"
+        no-caps
+        :label="isEdit ? 'Save' : 'Add'"
+        :loading="busy"
+        :disable="isEdit && !hasChanges"
+        data-testid="dialog-submit"
+      />
+    </template>
+  </DialogShell>
 </template>
 
 <script setup lang="ts">
+import { copyToClipboard, useQuasar } from 'quasar'
 import { ApiError } from '~/composables/useApi'
 import type { ConnectionCreate, ConnectionKind, ConnectionUpdate, ConnectionView, SystemInfo } from '~/composables/useApi'
 import { useDomainsApi } from '~/composables/useDomainsApi'
+import DialogShell from '~/components/ui/DialogShell.vue'
 
 interface FieldDef {
   name: string
@@ -242,22 +307,22 @@ interface FieldDef {
 const KIND_FIELDS: Record<ConnectionKind, FieldDef[]> = {
   m365: [
     { name: 'alias', label: 'Alias', isLabel: true, hint: 'Letters, digits and - (max 40)' },
-    { name: 'tenant_id', label: 'Tenant ID' },
-    { name: 'client_id', label: 'Client ID' },
+    { name: 'tenant_id', label: 'Tenant ID', hint: 'Azure Portal → Microsoft Entra ID → Overview → Tenant ID' },
+    { name: 'client_id', label: 'Client ID', hint: 'Azure Portal → App registrations → your app → Application (client) ID' },
   ],
   zoom: [
-    { name: 'account_id', label: 'Account ID' },
-    { name: 'client_id', label: 'Client ID' },
-    { name: 'client_secret', label: 'Client secret', secret: true },
+    { name: 'account_id', label: 'Account ID', hint: 'Zoom App Marketplace → your Server-to-Server app → Account ID' },
+    { name: 'client_id', label: 'Client ID', hint: 'Zoom App Marketplace → your app → Client ID' },
+    { name: 'client_secret', label: 'Client secret', secret: true, hint: 'Zoom App Marketplace → your app → Client Secret' },
   ],
   slack: [
     { name: 'label', label: 'Label', isLabel: true, hint: 'Lowercase letters and digits (max 32)' },
-    { name: 'token', label: 'Token', secret: true },
+    { name: 'token', label: 'Token', secret: true, hint: 'Slack API → Your Apps → OAuth & Permissions → Bot User OAuth Token' },
   ],
   gmail: [
     { name: 'label', label: 'Label', isLabel: true, hint: 'Lowercase letters and digits (max 32)' },
-    { name: 'client_id', label: 'Client ID' },
-    { name: 'client_secret', label: 'Client secret', secret: true },
+    { name: 'client_id', label: 'Client ID', hint: 'Google Cloud Console → APIs & Services → Credentials → OAuth client ID' },
+    { name: 'client_secret', label: 'Client secret', secret: true, hint: 'Google Cloud Console → APIs & Services → Credentials → Client secret' },
     {
       name: 'redirect_mode',
       label: 'Redirect mode',
@@ -275,7 +340,7 @@ const KIND_FIELDS: Record<ConnectionKind, FieldDef[]> = {
     // username, which is what every account but a reseller needs anyway.
     { name: 'username', label: 'Username', hint: 'your Namecheap account username' },
     { name: 'client_ip', label: 'Client IP', hint: 'this server’s public IPv4 — also add it in Namecheap’s own API whitelist' },
-    { name: 'api_key', label: 'API key', secret: true },
+    { name: 'api_key', label: 'API key', secret: true, hint: 'Namecheap → Profile → Tools → Business & Dev Tools → Namecheap API Access' },
     {
       name: 'sandbox',
       label: 'Sandbox',
@@ -289,9 +354,9 @@ const KIND_FIELDS: Record<ConnectionKind, FieldDef[]> = {
   ],
   godaddy: [
     { name: 'label', label: 'Label', isLabel: true, hint: 'Lowercase letters and digits (max 32)' },
-    { name: 'api_token', label: 'Personal Access Token', secret: true },
-    { name: 'api_key', label: 'API key', secret: true },
-    { name: 'api_secret', label: 'API secret', secret: true },
+    { name: 'api_token', label: 'Personal Access Token', secret: true, hint: 'developer.godaddy.com → API Keys → Personal Access Token' },
+    { name: 'api_key', label: 'API key', secret: true, hint: 'classic-developer.godaddy.com → API Keys (deprecated portal)' },
+    { name: 'api_secret', label: 'API secret', secret: true, hint: 'classic-developer.godaddy.com → API Keys (deprecated portal)' },
     {
       name: 'environment',
       label: 'Environment',
@@ -305,8 +370,8 @@ const KIND_FIELDS: Record<ConnectionKind, FieldDef[]> = {
   ],
   wordpress: [
     { name: 'label', label: 'Label', isLabel: true, hint: 'Lowercase letters and digits (max 32)' },
-    { name: 'client_id', label: 'Client ID' },
-    { name: 'client_secret', label: 'Client secret', secret: true },
+    { name: 'client_id', label: 'Client ID', hint: 'WordPress.com → Developer Apps → your app → Client ID' },
+    { name: 'client_secret', label: 'Client secret', secret: true, hint: 'WordPress.com → Developer Apps → your app → Client Secret' },
     {
       name: 'redirect_mode',
       label: 'Redirect mode',
@@ -319,10 +384,20 @@ const KIND_FIELDS: Record<ConnectionKind, FieldDef[]> = {
   ],
 }
 
+// Icon + one-line description for the create-mode kind picker (step 1). Material icon names only
+// (nuxt.config.ts sets fontIcons: ['material-icons']).
+const KIND_META: Record<ConnectionKind, { label: string; icon: string; description: string }> = {
+  m365: { label: 'Microsoft 365', icon: 'business', description: 'Outlook mail, calendar and Teams' },
+  zoom: { label: 'Zoom', icon: 'videocam', description: 'Meeting recordings and transcripts' },
+  slack: { label: 'Slack', icon: 'forum', description: 'Channel messages' },
+  gmail: { label: 'Gmail', icon: 'mail', description: 'Mail via Google sign-in' },
+  namecheap: { label: 'Namecheap', icon: 'dns', description: 'Domain registration and DNS' },
+  godaddy: { label: 'GoDaddy', icon: 'language', description: 'Domain registration and DNS' },
+  wordpress: { label: 'WordPress.com', icon: 'article', description: 'Site content' },
+}
 const KIND_OPTIONS = (['m365', 'zoom', 'slack', 'gmail', 'namecheap', 'godaddy', 'wordpress'] as const).map((value) => ({
-  label: value,
   value,
-  attrs: { 'data-testid': `kind-${value}` },
+  ...KIND_META[value],
 }))
 
 // zoom's auth_mode: "oauth" (Sign in with Zoom, the default) or "s2s" (Server-to-Server). Same rule
@@ -356,11 +431,17 @@ const IDENTIFIER_MAX = 128
 const SECRET_MAX = 4096
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\x00-\x1f\x7f]/
+const ZOOM_REDIRECT_PATH = '/api/oauth/callback/zoom'
+const REGISTRANT_CONTACT_PLACEHOLDER =
+  '{"first_name": "Jamie", "last_name": "Doe", "email": "jamie@example.com", "phone": "+1.5551234567", "address1": "123 Main St", "city": "Springfield", "state_province": "IL", "postal_code": "62704", "country": "US"}'
 
 const props = defineProps<{
   modelValue: boolean
   mode: 'create' | 'edit'
   connection?: ConnectionView | null
+  // Optional: lets a parent that already fetched system info (e.g. for OAuthDialog) hand it down
+  // instead of this dialog fetching its own copy. Falls back to its own fetch when omitted.
+  system?: SystemInfo | null
 }>()
 
 const emit = defineEmits<{
@@ -370,12 +451,14 @@ const emit = defineEmits<{
 
 const api = useApi()
 const domainsApi = useDomainsApi()
+const $q = useQuasar()
 
 const isEdit = computed(() => props.mode === 'edit')
-const kind = ref<ConnectionKind>('slack')
+const kind = ref<ConnectionKind | null>(null)
 const values = ref<Record<string, string>>({})
 // Secrets live only here: cleared in the finally of every request and whenever the dialog closes.
 const secrets = ref<Record<string, string>>({})
+const revealed = ref<Record<string, boolean>>({})
 const replacing = ref<Record<string, boolean>>({})
 const touched = ref<Set<string>>(new Set())
 const fieldErrors = ref<Record<string, string>>({})
@@ -401,10 +484,12 @@ const godaddyAuthModeTouched = ref(false)
 const detectingIp = ref(false)
 const detectIpError = ref<string | null>(null)
 // The API deliberately never returns the public URL itself (SystemInfo.public_base_url_configured
-// is a bool); fetched once so the redirect-URL note can warn when it is not set.
-const systemInfo = ref<SystemInfo | null>(null)
+// is a bool); fetched once (unless the parent already hands one down via the `system` prop) so the
+// redirect-URL note can warn when it is not set.
+const ownSystemInfo = ref<SystemInfo | null>(null)
+const systemInfo = computed(() => (props.system !== undefined ? props.system : ownSystemInfo.value))
 
-const fields = computed(() => KIND_FIELDS[kind.value])
+const fields = computed(() => (kind.value ? KIND_FIELDS[kind.value] : []))
 const visibleFields = computed(() =>
   fields.value.filter((field) => {
     if (isEdit.value && field.isLabel) return false
@@ -416,6 +501,7 @@ const visibleFields = computed(() =>
   }),
 )
 const labelField = computed(() => fields.value.find((field) => field.isLabel)?.name)
+const selectedKindMeta = computed(() => (kind.value ? KIND_META[kind.value] : null))
 
 function isSaved(name: string): boolean {
   return props.connection?.secrets_set.includes(name) ?? false
@@ -427,14 +513,19 @@ function defaultValues(forKind: ConnectionKind): Record<string, string> {
   )
 }
 
-function reset(forKind: ConnectionKind) {
+function reset(forKind: ConnectionKind | null) {
   kind.value = forKind
   secrets.value = {}
+  revealed.value = {}
   replacing.value = {}
   touched.value = new Set()
   fieldErrors.value = {}
   formError.value = null
   detectIpError.value = null
+  if (forKind === null) {
+    values.value = {}
+    return
+  }
   const initial = defaultValues(forKind)
   if (isEdit.value && props.connection) {
     for (const name of Object.keys(initial)) initial[name] = props.connection.config[name] ?? initial[name] ?? ''
@@ -468,7 +559,7 @@ function clearSecrets() {
 watch(
   () => props.modelValue,
   (open) => {
-    if (open) reset(isEdit.value && props.connection ? props.connection.kind : 'slack')
+    if (open) reset(isEdit.value && props.connection ? props.connection.kind : null)
     else clearSecrets()
   },
   { immediate: true },
@@ -479,6 +570,10 @@ watch(kind, (next, previous) => {
   if (next !== previous && !isEdit.value) reset(next)
 })
 
+function selectKind(value: ConnectionKind) {
+  if (!busy.value) kind.value = value
+}
+
 function onConfigInput(name: string, value: string) {
   values.value[name] = value
   touched.value.add(name)
@@ -488,6 +583,10 @@ function onConfigInput(name: string, value: string) {
 function onSecretInput(name: string, value: string | number | null) {
   secrets.value[name] = String(value ?? '')
   delete fieldErrors.value[name]
+}
+
+function toggleReveal(name: string) {
+  revealed.value[name] = !revealed.value[name]
 }
 
 function keepSaved(name: string) {
@@ -503,6 +602,16 @@ function onZoomAuthModeInput(value: string) {
 function onGodaddyAuthModeInput(value: string) {
   godaddyAuthMode.value = value as 'pat' | 'classic'
   godaddyAuthModeTouched.value = true
+}
+
+/** Puts the callback path (not a fabricated full URL — the server never exposes PUBLIC_BASE_URL itself) on the clipboard. */
+async function copyZoomRedirectPath() {
+  try {
+    await copyToClipboard(ZOOM_REDIRECT_PATH)
+    $q.notify({ type: 'positive', message: 'Copied' })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Could not copy to clipboard' })
+  }
 }
 
 async function detectClientIp() {
@@ -534,7 +643,7 @@ function checkConfig(field: FieldDef, value: string): true | string {
   if (isEdit.value && !touched.value.has(field.name)) return true
   if (!value) return 'Required'
   if (field.isLabel) {
-    const rule = LABEL_RULES[kind.value]
+    const rule = LABEL_RULES[kind.value as ConnectionKind]
     if (rule && (value.length > rule.max || !rule.pattern.test(value))) {
       return `Use ${rule.text}, at most ${rule.max} characters`
     }
@@ -696,10 +805,11 @@ function close() {
 }
 
 onMounted(async () => {
+  if (props.system !== undefined) return
   try {
-    systemInfo.value = await api.getSystem()
+    ownSystemInfo.value = await api.getSystem()
   } catch {
-    systemInfo.value = null
+    ownSystemInfo.value = null
   }
 })
 </script>

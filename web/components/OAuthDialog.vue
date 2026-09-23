@@ -1,140 +1,156 @@
 <template>
   <!-- persistent: a click outside or Esc must not drop a sign-in that is under way (the flow is single
-       use and the pasted address holds the OAuth code). Closing is Cancel or Close. -->
-  <q-dialog persistent :model-value="modelValue" @update:model-value="(value: boolean) => { if (!value) close() }">
-    <q-card style="min-width: 360px; max-width: 560px; width: 100%" data-testid="oauth-dialog">
-      <q-card-section>
-        <div class="text-h6" data-testid="oauth-title">Sign in {{ connection?.id }}</div>
-      </q-card-section>
+       use and the pasted address holds the OAuth code). Closing is Cancel, the header close, or Close. -->
+  <DialogShell
+    persistent
+    :model-value="modelValue"
+    :title="`Sign in ${connection?.id}`"
+    :busy="busy"
+    @update:model-value="(value: boolean) => emit('update:modelValue', value)"
+    @close="reset"
+  >
+    <div class="q-gutter-md" data-testid="oauth-dialog">
+      <q-banner v-if="provider === 'google'" dense class="bg-grey-3" data-testid="oauth-gmail-note">
+        Set the Google consent screen to In production. While it is in Testing, Google expires the refresh
+        token after 7 days.
+      </q-banner>
 
-      <q-card-section class="q-gutter-md">
-        <q-banner v-if="provider === 'google'" dense class="bg-grey-3" data-testid="oauth-gmail-note">
-          Set the Google consent screen to In production. While it is in Testing, Google expires the refresh
-          token after 7 days.
-        </q-banner>
+      <q-banner v-if="provider === 'wordpress'" dense class="bg-grey-3" data-testid="oauth-wordpress-note">
+        Uses an undocumented WordPress.com endpoint; if listing breaks, import a CSV instead.
+      </q-banner>
 
-        <q-banner v-if="provider === 'wordpress'" dense class="bg-grey-3" data-testid="oauth-wordpress-note">
-          Uses an undocumented WordPress.com endpoint; if listing breaks, import a CSV instead.
-        </q-banner>
+      <q-banner v-if="stage === 'connected'" class="bg-positive text-white" data-testid="oauth-connected">
+        Connected<template v-if="account"> as {{ account }}</template>
+      </q-banner>
 
-        <q-banner v-if="stage === 'connected'" class="bg-positive text-white" data-testid="oauth-connected">
-          Connected<template v-if="account"> as {{ account }}</template>
-        </q-banner>
-
-        <template v-else-if="stage === 'choose'">
-          <template v-if="isZoom">
-            <q-banner v-if="!callbackAvailable" dense class="bg-warning text-black" data-testid="oauth-callback-unavailable">
-              Automatic callback needs an https PUBLIC_BASE_URL. Set it in .env, then try again.
-            </q-banner>
-            <div v-else class="text-body2" data-testid="oauth-mode-help">
-              You approve in a new tab and Zoom sends that tab back to this app. This page notices the sign-in by
-              itself.
-            </div>
-          </template>
-          <template v-else>
-            <q-btn-toggle
-              v-model="mode"
-              no-caps
-              unelevated
-              toggle-color="primary"
-              :options="modeOptions"
-              :disable="busy"
-              data-testid="oauth-mode"
-            />
-            <div v-if="mode === 'paste_back'" class="text-body2" data-testid="oauth-mode-help">
-              Works anywhere. You approve in a new tab, that tab ends on a page that fails to load, and you paste
-              its address back here.
-            </div>
-            <div v-else class="text-body2" data-testid="oauth-mode-help">
-              You approve in a new tab and the provider sends that tab back to this app. This page notices the
-              sign-in by itself.
-            </div>
-          </template>
-        </template>
-
-        <template v-else-if="mode === 'paste_back'">
-          <div class="text-body2" data-testid="oauth-paste-help">
-            Approve access in the tab that just opened. The browser will then end on a page that fails to load
-            (the address starts with http://127.0.0.1 or http://localhost). That is expected. Copy the FULL
-            address from the address bar and paste it below.
-          </div>
-          <q-banner v-if="provider === 'microsoft'" dense class="bg-warning text-black" data-testid="oauth-ms-warning">
-            Microsoft sign-in codes live only about a minute. Paste the address straight away.
+      <template v-else-if="stage === 'choose'">
+        <template v-if="isZoom">
+          <q-banner v-if="!callbackAvailable" dense class="bg-warning text-black" data-testid="oauth-callback-unavailable">
+            Automatic callback needs an https PUBLIC_BASE_URL. Set it in .env, then try again.
           </q-banner>
-          <q-form autocomplete="off" @submit="onPaste">
-            <q-input
-              v-model="pasted"
-              type="password"
-              autocomplete="new-password"
-              label="Address copied from the browser"
-              outlined
-              dense
-              :disable="busy"
-              data-testid="oauth-paste"
-            />
-            <div class="row items-center q-gutter-sm q-mt-sm">
-              <q-btn
-                type="submit"
-                color="primary"
-                no-caps
-                label="Submit"
-                :loading="busy"
-                :disable="!pasted.trim()"
-                data-testid="oauth-submit"
-              />
-            </div>
-          </q-form>
+          <div v-else class="text-body2" data-testid="oauth-mode-help">
+            You approve in a new tab; this page notices automatically when you're done.
+          </div>
         </template>
 
         <template v-else>
-          <div class="row items-center q-gutter-sm" data-testid="oauth-callback-help">
-            <q-spinner size="sm" color="primary" />
-            <span>Waiting for you to approve access in the new tab. This page checks every 2 seconds.</span>
+          <div class="row q-col-gutter-sm" data-testid="oauth-mode">
+            <div v-if="availableModes.includes('callback')" class="col-12 col-sm-6">
+              <q-card flat bordered :class="mode === 'callback' ? 'bg-primary text-white' : undefined">
+                <q-item clickable v-ripple :disable="busy" data-testid="mode-callback" @click="mode = 'callback'">
+                  <q-item-section>
+                    <q-item-label>Sign in in this browser</q-item-label>
+                    <q-item-label caption :class="mode === 'callback' ? 'text-white' : 'text-grey-7'">
+                      Approve in a new tab; this page notices automatically.
+                    </q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-card>
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-card flat bordered :class="mode === 'paste_back' ? 'bg-primary text-white' : undefined">
+                <q-item clickable v-ripple :disable="busy" data-testid="mode-paste_back" @click="mode = 'paste_back'">
+                  <q-item-section>
+                    <q-item-label>Copy a link and paste the result</q-item-label>
+                    <q-item-label caption :class="mode === 'paste_back' ? 'text-white' : 'text-grey-7'">
+                      Works anywhere; approve, then paste the address back here.
+                    </q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-card>
+            </div>
           </div>
         </template>
+      </template>
 
-        <div v-if="stage === 'waiting'" class="row items-center q-gutter-sm">
-          <div class="text-grey-8" data-testid="oauth-countdown">Expires in {{ countdown }}</div>
-          <q-space />
-          <q-btn flat dense no-caps label="Open the sign-in page again" data-testid="oauth-reopen" @click="reopen" />
+      <template v-else-if="mode === 'paste_back'">
+        <div class="text-body2" data-testid="oauth-paste-help">
+          Approve access in the new tab, then copy the full address it lands on and paste it below.
         </div>
-
-        <div v-if="pollWarning" class="text-grey-8" data-testid="oauth-poll-warning">{{ pollWarning }}</div>
-
-        <q-banner v-if="errorText" dense class="bg-negative text-white" data-testid="oauth-error">
-          {{ errorText }}
+        <q-banner v-if="provider === 'microsoft'" dense class="bg-warning text-black" data-testid="oauth-ms-warning">
+          Microsoft sign-in codes live only about a minute. Paste the address straight away.
         </q-banner>
-      </q-card-section>
+        <q-expansion-item dense label="Having trouble?" data-testid="oauth-help">
+          <div class="text-caption text-grey-8 q-pa-sm">
+            The new tab ends on a page that fails to load — its address starts with http://127.0.0.1 or
+            http://localhost. That's expected: copy that address anyway and paste it above.
+          </div>
+        </q-expansion-item>
+        <q-form autocomplete="off" @submit="onPaste">
+          <q-input
+            v-model="pasted"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            label="Address copied from the browser"
+            outlined
+            dense
+            :disable="busy"
+            data-testid="oauth-paste"
+          />
+          <div class="row items-center q-gutter-sm q-mt-sm">
+            <q-btn
+              type="submit"
+              color="primary"
+              no-caps
+              label="Finish sign-in"
+              :loading="busy"
+              :disable="!pasted.trim()"
+              data-testid="oauth-submit"
+            />
+          </div>
+        </q-form>
+      </template>
 
-      <q-card-actions align="right">
-        <q-btn
-          v-if="stage !== 'connected'"
-          flat
-          no-caps
-          label="Cancel"
-          :disable="busy"
-          data-testid="oauth-cancel"
-          @click="close"
-        />
-        <q-btn
-          v-if="stage === 'choose'"
-          color="primary"
-          no-caps
-          label="Start"
-          :loading="busy"
-          :disable="isZoom && !callbackAvailable"
-          data-testid="oauth-start"
-          @click="onStart"
-        />
-        <q-btn v-if="stage === 'connected'" color="primary" no-caps label="Close" data-testid="oauth-close" @click="close" />
-      </q-card-actions>
-    </q-card>
-  </q-dialog>
+      <template v-else>
+        <div class="row items-center q-gutter-sm" data-testid="oauth-callback-help">
+          <q-spinner size="sm" color="primary" />
+          <span>Waiting for you to approve access in the new tab. This updates automatically.</span>
+        </div>
+      </template>
+
+      <div v-if="stage === 'waiting'" class="row items-center q-gutter-sm">
+        <div class="text-grey-8" data-testid="oauth-countdown">Expires in {{ countdown }}</div>
+        <q-space />
+        <q-btn flat dense no-caps label="Open the sign-in page again" data-testid="oauth-reopen" @click="reopen" />
+      </div>
+
+      <div v-if="pollWarning" class="text-grey-8" data-testid="oauth-poll-warning">{{ pollWarning }}</div>
+
+      <q-banner v-if="errorText" dense class="bg-negative text-white" data-testid="oauth-error">
+        {{ errorText }}
+      </q-banner>
+    </div>
+
+    <template #actions>
+      <q-btn
+        v-if="stage !== 'connected'"
+        flat
+        no-caps
+        label="Cancel"
+        :disable="busy"
+        data-testid="oauth-cancel"
+        @click="close"
+      />
+      <q-btn
+        v-if="stage === 'choose'"
+        color="primary"
+        no-caps
+        label="Start"
+        :loading="busy"
+        :disable="isZoom && !callbackAvailable"
+        data-testid="oauth-start"
+        @click="onStart"
+      />
+      <q-btn v-if="stage === 'connected'" color="primary" no-caps label="Close" data-testid="oauth-close" @click="close" />
+    </template>
+  </DialogShell>
 </template>
 
 <script setup lang="ts">
 import { ApiError, PROVIDER_FOR_KIND, parseUtc } from '~/composables/useApi'
 import type { ConnectionView, OAuthMode, OAuthProvider, SystemInfo } from '~/composables/useApi'
+import DialogShell from '~/components/ui/DialogShell.vue'
 
 const props = defineProps<{
   modelValue: boolean
@@ -205,13 +221,6 @@ const provider = computed<OAuthProvider>(() => (props.connection ? PROVIDER_FOR_
 const isZoom = computed(() => provider.value === 'zoom')
 const availableModes = computed<OAuthMode[]>(() => props.system?.oauth?.[provider.value]?.modes ?? [])
 const callbackAvailable = computed(() => availableModes.value.includes('callback'))
-const modeOptions = computed(() => {
-  const options = [{ label: 'Paste-back', value: 'paste_back', attrs: { 'data-testid': 'mode-paste_back' } }]
-  if (availableModes.value.includes('callback')) {
-    options.push({ label: 'Automatic callback', value: 'callback', attrs: { 'data-testid': 'mode-callback' } })
-  }
-  return options
-})
 
 const stage = ref<Stage>('choose')
 const mode = ref<OAuthMode>('paste_back')
