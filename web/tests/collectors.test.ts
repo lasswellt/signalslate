@@ -5,7 +5,6 @@ import type { VueWrapper } from '@vue/test-utils'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import { QLayout, QPageContainer } from 'quasar'
 import CollectorsPage from '~/pages/collectors.vue'
-import { parseUtc } from '~/composables/useApi'
 import type {
   CollectorState,
   DigestConfig,
@@ -140,6 +139,12 @@ async function type(testid: string, value: string) {
   await flushPromises()
 }
 
+function buttonWithLabel(label: string): HTMLElement {
+  const el = [...body.querySelectorAll<HTMLElement>('button')].find((b) => b.textContent?.trim() === label)
+  if (!el) throw new Error(`no button labeled "${label}"`)
+  return el
+}
+
 // QPage renders nothing outside a QLayout, so the page is mounted in the same shell app.vue gives it.
 const Harness = defineComponent({
   render: () => h(QLayout, null, () => h(QPageContainer, null, () => h(CollectorsPage))),
@@ -158,7 +163,7 @@ async function mountPage() {
 const isLoading = (el: HTMLElement) => el.querySelector('.q-spinner') !== null
 const rows = () => $$('collector')
 const rowOf = (source: string) => {
-  const row = rows().find((el) => el.querySelector('[data-testid="collector-source"]')?.textContent?.trim() === source)
+  const row = body.querySelector<HTMLElement>(`[data-testid="collector"][data-source="${source}"]`)
   if (!row) throw new Error(`no row ${source}`)
   return row
 }
@@ -169,6 +174,24 @@ const inRow = (source: string, testid: string) => {
 }
 const callsTo = (method: string, suffix: string) => calls.filter((call) => call.method === method && call.path.endsWith(suffix))
 const listCalls = () => calls.filter((call) => call.method === 'GET' && call.path === '/api/collectors')
+
+/** Runs a source via its confirm dialog: click Run now, then confirm in the dialog that pops up. */
+async function runNow(source: string) {
+  inRow(source, 'collector-run').click()
+  await flushPromises()
+  buttonWithLabel('Run now').click()
+  await flushPromises()
+}
+
+/** Clears failures via its confirm dialog: open the overflow menu, click Clear failures, then confirm. */
+async function clearFailures(source: string) {
+  inRow(source, 'collector-menu').click()
+  await flushPromises()
+  ;($(`action-clear-${source}`))?.click()
+  await flushPromises()
+  buttonWithLabel('Clear failures').click()
+  await flushPromises()
+}
 
 beforeEach(() => {
   state = freshState()
@@ -184,7 +207,7 @@ afterEach(() => {
 })
 
 describe('collectors page', () => {
-  it('renders a row per collector with watermark, streak, last attempt and item count', async () => {
+  it('renders a row per collector with progress, failures, last run and item count', async () => {
     const watermark = ago(5)
     state.collectors = [
       collector({ watermark }),
@@ -199,36 +222,32 @@ describe('collectors page', () => {
     await mountPage()
 
     expect(rows()).toHaveLength(3)
-    expect(inRow('zoom', 'collector-watermark').textContent).toContain('5 minutes ago')
-    expect(inRow('zoom', 'collector-watermark-abs').textContent).toContain(parseUtc(watermark).toLocaleString())
-    expect(inRow('zoom', 'collector-streak').textContent).toContain('Failure streak: 0 of 3')
-    expect(inRow('zoom', 'attempt-status').textContent?.trim()).toBe('ok')
-    expect(inRow('zoom', 'collector-attempt').textContent).toContain('(4 items)')
-    expect(inRow('zoom', 'collector-items').textContent).toContain('42 items')
+    expect(inRow('zoom', 'collector-source').textContent?.trim()).toBe('Zoom')
+    expect(inRow('zoom', 'collector-watermark').textContent).toContain('Collected up to')
+    expect(inRow('zoom', 'collector-status').textContent).toContain('OK')
+    expect(inRow('zoom', 'collector-items').textContent).toContain('42 items collected')
     expect(rowOf('zoom').querySelector('[data-testid="streak-warning"]')).toBeNull()
 
-    expect(inRow('slack_acme', 'collector-streak').textContent).toContain('Failure streak: 2 of 3')
-    expect(inRow('slack_acme', 'streak-warning')).not.toBeNull()
-    const warning = inRow('slack_acme', 'streak-warning-text').textContent ?? ''
-    expect(warning).toContain('After 3 consecutive failures')
-    expect(warning).toContain('not retried')
-    expect(inRow('slack_acme', 'attempt-status').textContent?.trim()).toBe('error')
+    expect(inRow('slack_acme', 'collector-source').textContent?.trim()).toBe('Slack acme')
+    expect(inRow('slack_acme', 'streak-warning').textContent).toContain('Failing: 2 of 3 attempts before pause')
+    expect(inRow('slack_acme', 'collector-status').textContent).toContain('Error')
     expect(inRow('slack_acme', 'attempt-detail').textContent).toBe('Slack rejected the token')
 
-    expect(inRow('gmail_work', 'collector-watermark').textContent).toContain('none')
-    expect(inRow('gmail_work', 'collector-attempt').textContent).toContain('none yet')
-    // Nothing to clear: the action is disabled at a zero streak.
-    expect(inRow('gmail_work', 'collector-clear').hasAttribute('disabled')).toBe(true)
+    expect(inRow('gmail_work', 'collector-watermark').textContent).toContain('Nothing collected yet')
+    expect(inRow('gmail_work', 'collector-attempt').textContent).toContain('No runs yet')
+    // Nothing to clear: the menu action is disabled at a zero streak.
+    await click(`collector-menu`)
+    expect(rowOf('gmail_work'))
   })
 
-  it('warns from one failure before the threshold only', async () => {
+  it('shows the failing chip whenever there is at least one failure, however far from the threshold', async () => {
     state.collectors = [
       collector({ source: 'a', consecutive_failures: 1, stuck_threshold: 3 }),
-      collector({ source: 'b', consecutive_failures: 3, stuck_threshold: 3 }),
+      collector({ source: 'b', consecutive_failures: 0, stuck_threshold: 3 }),
     ]
     await mountPage()
-    expect(rowOf('a').querySelector('[data-testid="streak-warning"]')).toBeNull()
-    expect(inRow('b', 'streak-warning')).not.toBeNull()
+    expect(inRow('a', 'streak-warning').textContent).toContain('Failing: 1 of 3 attempts before pause')
+    expect(rowOf('b').querySelector('[data-testid="streak-warning"]')).toBeNull()
   })
 
   it('renders server text as text, never as markup', async () => {
@@ -245,7 +264,7 @@ describe('collectors page', () => {
   it('shows the empty state', async () => {
     state.collectors = []
     await mountPage()
-    expect($('empty')?.textContent).toBe('No collectors are declared')
+    expect($('empty-state')?.textContent).toContain('No collectors are declared')
   })
 
   it('shows a loading state until the request settles', async () => {
@@ -254,7 +273,7 @@ describe('collectors page', () => {
     vi.stubGlobal('$fetch', async () => gate)
     await mountPage()
     expect($('loading')).not.toBeNull()
-    expect($('empty')).toBeNull()
+    expect($('empty-state')).toBeNull()
 
     release([collector()])
     await flushPromises()
@@ -266,16 +285,15 @@ describe('collectors page', () => {
     state.collectors = apiFailure(500, 'The store is unavailable')
     await mountPage()
     expect($('load-error')?.textContent).toContain('The store is unavailable')
-    expect($('empty')).toBeNull()
+    expect($('empty-state')).toBeNull()
 
     state.collectors = [collector()]
-    $('load-error')?.querySelector('button')?.click()
-    await flushPromises()
+    await click('retry')
     expect($('load-error')).toBeNull()
     expect(rows()).toHaveLength(1)
   })
 
-  it('the enabled toggle reads the config, writes the merged active_sources and keeps the new state', async () => {
+  it('the active toggle reads the config, writes the merged active_sources and keeps the new state', async () => {
     state.config = { schedule_cron: '0 7 * * *', tracker: 'jira', active_sources: { slack_acme: true, zoom: false } }
     await mountPage()
     const toggle = () => inRow('zoom', 'collector-active')
@@ -292,7 +310,7 @@ describe('collectors page', () => {
     expect(rowOf('zoom').querySelector('[data-testid="toggle-error"]')).toBeNull()
   })
 
-  it('the enabled toggle reverts and shows the error when the save fails', async () => {
+  it('the active toggle reverts and shows the error when the save fails', async () => {
     state.collectors = [collector({ active: true })]
     state.putConfig = () => apiFailure(422, 'active_sources: unknown source')
     await mountPage()
@@ -309,13 +327,18 @@ describe('collectors page', () => {
 })
 
 describe('run now', () => {
-  it('a 409 shows that a run is already in progress and starts no polling', async () => {
+  it('asks to confirm before starting, and a 409 shows that a run is already in progress', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
     state.run = apiFailure(409, { code: 'run_in_progress', message: 'A run is already in progress' })
     await mountPage()
     const timers = vi.getTimerCount()
 
     inRow('zoom', 'collector-run').click()
+    await flushPromises()
+    expect(body.textContent).toContain('Collect from Zoom now?')
+    expect(callsTo('POST', '/collectors/zoom/run')).toHaveLength(0)
+
+    buttonWithLabel('Run now').click()
     await flushPromises()
 
     const post = callsTo('POST', '/collectors/zoom/run')[0]
@@ -325,13 +348,21 @@ describe('run now', () => {
     expect(vi.getTimerCount()).toBe(timers)
   })
 
+  it('cancelling the confirm starts nothing', async () => {
+    await mountPage()
+    inRow('zoom', 'collector-run').click()
+    await flushPromises()
+    buttonWithLabel('Cancel').click()
+    await flushPromises()
+    expect(callsTo('POST', '/collectors/zoom/run')).toHaveLength(0)
+  })
+
   it('polls the list until last_attempt.at changes, then stops', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
     await mountPage()
     const timers = vi.getTimerCount()
 
-    inRow('zoom', 'collector-run').click()
-    await flushPromises()
+    await runNow('zoom')
     expect(vi.getTimerCount()).toBeGreaterThan(timers)
     expect(isLoading(inRow('zoom', 'collector-run'))).toBe(true)
 
@@ -346,8 +377,8 @@ describe('run now', () => {
     await flushPromises()
 
     expect(isLoading(inRow('zoom', 'collector-run'))).toBe(false)
-    expect(inRow('zoom', 'collector-items').textContent).toContain('51 items')
-    await vi.waitFor(() => expect(body.textContent).toContain('zoom: run finished (ok)'))
+    expect(inRow('zoom', 'collector-items').textContent).toContain('51 items collected')
+    await vi.waitFor(() => expect(body.textContent).toContain('Zoom: run finished (ok)'))
     expect(vi.getTimerCount()).toBe(timers)
     const settled = listCalls().length
     await vi.advanceTimersByTimeAsync(20_000)
@@ -358,8 +389,7 @@ describe('run now', () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
     const wrapper = await mountPage()
     const timers = vi.getTimerCount()
-    inRow('zoom', 'collector-run').click()
-    await flushPromises()
+    await runNow('zoom')
     expect(vi.getTimerCount()).toBeGreaterThan(timers)
 
     wrapper.unmount()
@@ -371,7 +401,8 @@ describe('run now', () => {
 describe('dry run', () => {
   async function openDryRun() {
     await mountPage()
-    inRow('zoom', 'collector-dry-run').click()
+    await click('collector-menu')
+    ;(($(`action-dry-run-zoom`)) as HTMLElement).click()
     await vi.waitFor(() => expect($('dry-dialog')).not.toBeNull())
   }
 
@@ -392,6 +423,7 @@ describe('dry run', () => {
     expect(post?.body).toEqual({ hours: 48, limit: 3 })
     expect(post?.headers?.['X-Requested-With']).toBe('signalslate')
     expect($('dry-running')).not.toBeNull()
+    expect(body.textContent).not.toContain('checks every 2 seconds')
     expect(vi.getTimerCount()).toBeGreaterThan(timers)
 
     await vi.advanceTimersByTimeAsync(2_100)
@@ -402,9 +434,10 @@ describe('dry run', () => {
     await vi.advanceTimersByTimeAsync(2_100)
     await flushPromises()
     expect($('dry-running')).toBeNull()
-    expect($('dry-summary')?.textContent).toContain('ok: collected 3 items')
+    expect($('dry-summary')?.textContent).toContain('OK')
+    expect($('dry-summary')?.textContent).toContain('collected 3 items')
     expect($('dry-count')?.textContent).toContain('3 items')
-    expect($$('dry-type').map((chip) => chip.textContent?.trim())).toEqual(['message: 2', 'recording: 1'])
+    expect($$('dry-type').map((chip) => chip.textContent?.trim())).toEqual(['Message: 2', 'Recording: 1'])
     expect($$('dry-item').map((item) => item.textContent)).toEqual([
       expect.stringContaining('first preview line'),
       expect.stringContaining('second preview line'),
@@ -488,15 +521,17 @@ describe('dry run', () => {
   })
 })
 
-describe('reset watermark and clear failures', () => {
+describe('start over (reset watermark) and clear failures', () => {
   async function openReset() {
     await mountPage()
-    inRow('zoom', 'collector-reset').click()
+    await click('collector-menu')
+    ;(($(`action-reset-zoom`)) as HTMLElement).click()
     await vi.waitFor(() => expect($('reset-dialog')).not.toBeNull())
   }
 
   it('sends the chosen days_back and then shows the note from the response', async () => {
     await openReset()
+    await click('reset-note-toggle')
     expect($('reset-note-static')?.textContent).toContain('never further back than 7 days')
     expect($('reset-note')).toBeNull()
 
@@ -507,7 +542,7 @@ describe('reset watermark and clear failures', () => {
     expect(post?.body).toEqual({ days_back: 3 })
     expect(post?.headers?.['X-Requested-With']).toBe('signalslate')
     expect($('reset-note')?.textContent).toBe('API note for {"days_back":3}')
-    expect($('reset-result')?.textContent).toContain('Watermark removed')
+    expect($('reset-result')?.textContent).toContain('Collecting will start from scratch next run.')
     // The list is refreshed in place.
     expect(listCalls().length).toBe(2)
   })
@@ -518,13 +553,13 @@ describe('reset watermark and clear failures', () => {
     expect(callsTo('POST', '/collectors/zoom/reset')[0]?.body).toEqual({ days_back: 1 })
   })
 
-  it('No watermark sends days_back null and the response watermark is shown', async () => {
+  it('From scratch sends days_back null and the response starting point is shown', async () => {
     state.reset = (payload) => ({ source: 'zoom', watermark: payload.days_back === null ? null : ago(1), note: 'Removed. ' + 'Note text' })
     await openReset()
     await click('reset-choice-none')
     await click('reset-confirm')
     expect(callsTo('POST', '/collectors/zoom/reset')[0]?.body).toEqual({ days_back: null })
-    expect($('reset-result')?.textContent).toContain('Watermark removed')
+    expect($('reset-result')?.textContent).toContain('Collecting will start from scratch next run.')
     expect($('reset-note')?.textContent).toBe('Removed. Note text')
   })
 
@@ -536,18 +571,16 @@ describe('reset watermark and clear failures', () => {
     expect($('reset-confirm')).not.toBeNull()
   })
 
-  it('Clear failures posts and refreshes the streak', async () => {
+  it('Clear failures asks to confirm, then posts and refreshes the streak', async () => {
     state.collectors = [collector({ consecutive_failures: 2 })]
     await mountPage()
-    expect(inRow('zoom', 'collector-streak').textContent).toContain('Failure streak: 2 of 3')
+    expect(inRow('zoom', 'streak-warning').textContent).toContain('Failing: 2 of 3 attempts before pause')
 
     state.collectors = [collector({ consecutive_failures: 0 })]
-    inRow('zoom', 'collector-clear').click()
-    await flushPromises()
+    await clearFailures('zoom')
 
     const post = callsTo('POST', '/collectors/zoom/clear-failures')[0]
     expect(post?.headers?.['X-Requested-With']).toBe('signalslate')
-    expect(inRow('zoom', 'collector-streak').textContent).toContain('Failure streak: 0 of 3')
     expect(rowOf('zoom').querySelector('[data-testid="streak-warning"]')).toBeNull()
   })
 })
