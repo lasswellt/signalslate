@@ -167,21 +167,33 @@ describe('ConnectionDialog fields', () => {
       godaddy: ['label', 'api_token', 'environment', 'registrant_contact'],
       wordpress: ['label', 'client_id', 'client_secret', 'redirect_mode'],
     }
+    let first = true
     for (const [kind, names] of Object.entries(expected)) {
+      if (!first) await click('kind-change')
+      first = false
       await click(`kind-${kind}`)
       expect(fieldNames()).toEqual(names)
     }
   })
 
-  it('renders secret inputs as password fields with autocomplete off for password managers', async () => {
+  it('renders secret inputs as password fields with autocomplete off for password managers, with a reveal toggle', async () => {
     await mountDialog({ mode: 'create' })
+    let first = true
     for (const [kind, secret] of [['zoom', 'client_secret'], ['slack', 'token'], ['gmail', 'client_secret']] as const) {
+      if (!first) await click('kind-change')
+      first = false
       await click(`kind-${kind}`)
       const el = input(secret)
       expect(el?.type).toBe('password')
       expect(el?.getAttribute('autocomplete')).toBe('new-password')
       expect(el?.value).toBe('')
+
+      await click(`reveal-${secret}`)
+      expect(input(secret)?.type).toBe('text')
+      await click(`reveal-${secret}`)
+      expect(input(secret)?.type).toBe('password')
     }
+    await click('kind-change')
     await click('kind-m365')
     expect(body.querySelector('input[type="password"]')).toBeNull()
   })
@@ -280,6 +292,14 @@ describe('ConnectionDialog zoom auth mode', () => {
     expect($('zoom-callback-missing')).toBeNull()
   })
 
+  it('offers a copy button for the zoom redirect path', async () => {
+    await mountDialog({ mode: 'create' })
+    await click('kind-zoom')
+    expect($<HTMLInputElement>('zoom-redirect-path')?.value).toBe('/api/oauth/callback/zoom')
+    expect($('copy-zoom-redirect')).not.toBeNull()
+    await click('copy-zoom-redirect')
+  })
+
   it('unchecking include transcripts posts include_transcripts: false', async () => {
     stubApi((call) => (call.method === 'POST' ? connection({ id: 'zoom', kind: 'zoom' }) : undefined))
     await mountDialog({ mode: 'create' })
@@ -338,6 +358,7 @@ describe('ConnectionDialog submit', () => {
     stubApi((call) => (call.method === 'POST' ? saved : undefined))
     const wrapper = await mountDialog({ mode: 'create' })
 
+    await click('kind-slack')
     await type('label', 'acme')
     await type('token', SECRET)
     await submit()
@@ -480,6 +501,7 @@ describe('ConnectionDialog submit', () => {
 
   it('validates on the client with the server rules and sends nothing', async () => {
     await mountDialog({ mode: 'create' })
+    await click('kind-slack')
     await type('label', 'Not_Valid')
     await type('token', SECRET)
     await submit()
@@ -487,6 +509,7 @@ describe('ConnectionDialog submit', () => {
     expect(calls.filter((call) => call.method === 'POST')).toHaveLength(0)
     expect(body.textContent).toContain('lowercase letters and digits')
 
+    await click('kind-change')
     await click('kind-m365')
     await type('alias', 'has.dot')
     await type('tenant_id', 'tenant-1')
@@ -526,6 +549,7 @@ describe('ConnectionDialog submit', () => {
     stubApi((call) => (call.method === 'POST' ? connection() : undefined))
     // No v-model handler: the dialog stays rendered so the field can be inspected after the save.
     await mountDialog({ mode: 'create' })
+    await click('kind-slack')
     await type('label', 'acme')
     await type('token', SECRET)
     expect(input('token')?.value).toBe(SECRET)
@@ -540,6 +564,7 @@ describe('ConnectionDialog submit', () => {
   it('clears the secret after a failed submit, keeps the other fields, and never renders it', async () => {
     stubApi((call) => (call.method === 'POST' ? apiFailure(503, { code: 'secret_key_missing', message: 'No encryption key is configured; secrets cannot be stored' }) : undefined))
     await mountDialog({ mode: 'create' })
+    await click('kind-slack')
     await type('label', 'acme')
     await type('token', SECRET)
 
@@ -554,6 +579,7 @@ describe('ConnectionDialog submit', () => {
 
   it('clears the secret when the dialog is closed', async () => {
     const wrapper = await mountDialog({ mode: 'create' })
+    await click('kind-slack')
     await type('token', SECRET)
     await click('dialog-cancel')
     expect(wrapper.emitted('update:modelValue')).toEqual([[false]])
@@ -562,6 +588,7 @@ describe('ConnectionDialog submit', () => {
     await flushPromises()
     await wrapper.setProps({ modelValue: true })
     await flushPromises()
+    await click('kind-slack')
     expect(input('token')?.value).toBe('')
   })
 
@@ -576,6 +603,7 @@ describe('ConnectionDialog submit', () => {
         : undefined,
     )
     await mountDialog({ mode: 'create' })
+    await click('kind-slack')
     await type('label', 'acme')
     await type('token', SECRET)
     await submit()
@@ -596,6 +624,7 @@ describe('ConnectionDialog submit', () => {
       call.method === 'POST' ? apiFailure(409, { code: 'duplicate_connection', message: 'A connection with this id already exists' }) : undefined,
     )
     await mountDialog({ mode: 'create' })
+    await click('kind-slack')
     await type('label', 'acme')
     await type('token', SECRET)
     await submit()
