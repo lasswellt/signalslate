@@ -1,134 +1,189 @@
 <template>
-  <!-- Not persistent: a click outside or Esc is just Close, same as the Close button; nothing here
-       survives a reopen (reset() runs every time the dialog opens, mirroring DomainPurchaseDialog.vue). -->
-  <q-dialog :model-value="open" @update:model-value="onModelUpdate">
-    <q-card style="min-width: 360px; max-width: 640px; width: 100%" data-testid="job-apply-dialog">
-      <q-card-section>
-        <div class="text-h6" data-testid="job-apply-title">Apply</div>
-      </q-card-section>
-
-      <q-card-section v-if="loading" data-testid="job-packet-loading">
+  <DialogShell
+    :model-value="open"
+    :title="dialogTitle"
+    :subtitle="dialogSubtitle"
+    width="640px"
+    :busy="saving"
+    :dirty="isDirty"
+    @update:model-value="onModelUpdate"
+    @close="onDialogClose"
+  >
+    <div data-testid="job-apply-dialog">
+      <div v-if="loading" data-testid="job-packet-loading">
         <q-skeleton type="text" width="60%" />
         <q-skeleton type="text" width="80%" />
         <q-skeleton type="text" width="40%" />
-      </q-card-section>
+      </div>
 
-      <q-card-section v-else-if="loadError" data-testid="job-packet-load-error">
+      <div v-else-if="loadError" data-testid="job-packet-load-error">
         <q-banner dense class="bg-negative text-white">{{ loadError }}</q-banner>
-        <q-btn flat no-caps label="Retry" data-testid="job-packet-retry" @click="prepare" />
-      </q-card-section>
+        <q-btn flat no-caps color="primary" label="Retry" data-testid="job-packet-retry" @click="prepare" />
+      </div>
 
       <template v-else-if="application">
-        <q-card-section class="q-gutter-sm" data-testid="job-packet">
+        <div class="q-mb-md" data-testid="job-packet">
+          <div class="text-subtitle2">Cover letter</div>
           <q-input
             v-model="coverLetterText"
             type="textarea"
-            label="Cover letter"
             outlined
             autogrow
             :disable="saving"
             data-testid="job-cover-letter"
           />
-
-          <div data-testid="job-screening-drafts">
-            <div class="text-subtitle2">Screening questions</div>
-            <div v-for="(draft, index) in screeningDrafts" :key="index" class="q-mb-sm" data-testid="job-screening-draft">
-              <div class="text-weight-medium">{{ draft.question }}</div>
-              <div>{{ draft.answer }}</div>
-            </div>
+          <div class="row items-center q-gutter-sm q-mt-xs">
+            <q-btn
+              unelevated
+              no-caps
+              color="primary"
+              label="Save"
+              :loading="saving"
+              :disable="saving"
+              data-testid="job-packet-save"
+              @click="savePacket"
+            />
+            <span class="text-caption text-grey-7" data-testid="job-cover-letter-count">{{ coverLetterText.length }} characters</span>
           </div>
-
-          <q-banner v-if="saveError" dense class="bg-negative text-white" data-testid="job-packet-save-error">
+          <q-banner v-if="saveError" dense class="bg-negative text-white q-mt-sm" data-testid="job-packet-save-error">
             {{ saveError }}
           </q-banner>
-          <div v-if="justSaved" class="text-positive" data-testid="job-packet-saved">Saved</div>
-
-          <q-btn
-            flat
-            no-caps
-            color="primary"
-            label="Save"
-            :loading="saving"
-            :disable="saving"
-            data-testid="job-packet-save"
-            @click="savePacket"
-          />
-        </q-card-section>
+          <div v-if="justSaved" class="text-positive q-mt-xs" data-testid="job-packet-saved">Saved</div>
+        </div>
 
         <q-separator />
 
-        <q-card-section class="q-gutter-sm" data-testid="job-assist">
-          <q-banner v-if="startError" dense class="bg-negative text-white" data-testid="job-start-assist-error">
+        <div class="q-my-md" data-testid="job-screening-drafts">
+          <div class="text-subtitle2">Screening answers</div>
+          <div class="text-caption text-grey-7 q-mb-sm">Draft — edit in the assistant</div>
+          <div v-for="(draft, index) in screeningDrafts" :key="index" class="q-mb-sm" data-testid="job-screening-draft">
+            <div class="text-weight-medium">{{ draft.question }}</div>
+            <div>{{ draft.answer }}</div>
+          </div>
+        </div>
+
+        <q-separator />
+
+        <div class="q-my-md" data-testid="job-documents">
+          <div class="text-subtitle2">Documents</div>
+          <div v-if="!application.cover_letter_path && !application.resume_path" class="text-grey-8">
+            No documents yet.
+          </div>
+          <div v-else class="row q-gutter-sm">
+            <q-btn
+              v-if="application.cover_letter_path"
+              flat
+              dense
+              no-caps
+              color="primary"
+              icon="description"
+              label="Cover letter (PDF)"
+              :href="api.applicationFileUrl(application.id, 'cover_letter')"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="job-cover-letter-link"
+            />
+            <q-btn
+              v-if="application.resume_path"
+              flat
+              dense
+              no-caps
+              color="primary"
+              icon="description"
+              label="Resume (PDF)"
+              :href="api.applicationFileUrl(application.id, 'resume')"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="job-resume-link"
+            />
+          </div>
+        </div>
+
+        <q-separator />
+
+        <div class="q-mt-md" data-testid="job-assist">
+          <div class="text-subtitle2">Guided apply</div>
+          <div class="row items-center q-gutter-sm q-my-xs" data-testid="job-assist-state">
+            <StatusChip kind="assist" :value="application.assist_state" />
+          </div>
+          <div class="text-grey-8" data-testid="job-assist-explanation">{{ assistExplanation }}</div>
+
+          <q-banner v-if="startError" dense class="bg-negative text-white q-mt-sm" data-testid="job-start-assist-error">
             {{ startError }}
           </q-banner>
 
-          <div data-testid="job-assist-state">Assist status: {{ application.assist_state }}</div>
-
-          <div v-if="showQueuedHint" class="text-grey-8" data-testid="job-assist-queued-hint">
-            Run <code>python -m pipeline.jobs.assist --watch</code> on your desktop to pick this up.
+          <div v-if="showQueuedHint" class="text-grey-8 q-mt-xs" data-testid="job-assist-queued-hint">
+            The assistant runs on your computer — start it from the desktop helper.
           </div>
 
           <q-btn
-            flat
+            unelevated
             no-caps
             color="primary"
             label="Start assist"
+            class="q-mt-sm"
             :loading="starting"
             :disable="starting || isAssistActive"
             data-testid="job-start-assist"
             @click="startAssist"
           />
-        </q-card-section>
 
-        <q-separator />
+          <q-expansion-item dense label="How to start the assistant" class="q-mt-sm" data-testid="job-assist-how-to-start">
+            <q-card-section class="text-body2">
+              Run this on the computer with your browser session:
+              <div><code data-testid="job-assist-command">python -m pipeline.jobs.assist --watch</code></div>
+            </q-card-section>
+          </q-expansion-item>
+        </div>
 
-        <q-card-section class="q-gutter-sm" data-testid="job-submit">
-          <q-banner v-if="submitError" dense class="bg-negative text-white" data-testid="job-mark-submitted-error">
-            {{ submitError }}
-          </q-banner>
-
-          <div v-if="confirmingSubmit" class="q-gutter-sm" data-testid="job-confirm-submitted-banner">
-            <q-banner dense class="bg-warning text-black">Mark this application as submitted? This cannot be undone.</q-banner>
-            <q-btn flat no-caps label="Cancel" :disable="submitting" data-testid="job-cancel-submitted" @click="confirmingSubmit = false" />
-            <q-btn
-              color="negative"
-              no-caps
-              label="Confirm submitted"
-              :loading="submitting"
-              data-testid="job-confirm-submitted"
-              @click="confirmMarkSubmitted"
-            />
-          </div>
-        </q-card-section>
-
-        <q-card-actions align="right">
-          <q-btn flat no-caps label="Close" data-testid="job-apply-close" @click="close" />
-          <q-btn
-            color="primary"
-            no-caps
-            label="Mark submitted"
-            :disable="submitting || !canMarkSubmitted"
-            data-testid="job-mark-submitted"
-            @click="onMarkSubmittedClick"
-          />
-        </q-card-actions>
+        <q-banner v-if="submitError" dense class="bg-negative text-white q-mt-md" data-testid="job-mark-submitted-error">
+          {{ submitError }}
+        </q-banner>
       </template>
-    </q-card>
-  </q-dialog>
+    </div>
+
+    <template #actions>
+      <q-btn flat no-caps label="Close" data-testid="job-apply-close" @click="close" />
+      <q-btn
+        v-if="application"
+        unelevated
+        color="primary"
+        no-caps
+        label="Mark as submitted"
+        :disable="submitting || !canMarkSubmitted"
+        :loading="submitting"
+        data-testid="job-mark-submitted"
+        @click="onMarkSubmittedClick"
+      />
+    </template>
+  </DialogShell>
 </template>
 
 <script setup lang="ts">
-import { ApiError } from '~/composables/useApi'
+import { useQuasar } from 'quasar'
 import { useJobsApi } from '~/composables/useJobsApi'
 import type { ApplicationOut } from '~/composables/useJobsApi'
+import DialogShell from '~/components/ui/DialogShell.vue'
+import StatusChip from '~/components/ui/StatusChip.vue'
 
 // How often the running assist session's state is polled once queued (mirrors
 // DomainPurchaseDialog.vue's setInterval/onMounted/onUnmounted pattern, reused here for polling
 // instead of a countdown).
 const ASSIST_POLL_INTERVAL_MS = 3000
 // If assist_state is still "queued" this long after queuing, the desktop runner probably isn't
-// watching the queue yet — point the user at the command that picks it up.
+// watching the queue yet — point the user at the desktop helper.
 const ASSIST_QUEUED_HINT_MS = 15000
+
+// Plain-language explanation for each of api/routers/job_apply.py's _ASSIST_STATES.
+const ASSIST_EXPLANATIONS: Record<string, string> = {
+  idle: 'Guided apply has not started for this application.',
+  queued: 'Waiting for the desktop assistant to pick this up.',
+  claimed: 'The desktop assistant has claimed this application.',
+  running: 'The desktop assistant is filling out this application now.',
+  paused: 'The desktop assistant paused and needs your input.',
+  done: 'The desktop assistant finished filling out this application.',
+  failed: 'The desktop assistant hit an error working on this application.',
+}
 
 interface ScreeningDraft {
   question: string
@@ -147,12 +202,14 @@ const emit = defineEmits<{
 }>()
 
 const api = useJobsApi()
+const $q = useQuasar()
 
 const loading = ref(false)
 const loadError = ref<string | null>(null)
 const application = ref<ApplicationOut | null>(null)
 
 const coverLetterText = ref('')
+const baselineCoverLetterText = ref('')
 const screeningDrafts = ref<ScreeningDraft[]>([])
 const saving = ref(false)
 const saveError = ref<string | null>(null)
@@ -164,7 +221,6 @@ const queuedSinceMs = ref<number | null>(null)
 const nowMs = ref(Date.now())
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
-const confirmingSubmit = ref(false)
 const submitting = ref(false)
 const submitError = ref<string | null>(null)
 
@@ -186,13 +242,25 @@ function parsePacket(raw: Record<string, unknown> | null): { coverLetterText: st
   return { coverLetterText, screeningDrafts }
 }
 
-function errorMessage(err: unknown): string {
-  return err instanceof ApiError ? err.message : 'Something went wrong'
-}
+const dialogTitle = computed(() => {
+  const app = application.value
+  if (!app) return 'Apply'
+  return app.posting_title ? `Apply: ${app.posting_title}` : `Application #${app.id}`
+})
+
+const dialogSubtitle = computed(() => application.value?.company_name ?? undefined)
+
+const isDirty = computed(() => coverLetterText.value !== baselineCoverLetterText.value)
 
 const isAssistActive = computed(() => {
   const state = application.value?.assist_state
   return state === 'queued' || state === 'claimed' || state === 'running'
+})
+
+const assistExplanation = computed(() => {
+  const state = application.value?.assist_state
+  if (!state) return ASSIST_EXPLANATIONS.idle
+  return ASSIST_EXPLANATIONS[state] ?? humanize(state)
 })
 
 const showQueuedHint = computed(() => {
@@ -225,7 +293,7 @@ async function pollAssistState() {
     if (updated.assist_state === 'done' || updated.assist_state === 'failed') stopPolling()
   } catch (err) {
     nowMs.value = Date.now()
-    startError.value = errorMessage(err)
+    startError.value = errorText(err)
   }
 }
 
@@ -246,9 +314,10 @@ async function prepare() {
     application.value = result
     const parsed = parsePacket(result.packet)
     coverLetterText.value = parsed.coverLetterText
+    baselineCoverLetterText.value = parsed.coverLetterText
     screeningDrafts.value = parsed.screeningDrafts
   } catch (err) {
-    loadError.value = errorMessage(err)
+    loadError.value = errorText(err)
   } finally {
     loading.value = false
   }
@@ -265,9 +334,10 @@ async function savePacket() {
   try {
     const result = await api.editApplicationPacket(application.value.id, { cover_letter_text: coverLetterText.value })
     application.value = result
+    baselineCoverLetterText.value = coverLetterText.value
     justSaved.value = true
   } catch (err) {
-    saveError.value = errorMessage(err)
+    saveError.value = errorText(err)
   } finally {
     saving.value = false
   }
@@ -288,22 +358,17 @@ async function startAssist() {
     queuedSinceMs.value = result.assist_state === 'queued' ? nowMs.value : null
     startPolling()
   } catch (err) {
-    startError.value = errorMessage(err)
+    startError.value = errorText(err)
   } finally {
     starting.value = false
   }
 }
 
-function onMarkSubmittedClick() {
-  submitError.value = null
-  confirmingSubmit.value = true
-}
-
 /**
  * Moves the application to "submitted" — the one irreversible, user-only action per
- * pipeline/jobs/apply.py's own contract — after the confirm step above.
+ * pipeline/jobs/apply.py's own contract — after the confirm dialog below.
  * @returns Nothing; on success emits `submitted`, on failure (e.g. 422 illegal_transition) sets
- *   submitError and leaves the confirm step open.
+ *   submitError.
  */
 async function confirmMarkSubmitted() {
   if (!application.value) return
@@ -312,13 +377,25 @@ async function confirmMarkSubmitted() {
   try {
     const result = await api.updateApplicationStatus(application.value.id, { status: 'submitted' })
     application.value = result
-    confirmingSubmit.value = false
     emit('submitted', result)
   } catch (err) {
-    submitError.value = errorMessage(err)
+    submitError.value = errorText(err)
   } finally {
     submitting.value = false
   }
+}
+
+function onMarkSubmittedClick() {
+  submitError.value = null
+  $q.dialog({
+    title: 'Mark as submitted?',
+    message: 'This records the application as submitted. It cannot be undone.',
+    cancel: { label: 'Cancel', flat: true, noCaps: true, 'data-testid': 'job-cancel-submitted' },
+    ok: { label: 'Mark as submitted', color: 'primary', unelevated: true, noCaps: true, 'data-testid': 'job-confirm-submitted' },
+    persistent: true,
+  }).onOk(() => {
+    void confirmMarkSubmitted()
+  })
 }
 
 watch(coverLetterText, () => {
@@ -330,6 +407,7 @@ function reset() {
   loadError.value = null
   application.value = null
   coverLetterText.value = ''
+  baselineCoverLetterText.value = ''
   screeningDrafts.value = []
   saving.value = false
   saveError.value = null
@@ -339,7 +417,6 @@ function reset() {
   stopPolling()
   queuedSinceMs.value = null
   nowMs.value = Date.now()
-  confirmingSubmit.value = false
   submitting.value = false
   submitError.value = null
 }
@@ -351,7 +428,10 @@ function close() {
 
 function onModelUpdate(value: boolean) {
   emit('update:open', value)
-  if (!value) emit('closed')
+}
+
+function onDialogClose() {
+  emit('closed')
 }
 
 watch(

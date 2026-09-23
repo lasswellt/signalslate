@@ -1,81 +1,74 @@
 <template>
-  <!-- Not persistent: read-only detail with one action (start application), so a click outside or
-       Esc closes it the same as the Close button. -->
-  <q-dialog :model-value="open" @update:model-value="onModelUpdate">
-    <q-card style="min-width: 360px; max-width: 720px; width: 100%" data-testid="job-detail-dialog">
+  <DialogShell
+    :model-value="open"
+    :title="dialogTitle"
+    :subtitle="dialogSubtitle"
+    width="640px"
+    @update:model-value="onModelUpdate"
+    @close="onDialogClose"
+  >
+    <div data-testid="job-detail-dialog">
       <template v-if="posting">
-        <q-card-section>
-          <div class="text-h6" data-testid="job-title">{{ posting.title }}</div>
-          <div class="text-subtitle2 text-grey-8" data-testid="job-company">{{ posting.company_name }}</div>
-        </q-card-section>
+        <q-banner v-if="isClosed" dense class="bg-grey-3 q-mb-md" data-testid="job-closed-banner">
+          This posting has closed.
+        </q-banner>
 
-        <q-card-section v-if="isClosed" data-testid="job-closed-banner">
-          <q-banner dense class="bg-grey-3">This posting has closed.</q-banner>
-        </q-card-section>
-
-        <q-card-section data-testid="job-fit">
-          <div class="row items-center q-gutter-sm">
-            <q-badge :color="fitColor" data-testid="job-fit-score">
-              {{ posting.fit_score ?? 'Unscored' }}
-            </q-badge>
+        <div class="row items-center q-gutter-sm q-mb-md" data-testid="job-fit">
+          <div data-testid="job-fit-score">
+            <StatusChip kind="fit" :value="posting.fit_score" />
           </div>
-          <div class="text-grey-8" data-testid="job-fit-reason">
-            {{ posting.fit_reason ?? 'No fit reason available.' }}
-          </div>
-        </q-card-section>
+          <span class="text-grey-8" data-testid="job-fit-reason">{{ posting.fit_reason ?? '—' }}</span>
+        </div>
 
-        <q-card-section data-testid="job-details">
-          <div>Location: {{ posting.location ?? 'Unknown' }}</div>
-          <div>Remote: {{ posting.remote === null ? 'Unknown' : posting.remote ? 'Yes' : 'No' }}</div>
-          <div v-if="posting.comp_text">Compensation: {{ posting.comp_text }}</div>
-          <div>ATS: {{ posting.ats_kind }}</div>
-          <div>First seen: {{ formatDate(posting.first_seen) }}</div>
-          <div>Last seen: {{ formatDate(posting.last_seen) }}</div>
-        </q-card-section>
+        <div class="q-gutter-xs q-mb-md" data-testid="job-details">
+          <div>Job board: {{ humanize(posting.ats_kind) }}</div>
+          <div>Compensation: {{ posting.comp_text ?? '—' }}</div>
+          <div>Remote: {{ posting.remote === null ? '—' : posting.remote ? 'Yes' : 'No' }}</div>
+          <div>First seen: {{ formatDate(posting.first_seen) }} · {{ relativeTime(posting.first_seen) }}</div>
+        </div>
 
-        <q-card-section data-testid="job-apply-link">
-          <q-btn
-            flat
-            no-caps
-            color="primary"
-            label="View posting"
-            :href="posting.apply_url"
-            target="_blank"
-            rel="noopener noreferrer"
-          />
-        </q-card-section>
+        <q-banner v-if="createdApplication" dense class="bg-positive text-white q-mb-md" data-testid="job-application-created">
+          Application created.
+        </q-banner>
 
-        <q-card-section v-if="createdApplication" data-testid="job-application-created">
-          <q-banner dense class="bg-positive text-white">Application created.</q-banner>
-        </q-card-section>
-
-        <q-card-section v-if="submitError" data-testid="job-start-application-error">
-          <q-banner dense class="bg-negative text-white">{{ submitError }}</q-banner>
-        </q-card-section>
+        <q-banner v-if="submitError" dense class="bg-negative text-white" data-testid="job-start-application-error">
+          {{ submitError }}
+        </q-banner>
       </template>
+    </div>
 
-      <q-card-actions align="right">
-        <q-btn
-          v-if="posting && !createdApplication"
-          flat
-          no-caps
-          color="primary"
-          :loading="submitting"
-          :disable="submitting"
-          label="Start application"
-          data-testid="job-start-application"
-          @click="startApplication"
-        />
-        <q-btn flat no-caps label="Close" data-testid="job-detail-close" @click="close" />
-      </q-card-actions>
-    </q-card>
-  </q-dialog>
+    <template #actions>
+      <q-btn
+        v-if="posting"
+        flat
+        no-caps
+        label="Open posting"
+        :href="posting.apply_url"
+        target="_blank"
+        rel="noopener noreferrer"
+        data-testid="job-apply-link"
+      />
+      <q-btn
+        v-if="posting && !createdApplication"
+        unelevated
+        no-caps
+        color="primary"
+        :loading="submitting"
+        :disable="submitting"
+        label="Start application"
+        data-testid="job-start-application"
+        @click="startApplication"
+      />
+      <q-btn flat no-caps label="Close" data-testid="job-detail-close" @click="close" />
+    </template>
+  </DialogShell>
 </template>
 
 <script setup lang="ts">
-import { ApiError, parseUtc } from '~/composables/useApi'
 import { useJobsApi } from '~/composables/useJobsApi'
 import type { ApplicationOut, PostingOut } from '~/composables/useJobsApi'
+import DialogShell from '~/components/ui/DialogShell.vue'
+import StatusChip from '~/components/ui/StatusChip.vue'
 
 const props = defineProps<{
   open: boolean
@@ -96,38 +89,12 @@ const createdApplication = ref<ApplicationOut | null>(null)
 
 const isClosed = computed(() => props.posting?.closed_at != null)
 
-type FitTier = 'high' | 'med' | 'low'
-
-const fitTier = computed<FitTier | null>(() => {
-  const score = props.posting?.fit_score
-  if (score === null || score === undefined) return null
-  if (score >= 75) return 'high'
-  if (score >= 50) return 'med'
-  return 'low'
+const dialogTitle = computed(() => props.posting?.title ?? 'Job posting')
+const dialogSubtitle = computed(() => {
+  const posting = props.posting
+  if (!posting) return undefined
+  return `${posting.company_name || '—'} · ${posting.location || '—'}`
 })
-
-const fitColor = computed(() => {
-  switch (fitTier.value) {
-    case 'high':
-      return 'positive'
-    case 'med':
-      return 'warning'
-    case 'low':
-      return 'negative'
-    default:
-      return 'grey'
-  }
-})
-
-function formatDate(value: string | null): string {
-  if (!value) return 'Unknown'
-  const date = parseUtc(value)
-  return Number.isNaN(date.getTime()) ? 'Unknown' : date.toLocaleDateString()
-}
-
-function errorMessage(err: unknown): string {
-  return err instanceof ApiError ? err.message : 'Something went wrong'
-}
 
 /**
  * Creates an application for the currently displayed posting via POST /jobs/applications.
@@ -143,7 +110,7 @@ async function startApplication() {
     createdApplication.value = application
     emit('applicationCreated', application)
   } catch (err) {
-    submitError.value = errorMessage(err)
+    submitError.value = errorText(err)
   } finally {
     submitting.value = false
   }
@@ -156,7 +123,10 @@ function close() {
 
 function onModelUpdate(value: boolean) {
   emit('update:open', value)
-  if (!value) emit('closed')
+}
+
+function onDialogClose() {
+  emit('closed')
 }
 
 watch(

@@ -98,8 +98,8 @@ afterEach(() => {
 describe('posting detail', () => {
   it('renders title, fit reason and details', async () => {
     await mountDialog()
-    expect($('job-title')?.textContent).toContain('Staff Engineer')
-    expect($('job-company')?.textContent).toContain('Acme Corp')
+    expect($('dialog-title')?.textContent).toContain('Staff Engineer')
+    expect($('dialog-subtitle')?.textContent).toContain('Acme Corp')
     expect($('job-fit-reason')?.textContent).toContain('Strong match on backend and infra experience.')
     expect($('job-fit-score')?.textContent).toContain('82')
     expect($('job-details')?.textContent).toContain('$180k-$220k')
