@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "console-ux-overhaul",
-  "updated": "2026-09-23T03:11:23Z",
+  "updated": "2026-09-23T03:13:40Z",
   "tasks": [
     {
       "id": "T-001",
@@ -947,11 +947,46 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "in_progress",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-23T03:13:40Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "cd web && npx vitest run tests/domains.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3954,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/domains.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n··························\n\n Test Files  1 passed (1)\n      Tests  26 passed (26)\n   Start at  23:13:38\n   Duration  2.69s (tests 58%, transform 27%, environment 7%, import 6%, setup 2%)",
+            "recorded_at": "2026-09-23T03:13:40Z"
+          },
+          {
+            "cmd": "test -f web/pages/domains/watchlist.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:13:40Z"
+          },
+          {
+            "cmd": "grep -q 'pagination' web/components/DomainTable.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:13:40Z"
+          },
+          {
+            "cmd": "! grep -rq 'See details' web/pages/domains.vue web/pages/domains web/components/DomainTable.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:13:40Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "scope+web/pages/domains/ideas.vue,web/pages/domains/purchases.vue (thin moves; T-015 refines)"
     },
@@ -992,7 +1027,7 @@
         }
       ],
       "passes": false,
-      "status": "open",
+      "status": "in_progress",
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": null,
