@@ -46,3 +46,5 @@ Ruling: integration — reconcile ConnectionDialog.test.ts 'connections page' bl
 ## 2026-09-23T03:13:40Z verify T-014 ok=true
 Concern (T-014, low): DomainTable mobile uses horizontal scroll, not grid mode; tab clicks not exercised in tests (child routes mounted directly).
 ## 2026-09-23T03:13:40Z build T-015 start (attempt 1) wave 4
+## 2026-09-23T03:18:23Z verify T-020 ok=true
+Concern (T-020, low): screening answers stay read-only; API only saves cover_letter_text.
