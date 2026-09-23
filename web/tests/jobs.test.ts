@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
+import type { Component } from 'vue'
 import type { VueWrapper } from '@vue/test-utils'
 import { flushPromises } from '@vue/test-utils'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import { QLayout, QPageContainer } from 'quasar'
 import JobsPage from '~/pages/jobs.vue'
-import type { ApplicationOut, CompanyOut, JobsProfileOut, PostingOut } from '~/composables/useJobsApi'
+import JobsIndexPage from '~/pages/jobs/index.vue'
+import JobsApplicationsPage from '~/pages/jobs/applications.vue'
+import type { ApplicationOut, PostingOut } from '~/composables/useJobsApi'
 
 function posting(overrides: Partial<PostingOut> = {}): PostingOut {
   return {
@@ -30,6 +33,8 @@ function application(overrides: Partial<ApplicationOut> = {}): ApplicationOut {
   return {
     id: 7,
     posting_id: 1,
+    posting_title: 'Staff Engineer',
+    company_name: 'Acme Corp',
     status: 'saved',
     packet: null,
     cover_letter_path: null,
@@ -38,50 +43,6 @@ function application(overrides: Partial<ApplicationOut> = {}): ApplicationOut {
     assist_session_id: null,
     created_at: '2026-09-22T00:00:00Z',
     submitted_at: null,
-    ...overrides,
-  }
-}
-
-function company(overrides: Partial<CompanyOut> = {}): CompanyOut {
-  return {
-    id: 1,
-    name: 'Acme Corp',
-    domain: 'acme.com',
-    source: 'manual',
-    status: 'active',
-    first_seen: '2026-09-01T00:00:00Z',
-    last_seen: '2026-09-20T00:00:00Z',
-    boards: [],
-    ...overrides,
-  }
-}
-
-function profile(overrides: Partial<JobsProfileOut> = {}): JobsProfileOut {
-  return {
-    id: 1,
-    full_name: null,
-    email: null,
-    phone: null,
-    linkedin_url: null,
-    github_url: null,
-    portfolio_url: null,
-    other_links: [],
-    work_authorized: null,
-    needs_sponsorship: null,
-    open_to_relocation: null,
-    relocation_notes: null,
-    start_date_notes: null,
-    salary_floor: null,
-    salary_disclosure_policy: 'decline',
-    eeo_answers: {},
-    target_roles: [],
-    target_locations: [],
-    target_remote: null,
-    target_salary_floor: null,
-    target_exclusions: [],
-    resume_paths: [],
-    cover_letter_tone: null,
-    updated_at: null,
     ...overrides,
   }
 }
@@ -96,9 +57,6 @@ interface Call {
 interface Routes {
   postings?: PostingOut[] | Error
   applications?: ApplicationOut[] | Error
-  companies?: CompanyOut[] | Error
-  profile?: JobsProfileOut | Error
-  answers?: unknown[] | Error
   createApplication?: (body: Record<string, unknown>) => ApplicationOut | Error
 }
 
@@ -129,17 +87,20 @@ function stubApi(nextRoutes: Routes) {
           routes.createApplication ? routes.createApplication(body ?? {}) : application({ posting_id: body?.posting_id as number }),
         )
       }
-      if (method === 'GET' && path === '/api/jobs/companies') return answer(routes.companies ?? [])
-      if (method === 'GET' && path === '/api/jobs/profile') return answer(routes.profile ?? profile())
-      if (method === 'GET' && path === '/api/jobs/answers') return answer(routes.answers ?? [])
       throw new Error(`unexpected ${method} ${path}`)
     },
   )
 }
 
-const Harness = defineComponent({
-  render: () => h(QLayout, null, () => h(QPageContainer, null, () => h(JobsPage))),
-})
+function harnessFor(component: Component) {
+  return defineComponent({
+    render: () => h(QLayout, null, () => h(QPageContainer, null, () => h(component))),
+  })
+}
+
+const IndexHarness = harnessFor(JobsIndexPage)
+const ApplicationsHarness = harnessFor(JobsApplicationsPage)
+const TabsHarness = harnessFor(JobsPage)
 
 const body = document.body
 const $ = <T extends Element = HTMLElement>(testid: string) => body.querySelector<T>(`[data-testid="${testid}"]`)
@@ -153,8 +114,8 @@ async function click(testid: string) {
 
 let mounted: Array<VueWrapper<unknown>> = []
 
-async function mountPage() {
-  const wrapper = await mountSuspended(Harness, { attachTo: document.body })
+async function mount(harness: Component) {
+  const wrapper = await mountSuspended(harness, { attachTo: document.body })
   mounted.push(wrapper as VueWrapper<unknown>)
   await flushPromises()
   return wrapper
@@ -168,32 +129,22 @@ beforeEach(() => {
 afterEach(() => {
   for (const wrapper of mounted) wrapper.unmount()
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
-describe('jobs page', () => {
-  it('shows the four tabs and switches between panels', async () => {
-    stubApi({
-      postings: [posting()],
-      companies: [company({ name: 'Beta Inc' })],
-      profile: profile({ full_name: 'Ada Lovelace' }),
-    })
-    const wrapper = await mountPage()
+describe('jobs parent tabs', () => {
+  it('renders the four route tabs pointing at the jobs sub-routes', async () => {
+    stubApi({})
+    await mount(TabsHarness)
 
-    expect(wrapper.find('[data-testid="panel-postings"]').isVisible()).toBe(true)
-    expect(wrapper.find('[data-testid="postings-table"]').exists()).toBe(true)
-
-    await click('tab-applications')
-    expect(wrapper.find('[data-testid="panel-applications"]').isVisible()).toBe(true)
-
-    await click('tab-companies')
-    expect($('jobs-companies-panel')).not.toBeNull()
-    expect($('jobs-companies-panel')?.textContent).toContain('Beta Inc')
-
-    await click('tab-profile')
-    expect($('jobs-profile-panel')).not.toBeNull()
-    expect($<HTMLInputElement>('jobs-full-name')?.value).toBe('Ada Lovelace')
+    expect($<HTMLAnchorElement>('tab-postings')?.getAttribute('href')).toBe('/jobs')
+    expect($<HTMLAnchorElement>('tab-applications')?.getAttribute('href')).toBe('/jobs/applications')
+    expect($<HTMLAnchorElement>('tab-companies')?.getAttribute('href')).toBe('/jobs/companies')
+    expect($<HTMLAnchorElement>('tab-profile')?.getAttribute('href')).toBe('/jobs/profile')
   })
+})
 
+describe('jobs postings page', () => {
   it('renders fetched postings sorted by fit score then first_seen, both descending', async () => {
     stubApi({
       postings: [
@@ -202,7 +153,7 @@ describe('jobs page', () => {
         posting({ id: 3, title: 'Low fit, older', fit_score: 40, first_seen: '2026-09-05T00:00:00Z' }),
       ],
     })
-    const wrapper = await mountPage()
+    const wrapper = await mount(IndexHarness)
 
     const rows = wrapper.findAll('[data-testid="postings-table"] tbody tr')
     expect(rows).toHaveLength(3)
@@ -211,9 +162,19 @@ describe('jobs page', () => {
     expect(rows[2].text()).toContain('Low fit, older')
   })
 
+  it('shows title, company and an unscored fit chip when fit_score is null', async () => {
+    stubApi({ postings: [posting({ id: 4, title: 'Unscored Role', fit_score: null })] })
+    const wrapper = await mount(IndexHarness)
+
+    const row = wrapper.get('[data-testid="posting-row-4"]')
+    expect(row.text()).toContain('Unscored Role')
+    expect(row.text()).toContain('Acme Corp')
+    expect(row.text()).toContain('Unscored')
+  })
+
   it('re-fetches postings with the min-score filter applied', async () => {
     stubApi({ postings: [posting()] })
-    const wrapper = await mountPage()
+    await mount(IndexHarness)
 
     const input = $<HTMLInputElement>('postings-filter-min-score')
     if (!input) throw new Error('no min score input')
@@ -223,12 +184,67 @@ describe('jobs page', () => {
 
     const call = calls.find((c) => c.method === 'GET' && c.path === '/api/jobs/postings' && c.params?.min_score === '75')
     expect(call).toBeDefined()
-    expect(wrapper).toBeTruthy()
+  })
+
+  it('debounces the text search before re-fetching', async () => {
+    vi.useFakeTimers()
+    stubApi({ postings: [posting()] })
+    await mount(IndexHarness)
+
+    const before = calls.length
+    const input = $<HTMLInputElement>('postings-filter-text')
+    if (!input) throw new Error('no text filter input')
+    input.value = 'engineer'
+    input.dispatchEvent(new Event('input'))
+
+    // Still within the 300ms debounce window: no extra request yet.
+    await vi.advanceTimersByTimeAsync(100)
+    expect(calls.length).toBe(before)
+
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+
+    const call = calls.find((c) => c.method === 'GET' && c.path === '/api/jobs/postings' && c.params?.text === 'engineer')
+    expect(call).toBeDefined()
+  })
+
+  it('re-fetches postings when the remote toggle is switched on', async () => {
+    stubApi({ postings: [posting()] })
+    await mount(IndexHarness)
+
+    await click('postings-filter-remote')
+
+    const call = calls.find((c) => c.method === 'GET' && c.path === '/api/jobs/postings' && c.params?.remote === 'true')
+    expect(call).toBeDefined()
+  })
+
+  it('shows the never-ingested empty state with a CTA to Companies when there are no filters', async () => {
+    stubApi({ postings: [] })
+    await mount(IndexHarness)
+
+    expect($('postings-empty-none')).not.toBeNull()
+    expect($<HTMLAnchorElement>('postings-empty-cta')?.getAttribute('href')).toBe('/jobs/companies')
+    expect($('postings-empty')).toBeNull()
+  })
+
+  it('shows the no-match empty state with Clear filters when a filter is active and nothing matches', async () => {
+    stubApi({ postings: [] })
+    await mount(IndexHarness)
+
+    const input = $<HTMLInputElement>('postings-filter-min-score')
+    if (!input) throw new Error('no min score input')
+    input.value = '90'
+    input.dispatchEvent(new Event('input'))
+    await flushPromises()
+
+    expect($('postings-empty')).not.toBeNull()
+    expect($('postings-empty-none')).toBeNull()
+    expect($('postings-clear-filters')).not.toBeNull()
   })
 
   it('opens JobDetailDialog when a posting row is clicked', async () => {
     stubApi({ postings: [posting({ id: 5, title: 'Clickable Role' })] })
-    await mountPage()
+    await mount(IndexHarness)
 
     await click('posting-row-5')
 
@@ -236,12 +252,12 @@ describe('jobs page', () => {
     expect($('job-title')?.textContent).toContain('Clickable Role')
   })
 
-  it('flows from starting an application into JobApplyDialog', async () => {
+  it('flows from starting an application into JobApplyDialog, with only one dialog open', async () => {
     stubApi({
       postings: [posting({ id: 9 })],
       createApplication: () => application({ id: 42, posting_id: 9 }),
     })
-    await mountPage()
+    await mount(IndexHarness)
 
     await click('posting-row-9')
     await click('job-start-application')
@@ -249,15 +265,38 @@ describe('jobs page', () => {
     expect($('job-apply-dialog')).not.toBeNull()
     expect(calls.some((c) => c.method === 'POST' && c.path === '/api/jobs/applications/42/packet')).toBe(true)
   })
+})
 
-  it('lists applications and opens JobApplyDialog on row click', async () => {
+describe('jobs applications page', () => {
+  it('lists applications with job title, company, status and assistant state', async () => {
     stubApi({ applications: [application({ id: 11 })] })
-    const wrapper = await mountPage()
+    const wrapper = await mount(ApplicationsHarness)
 
-    await click('tab-applications')
-    expect(wrapper.get('[data-testid="applications-table"]').text()).toContain('11')
+    const row = wrapper.get('[data-testid="application-row-11"]')
+    expect(row.text()).toContain('Staff Engineer')
+    expect(row.text()).toContain('Acme Corp')
+  })
+
+  it('falls back to "Posting #<id>" when posting_title is missing', async () => {
+    stubApi({ applications: [application({ id: 12, posting_id: 3, posting_title: null, company_name: null })] })
+    const wrapper = await mount(ApplicationsHarness)
+
+    expect(wrapper.get('[data-testid="application-row-12"]').text()).toContain('Posting #3')
+  })
+
+  it('opens JobApplyDialog on row click', async () => {
+    stubApi({ applications: [application({ id: 11 })] })
+    await mount(ApplicationsHarness)
 
     await click('application-row-11')
     expect($('job-apply-dialog')).not.toBeNull()
+  })
+
+  it('shows an empty state when there are no applications yet', async () => {
+    stubApi({ applications: [] })
+    await mount(ApplicationsHarness)
+
+    expect($('empty-state')).not.toBeNull()
+    expect($('empty-state')?.textContent).toContain('No applications yet')
   })
 })
