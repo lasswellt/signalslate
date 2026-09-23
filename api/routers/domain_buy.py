@@ -50,7 +50,7 @@ from sqlmodel import col, select
 from api.serialize import iso_z
 from pipeline import db
 from pipeline.clock import utcnow
-from pipeline.db import DomainPurchase
+from pipeline.db import DomainPurchase, DomainQuote
 from pipeline.domains import domain_settings, normalize_domain
 from pipeline.domains import ideas as domain_ideas
 from pipeline.domains import purchase as domain_purchase
@@ -140,6 +140,9 @@ class PurchaseBody(BaseModel):
 class PurchaseOut(BaseModel):
     id: int
     quote_id: str
+    # From the purchase's quote, so a list can name the domain; None only if the quote row is gone.
+    name: Optional[str] = None
+    currency: Optional[str] = None
     status: str
     price: str
     created_at: Optional[str]
@@ -190,11 +193,22 @@ def _quote_out(row) -> StoredQuoteOut:
     )
 
 
-def _purchase_out(row: DomainPurchase) -> PurchaseOut:
+def _quotes_by_id(quote_ids: list[str]) -> dict[str, DomainQuote]:
+    """One query for every quote a set of purchases references (no per-row lookups)."""
+    if not quote_ids:
+        return {}
+    with db.get_session() as session:
+        rows = session.exec(select(DomainQuote).where(col(DomainQuote.id).in_(quote_ids))).all()
+        return {row.id: row for row in rows}
+
+
+def _purchase_out(row: DomainPurchase, quote: Optional[DomainQuote] = None) -> PurchaseOut:
     assert row.id is not None  # row came from a select() or a just-committed insert, always has a primary key
     return PurchaseOut(
         id=row.id,
         quote_id=row.quote_id,
+        name=quote.name if quote is not None else None,
+        currency=quote.currency if quote is not None else None,
         status=row.status,
         price=row.price,
         created_at=iso_z(row.created_at),
@@ -274,7 +288,7 @@ def create_purchase(body: PurchaseBody) -> PurchaseOut:
         )
     except domain_purchase.PurchaseRefused as exc:
         raise _coded(422, exc.reason_code, exc.detail) from None
-    return _purchase_out(row)
+    return _purchase_out(row, _quotes_by_id([row.quote_id]).get(row.quote_id))
 
 
 @router.get("/domains/purchases", response_model=list[PurchaseOut])
@@ -282,7 +296,8 @@ def list_purchases() -> list[PurchaseOut]:
     """Every purchase attempt, most recent first."""
     with db.get_session() as session:
         rows = session.exec(select(DomainPurchase).order_by(col(DomainPurchase.created_at).desc())).all()
-    return [_purchase_out(row) for row in rows]
+    quotes = _quotes_by_id([row.quote_id for row in rows])
+    return [_purchase_out(row, quotes.get(row.quote_id)) for row in rows]
 
 
 @router.get("/domains/purchase-settings", response_model=PurchaseSettingsOut)

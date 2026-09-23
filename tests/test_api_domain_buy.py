@@ -280,6 +280,8 @@ def test_create_purchase_succeeds(client, namecheap_conn, monkeypatch):
     body = resp.json()
     assert body["status"] == "succeeded"
     assert body["quote_id"] == quote.id
+    assert body["name"] == "newidea.com"
+    assert body["currency"] == "USD"
 
 
 def test_create_purchase_refused_maps_reason_code(client, namecheap_conn, monkeypatch):
@@ -318,6 +320,17 @@ def test_list_purchases(client, temp_db):
     assert len(body) == 1
     assert body[0]["quote_id"] == "q1"
     assert body[0]["status"] == "succeeded"
+    # No quote row for "q1": the name is absent rather than an error.
+    assert body[0]["name"] is None
+
+
+def test_list_purchases_names_the_domain_from_its_quote(client, namecheap_conn):
+    quote = _insert_quote(connection_id=namecheap_conn, name="shiny.dev")
+    with db.get_session() as session:
+        session.add(DomainPurchase(quote_id=quote.id, status="succeeded", price="12.98", created_at=utcnow()))
+        session.commit()
+    body = client.get("/api/domains/purchases").json()
+    assert [(p["name"], p["currency"]) for p in body] == [("shiny.dev", "USD")]
 
 
 # --- GET /domains/purchase-settings ---------------------------------------------------------

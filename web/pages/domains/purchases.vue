@@ -54,11 +54,9 @@ const purchases = ref<PurchaseOut[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 
-// The purchase API response has no domain name field yet, so the purchase's own id is the only
-// stable, non-jargon identifier available for this column until that response gains one.
 const columns: QTableColumn<PurchaseOut>[] = [
-  { name: 'purchase', label: 'Purchase', field: (row) => row.id, format: (val: number) => `#${val}`, align: 'left', sortable: true },
-  { name: 'price', label: 'Price', field: (row) => Number(row.price), format: (val: number) => formatMoney(val), align: 'left', sortable: true },
+  { name: 'purchase', label: 'Domain', field: (row) => row.name ?? `Purchase #${row.id}`, align: 'left', sortable: true },
+  { name: 'price', label: 'Price', field: (row) => Number(row.price), format: (val: number, row: PurchaseOut) => formatMoney(val, row.currency ?? 'USD'), align: 'left', sortable: true },
   { name: 'status', label: 'Status', field: 'status', align: 'left' },
   { name: 'created', label: 'Date', field: 'created_at', format: (val: string | null) => formatDate(val), align: 'left', sortable: true },
 ]

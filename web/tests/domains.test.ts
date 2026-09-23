@@ -483,13 +483,19 @@ describe('watchlist route (/domains/watchlist)', () => {
 })
 
 describe('purchases route (/domains/purchases)', () => {
-  it('shows the purchases list', async () => {
-    stubApi({ purchases: [purchase()] })
+  it('shows the purchases list by domain name, never the internal quote id', async () => {
+    stubApi({ purchases: [purchase({ name: 'shiny.dev', currency: 'USD' })] })
     await mountPage('/domains/purchases')
-    // api/routers/domain_buy.py's PurchaseOut has no domain name (only quote_id, an opaque store id);
-    // the table shows the purchase's own id instead of that internal id.
-    expect($('purchases-table')?.textContent).toContain('#1')
-    expect($('purchases-table')?.textContent).toContain('12.00')
+    const text = $('purchases-table')?.textContent ?? ''
+    expect(text).toContain('shiny.dev')
+    expect(text).toContain('12.00')
+    expect(text).not.toContain('quote-1')
+  })
+
+  it('falls back to the purchase number when the quote is gone', async () => {
+    stubApi({ purchases: [purchase({ name: null })] })
+    await mountPage('/domains/purchases')
+    expect($('purchases-table')?.textContent).toContain('Purchase #1')
   })
 
   it('shows the purchases empty state', async () => {

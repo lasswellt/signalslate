@@ -172,6 +172,8 @@ export interface PurchaseBody {
 export interface PurchaseOut {
   id: number
   quote_id: string
+  name?: string | null
+  currency?: string | null
   status: string
   price: string
   created_at: string | null
