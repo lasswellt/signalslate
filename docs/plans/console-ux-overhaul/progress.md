@@ -61,3 +61,6 @@ Ruling: scope-expansion — PurchaseOut lacked a domain name; main thread added 
 Concern (T-019, low): answer-bank Edit posts a new row (no PATCH/DELETE endpoint); display dedups by question_norm. Resume accept narrowed to PDF on main.
 ## 2026-09-23T03:36:49Z build waves 3-5 done (18 feature tasks + T-017)
 ## 2026-09-23T03:36:49Z build T-021 start (attempt 1) wave 6
+## 2026-09-23T03:37:45Z verify T-021 ok=true
+## 2026-09-23T03:37:45Z integration pass: nuxt build ok; web vitest 468/468; pytest 2903 passed; typecheck clean; every top-level page has PageHeader, every data view has AsyncState (directly or via its panel); no per-file helper copies; no unlabelled icon-only buttons
+## 2026-09-23T03:37:45Z build complete 21/21

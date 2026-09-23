@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "console-ux-overhaul",
-  "updated": "2026-09-23T03:36:49Z",
+  "updated": "2026-09-23T03:37:18Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1487,11 +1487,39 @@
           "timeout": 600
         }
       ],
-      "passes": false,
-      "status": "in_progress",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-23T03:37:18Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "! grep -rnE 'function (errorText|errorMessage|formatDate|statusColor|relativeTime|formatMoney)\\b' web/pages web/components",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:37:06Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run --reporter=dot",
+            "exit": 0,
+            "duration_ms": 7200,
+            "tail": " buy > keeps Buy disabled until a registrar connection is selected\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\nstderr | tests/DomainIdeasPanel.test.ts > buy > keeps Buy disabled until a registrar connection is selected\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n·············stderr | tests/JobCompaniesPanel.test.ts > board override > sends {ats_kind, board_id} to overrideBoard\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n·················stdout | tests/history-detail.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·stdout | tests/ui-shells.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/JobDetailDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n···········stdout | tests/ui-basics.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n··stdout | tests/smoke.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·······························································································································\n\n Test Files  26 passed (26)\n      Tests  468 passed (468)\n   Start at  23:37:07\n   Duration  5.95s (transform 39%, tests 37%, environment 14%, import 7%, setup 2%)\n\n  Transform  transforming modules took 39.78s · 39% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-09-23T03:37:13Z"
+          },
+          {
+            "cmd": "cd web && npx nuxt typecheck",
+            "exit": 0,
+            "duration_ms": 4509,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:37:18Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": ""
     }
