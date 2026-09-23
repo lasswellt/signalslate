@@ -12,3 +12,6 @@ Ruling: scope-expansion — owner approved adding sass-embedded devDependency; m
 ## 2026-09-23T02:40:35Z verify T-003 ok=true
 Concern (T-002, low): domains.vue purchaseStatusColor uses submitted/confirmed/failed/refused but pipeline writes pending/succeeded/failed/unknown; statusMeta covers both — wire in T-015.
 ## 2026-09-23T02:40:35Z build wave 0 4/4 done
+## 2026-09-23T02:40:39Z build T-004 start (attempt 1) wave 1
+## 2026-09-23T02:40:39Z build T-005 start (attempt 1) wave 1
+## 2026-09-23T02:40:39Z build T-006 start (attempt 1) wave 1
