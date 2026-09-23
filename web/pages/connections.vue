@@ -1,126 +1,138 @@
 <template>
-  <q-page padding class="q-gutter-md" style="max-width: 900px">
-    <div class="row items-center">
-      <div class="text-h5">Connections</div>
-      <q-space />
-      <q-btn
-        v-if="system?.secret_key_configured"
-        color="primary"
-        icon="add"
-        label="Add connection"
-        no-caps
-        data-testid="conn-add"
-        @click="openAdd"
-      />
-    </div>
-
-    <q-banner v-if="system && !system.secret_key_configured" class="bg-warning text-black" data-testid="key-banner">
-      Set SIGNALSLATE_SECRET_KEY in .env to manage connections here; env-only mode keeps working
-    </q-banner>
-
-    <div v-if="loading" class="row justify-center q-pa-lg" data-testid="loading">
-      <q-spinner size="lg" color="primary" />
-    </div>
-
-    <q-banner v-else-if="loadError" class="bg-negative text-white" data-testid="load-error">
-      {{ loadError }}
-      <template #action>
-        <q-btn flat label="Retry" @click="load()" />
+  <q-page class="page-container q-pa-md">
+    <PageHeader title="Accounts" subtitle="Services SignalSlate reads from">
+      <template #actions>
+        <q-btn
+          v-if="system?.secret_key_configured"
+          color="primary"
+          icon="add"
+          label="Add account"
+          no-caps
+          data-testid="conn-add"
+          @click="openAdd"
+        />
       </template>
+    </PageHeader>
+
+    <q-banner v-if="system && !system.secret_key_configured" rounded class="bg-warning text-black q-my-md" data-testid="key-banner">
+      You can add and edit accounts here once a one-time setup step is done. Accounts already set through your
+      server's environment keep working either way.
+      <q-expansion-item dense label="How to enable" header-class="text-black" class="q-mt-sm" data-testid="key-banner-howto">
+        <div class="q-pa-sm text-black">
+          Add <code>SIGNALSLATE_SECRET_KEY</code> to your <code>.env</code> file, then restart SignalSlate.
+        </div>
+      </q-expansion-item>
     </q-banner>
 
-    <div v-else-if="!connections.length" class="text-grey" data-testid="empty">No connections yet</div>
+    <AsyncState
+      :loading="loading"
+      :error="loadError"
+      :empty="connections.length === 0"
+      empty-icon="link"
+      empty-title="No accounts yet"
+      empty-message="Add an account to start collecting from it."
+      skeleton="cards"
+      @retry="load()"
+    >
+      <div v-for="group in groups" :key="group.kind" class="q-mt-md q-mb-lg" data-testid="kind-group">
+        <div class="text-subtitle1 text-weight-medium q-mb-sm" data-testid="kind-group-title">{{ group.label }}</div>
 
-    <template v-else>
-      <q-card v-for="conn in connections" :key="conn.id" data-testid="connection">
-        <q-card-section>
-          <div class="row items-center q-gutter-sm">
-            <div class="text-subtitle1" data-testid="conn-id">{{ conn.id }}</div>
-            <q-badge color="primary" outline data-testid="conn-kind">{{ conn.kind }}</q-badge>
-            <q-badge :color="conn.origin === 'ui' ? 'secondary' : 'grey-7'" data-testid="conn-origin">
-              {{ conn.origin }}
-            </q-badge>
+        <q-card v-for="conn in group.connections" :key="conn.id" flat bordered class="q-mb-sm" data-testid="connection">
+          <q-card-section>
+            <div class="row items-start no-wrap q-gutter-sm">
+              <div class="col-grow" style="min-width: 0">
+                <div class="text-subtitle1 ellipsis" data-testid="conn-label">{{ conn.label || conn.id }}</div>
+                <div class="text-caption text-grey" data-testid="conn-id">{{ conn.id }}</div>
+              </div>
+              <div class="text-caption text-grey" data-testid="conn-origin">
+                {{ conn.origin === 'ui' ? 'Added here' : 'Set in .env' }}
+              </div>
+            </div>
+
+            <div class="row items-center q-gutter-sm q-mt-sm" data-testid="conn-health">
+              <StatusChip
+                kind="health"
+                :value="conn.health?.status ?? null"
+                :label-override="conn.health ? undefined : 'Not checked yet'"
+                dense
+              />
+              <span v-if="conn.health?.detail" class="text-grey-8">{{ conn.health.detail }}</span>
+              <span v-if="conn.health?.checked_at" class="text-grey">{{ relativeTime(conn.health.checked_at) }}</span>
+            </div>
+
+            <div v-if="conn.secrets_set.length" class="text-caption text-grey-8 q-mt-sm" data-testid="conn-secrets">
+              Credentials saved: {{ conn.secrets_set.map((name) => humanize(name)).join(', ') }}
+            </div>
+
+            <div v-if="toggleErrors[conn.id]" class="q-mt-sm text-negative" data-testid="toggle-error">
+              {{ toggleErrors[conn.id] }}
+            </div>
+            <div
+              v-if="testResults[conn.id]"
+              class="q-mt-sm"
+              :class="testResults[conn.id]?.status === 'ok' ? 'text-positive' : 'text-negative'"
+              data-testid="test-result"
+            >
+              {{ testResults[conn.id]?.status }}: {{ testResults[conn.id]?.detail }}
+            </div>
+          </q-card-section>
+
+          <q-card-actions class="row items-center q-gutter-sm">
+            <q-btn
+              flat
+              no-caps
+              color="primary"
+              icon="network_check"
+              label="Test"
+              :loading="testing[conn.id] === true"
+              data-testid="conn-test"
+              @click="onTest(conn)"
+            />
+            <q-btn
+              v-if="showSignIn(conn)"
+              flat
+              no-caps
+              color="primary"
+              icon="login"
+              label="Sign in"
+              data-testid="conn-signin"
+              @click="openSignIn(conn)"
+            />
             <q-space />
             <q-toggle
               :model-value="conn.active"
-              :disable="toggling"
+              :disable="togglingIds.has(conn.id)"
               label="Active"
               data-testid="conn-active"
               @update:model-value="(value: boolean) => onToggle(conn, value)"
             />
-          </div>
-
-          <div class="row items-center q-gutter-sm q-mt-sm" data-testid="conn-health">
-            <q-badge :color="healthColor(conn)" rounded data-testid="health-dot" />
-            <span>{{ healthLabel(conn) }}</span>
-            <span v-if="conn.health?.detail" class="text-grey-8">{{ conn.health.detail }}</span>
-            <span v-if="conn.health?.checked_at" class="text-grey">{{ relativeTime(conn.health.checked_at) }}</span>
-          </div>
-
-          <div v-if="conn.secrets_set.length" class="q-mt-sm">
-            <q-chip
-              v-for="name in conn.secrets_set"
-              :key="name"
+            <q-btn
+              v-if="system?.secret_key_configured"
+              flat
+              round
               dense
-              data-testid="secret-chip"
+              icon="more_vert"
+              :aria-label="`More actions for ${accountTitle(conn)}`"
+              data-testid="conn-menu"
             >
-              {{ name }}
-            </q-chip>
-          </div>
-
-          <div v-if="toggleErrors[conn.id]" class="q-mt-sm text-negative" data-testid="toggle-error">
-            {{ toggleErrors[conn.id] }}
-          </div>
-          <div
-            v-if="testResults[conn.id]"
-            class="q-mt-sm"
-            :class="testResults[conn.id]?.status === 'ok' ? 'text-positive' : 'text-negative'"
-            data-testid="test-result"
-          >
-            {{ testResults[conn.id]?.status }}: {{ testResults[conn.id]?.detail }}
-          </div>
-        </q-card-section>
-
-        <q-card-actions>
-          <q-btn
-            flat
-            color="primary"
-            icon="network_check"
-            label="Test"
-            :loading="testing[conn.id] === true"
-            data-testid="conn-test"
-            @click="onTest(conn)"
-          />
-          <q-btn
-            v-if="system?.secret_key_configured"
-            flat
-            color="primary"
-            icon="edit"
-            label="Edit"
-            data-testid="conn-edit"
-            @click="openEdit(conn)"
-          />
-          <q-btn
-            v-if="system?.secret_key_configured && showSignIn(conn)"
-            flat
-            color="primary"
-            icon="login"
-            label="Sign in"
-            data-testid="conn-signin"
-            @click="openSignIn(conn)"
-          />
-          <q-space />
-          <q-btn
-            flat
-            color="negative"
-            icon="delete"
-            label="Delete"
-            data-testid="conn-delete"
-            @click="askDelete(conn)"
-          />
-        </q-card-actions>
-      </q-card>
-    </template>
+              <q-tooltip>{{ `More actions for ${accountTitle(conn)}` }}</q-tooltip>
+              <q-menu>
+                <q-list style="min-width: 160px">
+                  <q-item clickable v-close-popup data-testid="conn-edit" @click="openEdit(conn)">
+                    <q-item-section avatar><q-icon name="edit" /></q-item-section>
+                    <q-item-section>Edit</q-item-section>
+                  </q-item>
+                  <q-item clickable v-close-popup data-testid="conn-delete" @click="askDelete(conn)">
+                    <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
+                    <q-item-section class="text-negative">Delete</q-item-section>
+                  </q-item>
+                </q-list>
+              </q-menu>
+            </q-btn>
+          </q-card-actions>
+        </q-card>
+      </div>
+    </AsyncState>
 
     <ConnectionDialog v-model="dialogOpen" :mode="dialogMode" :connection="dialogConnection" @saved="onSaved" />
 
@@ -129,16 +141,15 @@
     <q-dialog :model-value="deleteTarget !== null" @update:model-value="(open: boolean) => { if (!open) deleteTarget = null }">
       <q-card style="max-width: 480px" data-testid="delete-confirm">
         <q-card-section>
-          <div class="text-h6">Delete {{ deleteTarget?.id }}?</div>
+          <div class="text-h6">Delete {{ deleteTarget ? accountTitle(deleteTarget) : '' }}?</div>
         </q-card-section>
         <q-card-section class="q-pt-none">
           <p>
-            This removes {{ deleteTarget?.id }}'s stored credentials, its collection watermark and its active
-            toggle. Items already collected are kept.
+            SignalSlate will stop collecting from {{ deleteTarget ? accountTitle(deleteTarget) : '' }} and forget its
+            saved credentials, sync position and on/off setting. Items already collected are kept.
           </p>
           <p class="q-mb-none">
-            A .env entry will NOT bring it back: deleting it here makes the connection stay deleted until you add
-            it again.
+            A .env entry will NOT bring it back: deleting it here keeps this account deleted until you add it again.
           </p>
           <div v-if="deleteError" class="q-mt-sm text-negative" data-testid="delete-error">{{ deleteError }}</div>
         </q-card-section>
@@ -160,8 +171,11 @@
 
 <script setup lang="ts">
 import { useQuasar } from 'quasar'
-import { ApiError, PROVIDER_FOR_KIND, parseUtc, zoomAuthMode } from '~/composables/useApi'
-import type { ConnectionCheck, ConnectionView, SystemInfo } from '~/composables/useApi'
+import PageHeader from '~/components/ui/PageHeader.vue'
+import AsyncState from '~/components/ui/AsyncState.vue'
+import StatusChip from '~/components/ui/StatusChip.vue'
+import { PROVIDER_FOR_KIND, zoomAuthMode } from '~/composables/useApi'
+import type { ConnectionCheck, ConnectionKind, ConnectionView, SystemInfo } from '~/composables/useApi'
 
 const api = useApi()
 const $q = useQuasar()
@@ -174,13 +188,43 @@ const loadError = ref<string | null>(null)
 const testing = reactive<Record<string, boolean>>({})
 const testResults = reactive<Record<string, ConnectionCheck | undefined>>({})
 const toggleErrors = reactive<Record<string, string | undefined>>({})
-// One flag for every toggle: active_sources is a single document that each toggle reads, edits and
-// writes back, so two in flight at once would let the later write drop the earlier change.
-const toggling = ref(false)
+// Each toggle saves independently: a Set of in-flight ids disables only the card being saved.
+const togglingIds = reactive(new Set<string>())
 
-function errorText(error: unknown): string {
-  return error instanceof ApiError ? error.message : 'Something went wrong'
+/** Display name for a connection: its label, falling back to the id when the label is blank. */
+function accountTitle(conn: ConnectionView): string {
+  return conn.label || conn.id
 }
+
+const KIND_LABELS: Record<ConnectionKind, string> = {
+  m365: 'Microsoft 365',
+  zoom: 'Zoom',
+  slack: 'Slack',
+  gmail: 'Gmail',
+  namecheap: 'Namecheap',
+  godaddy: 'GoDaddy',
+  wordpress: 'WordPress',
+}
+
+interface ConnectionGroup {
+  kind: ConnectionKind
+  label: string
+  connections: ConnectionView[]
+}
+
+// Grouped by kind, in the fixed order the kinds are declared (KIND_LABELS), so section order never
+// jumps around as connections are added or removed.
+const groups = computed<ConnectionGroup[]>(() => {
+  const byKind = new Map<ConnectionKind, ConnectionView[]>()
+  for (const conn of connections.value) {
+    const list = byKind.get(conn.kind)
+    if (list) list.push(conn)
+    else byKind.set(conn.kind, [conn])
+  }
+  return (Object.keys(KIND_LABELS) as ConnectionKind[])
+    .filter((kind) => byKind.has(kind))
+    .map((kind) => ({ kind, label: KIND_LABELS[kind], connections: byKind.get(kind) as ConnectionView[] }))
+})
 
 // `silent` refreshes in place: after a save or delete the list must not collapse into the spinner.
 async function load(silent = false) {
@@ -197,33 +241,8 @@ async function load(silent = false) {
   }
 }
 
-function healthColor(conn: ConnectionView): string {
-  if (!conn.health) return 'grey'
-  return { ok: 'positive', error: 'negative' }[conn.health.status] ?? 'grey'
-}
-
-function healthLabel(conn: ConnectionView): string {
-  return conn.health ? conn.health.status : 'not checked yet'
-}
-
-function relativeTime(iso: string): string {
-  const then = parseUtc(iso).getTime()
-  if (Number.isNaN(then)) return ''
-  const seconds = Math.round((then - Date.now()) / 1000)
-  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
-    ['day', 86400],
-    ['hour', 3600],
-    ['minute', 60],
-  ]
-  const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
-  for (const [unit, size] of units) {
-    if (Math.abs(seconds) >= size) return formatter.format(Math.round(seconds / size), unit)
-  }
-  return formatter.format(seconds, 'second')
-}
-
 async function onToggle(conn: ConnectionView, value: boolean) {
-  toggling.value = true
+  togglingIds.add(conn.id)
   toggleErrors[conn.id] = undefined
   const previous = conn.active
   conn.active = value
@@ -238,25 +257,22 @@ async function onToggle(conn: ConnectionView, value: boolean) {
     conn.active = previous
     const message = errorText(error)
     toggleErrors[conn.id] = message
-    $q.notify({ type: 'negative', message: `Could not change ${conn.id}: ${message}` })
+    $q.notify({ type: 'negative', message: `Could not change ${accountTitle(conn)}: ${message}` })
   } finally {
-    toggling.value = false
+    togglingIds.delete(conn.id)
   }
 }
 
 async function onTest(conn: ConnectionView) {
   testing[conn.id] = true
   try {
-    const result = await api.testConnection(conn.id)
-    testResults[conn.id] = result
-    $q.notify({
-      type: result.status === 'ok' ? 'positive' : 'negative',
-      message: `${conn.id}: ${result.detail}`,
-    })
+    testResults[conn.id] = await api.testConnection(conn.id)
   } catch (error) {
+    // The request itself failed (network/API error), not just an app-level "not ok" result: this
+    // is the one case that still gets a toast, since the inline result never got set.
     const message = errorText(error)
     testResults[conn.id] = { status: 'error', detail: message }
-    $q.notify({ type: 'negative', message: `${conn.id}: ${message}` })
+    $q.notify({ type: 'negative', message: `Could not test ${accountTitle(conn)}: ${message}` })
   } finally {
     testing[conn.id] = false
   }
@@ -291,6 +307,7 @@ async function onSaved(saved: ConnectionView, mode: 'create' | 'edit') {
 // gmail and m365 always sign in through OAuth; zoom only when its effective auth_mode is "oauth"
 // (a Server-to-Server zoom connection has no browser sign-in step).
 function showSignIn(conn: ConnectionView): boolean {
+  if (!system.value?.secret_key_configured) return false
   const provider = PROVIDER_FOR_KIND[conn.kind]
   if (!provider) return false
   return provider !== 'zoom' || zoomAuthMode(conn) === 'oauth'
@@ -355,11 +372,11 @@ async function confirmDelete() {
   try {
     await api.deleteConnection(target.id)
     deleteTarget.value = null
-    $q.notify({ type: 'positive', message: `Deleted ${target.id}` })
+    $q.notify({ type: 'positive', message: `Deleted ${accountTitle(target)}` })
     await load(true)
   } catch (error) {
     deleteError.value = errorText(error)
-    $q.notify({ type: 'negative', message: `Could not delete ${target.id}: ${deleteError.value}` })
+    $q.notify({ type: 'negative', message: `Could not delete ${accountTitle(target)}: ${deleteError.value}` })
   } finally {
     deleting.value = false
   }
