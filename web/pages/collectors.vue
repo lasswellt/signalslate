@@ -1,86 +1,75 @@
 <template>
-  <q-page padding class="q-gutter-md" style="max-width: 900px">
-    <div class="row items-center">
-      <div class="text-h5">Collectors</div>
-    </div>
+  <q-page class="page-container q-pa-md">
+    <PageHeader title="Collectors" subtitle="Each source SignalSlate collects from" />
 
-    <div v-if="loading" class="row justify-center q-pa-lg" data-testid="loading">
-      <q-spinner size="lg" color="primary" />
-    </div>
-
-    <q-banner v-else-if="loadError" class="bg-negative text-white" data-testid="load-error">
-      {{ loadError }}
-      <template #action>
-        <q-btn flat label="Retry" @click="load()" />
-      </template>
-    </q-banner>
-
-    <div v-else-if="!collectors.length" class="text-grey" data-testid="empty">No collectors are declared</div>
-
-    <template v-else>
-      <q-card v-for="c in collectors" :key="c.source" data-testid="collector">
+    <AsyncState
+      :loading="loading"
+      :error="loadError"
+      :empty="collectors.length === 0"
+      empty-icon="cloud_sync"
+      empty-title="No collectors are declared"
+      skeleton="cards"
+      @retry="load()"
+    >
+      <q-card
+        v-for="c in collectors"
+        :key="c.source"
+        flat
+        bordered
+        class="q-mb-sm"
+        data-testid="collector"
+        :data-source="c.source"
+      >
         <q-card-section>
-          <div class="row items-center q-gutter-sm">
-            <div class="text-subtitle1" data-testid="collector-source">{{ c.source }}</div>
-            <q-space />
-            <q-toggle
-              :model-value="c.active"
-              :disable="toggling"
-              label="Enabled"
-              data-testid="collector-active"
-              @update:model-value="(value: boolean) => onToggle(c, value)"
+          <div class="row items-center no-wrap q-gutter-sm">
+            <div class="col-grow" style="min-width: 0">
+              <div class="text-subtitle1 ellipsis" data-testid="collector-source">{{ humanize(c.source) }}</div>
+            </div>
+            <StatusChip
+              kind="run"
+              :value="c.last_attempt?.status ?? null"
+              :label-override="c.last_attempt ? undefined : 'No runs yet'"
+              dense
+              data-testid="collector-status"
             />
           </div>
 
-          <div class="q-mt-sm" data-testid="collector-watermark">
-            <template v-if="c.watermark">
-              Watermark: {{ relativeTime(c.watermark) }}
-              <span class="text-grey-8" data-testid="collector-watermark-abs">({{ absoluteTime(c.watermark) }})</span>
-            </template>
-            <template v-else>Watermark: none (the next run collects the last 24 hours)</template>
+          <div class="text-body2 text-grey-8 q-mt-sm" data-testid="collector-watermark">
+            <template v-if="c.watermark">Collected up to {{ formatDate(c.watermark) }}</template>
+            <template v-else>Nothing collected yet</template>
+            <q-icon name="info" size="16px" class="q-ml-xs" />
+            <q-tooltip>{{ WATERMARK_TOOLTIP }}</q-tooltip>
           </div>
 
-          <div class="row items-center q-gutter-sm q-mt-xs" data-testid="collector-streak">
-            <span>Failure streak: {{ c.consecutive_failures }} of {{ c.stuck_threshold }}</span>
-            <q-chip
-              v-if="streakWarns(c)"
-              dense
-              color="warning"
-              text-color="black"
-              icon="warning"
-              data-testid="streak-warning"
-            >
-              Stuck soon
-            </q-chip>
-          </div>
-          <div v-if="streakWarns(c)" class="text-warning q-mt-xs" data-testid="streak-warning-text">
-            After {{ c.stuck_threshold }} consecutive failures the watermark advances anyway: the data that could
-            not be collected is skipped and is not retried.
-          </div>
-
-          <div class="q-mt-xs" data-testid="collector-attempt">
+          <div class="text-body2 q-mt-xs" data-testid="collector-attempt">
             <template v-if="c.last_attempt">
-              Last attempt:
-              <q-badge :color="statusColor(c.last_attempt.status)" data-testid="attempt-status">
-                {{ c.last_attempt.status ?? 'unknown' }}
-              </q-badge>
-              <span v-if="c.last_attempt.detail" class="q-ml-xs" data-testid="attempt-detail">{{ c.last_attempt.detail }}</span>
-              <span v-if="c.last_attempt.item_count !== null" class="q-ml-xs text-grey-8">
-                ({{ c.last_attempt.item_count }} items)
-              </span>
-              <span class="q-ml-xs text-grey">{{ relativeTime(c.last_attempt.at) }}</span>
+              Last run {{ relativeTime(c.last_attempt.at) }}
+              <span v-if="c.last_attempt.detail" class="text-grey-8 q-ml-xs" data-testid="attempt-detail">{{ c.last_attempt.detail }}</span>
             </template>
-            <template v-else>Last attempt: none yet</template>
+            <template v-else>No runs yet</template>
           </div>
 
-          <div class="q-mt-xs" data-testid="collector-items">{{ c.item_count }} items stored</div>
+          <div class="text-body2 text-grey-8 q-mt-xs" data-testid="collector-items">
+            {{ formatNumber(c.item_count) }} items collected
+          </div>
+
+          <div v-if="c.consecutive_failures > 0" class="row items-center q-gutter-xs q-mt-sm">
+            <q-chip dense color="warning" text-color="black" icon="warning" data-testid="streak-warning">
+              Failing: {{ c.consecutive_failures }} of {{ c.stuck_threshold }} attempts before pause
+            </q-chip>
+            <q-icon name="info" size="16px" class="text-grey-6" />
+            <q-tooltip>
+              After {{ c.stuck_threshold }} attempts in a row, SignalSlate moves on: whatever could not be
+              collected is skipped, not retried.
+            </q-tooltip>
+          </div>
 
           <div v-if="toggleErrors[c.source]" class="q-mt-sm text-negative" data-testid="toggle-error">
             {{ toggleErrors[c.source] }}
           </div>
         </q-card-section>
 
-        <q-card-actions>
+        <q-card-actions class="row items-center q-gutter-sm">
           <q-btn
             flat
             no-caps
@@ -89,36 +78,7 @@
             label="Run now"
             :loading="running[c.source] === true"
             data-testid="collector-run"
-            @click="onRun(c)"
-          />
-          <q-btn
-            flat
-            no-caps
-            color="primary"
-            icon="science"
-            label="Dry run"
-            data-testid="collector-dry-run"
-            @click="openDryRun(c)"
-          />
-          <q-btn
-            flat
-            no-caps
-            color="primary"
-            icon="history"
-            label="Reset watermark"
-            data-testid="collector-reset"
-            @click="openReset(c)"
-          />
-          <q-btn
-            flat
-            no-caps
-            color="primary"
-            icon="healing"
-            label="Clear failures"
-            :disable="c.consecutive_failures === 0"
-            :loading="clearing[c.source] === true"
-            data-testid="collector-clear"
-            @click="onClear(c)"
+            @click="confirmRun(c)"
           />
           <q-btn
             flat
@@ -129,15 +89,55 @@
             data-testid="collector-browse"
             @click="openItems(c)"
           />
+          <q-space />
+          <q-toggle
+            :model-value="c.active"
+            :disable="toggling"
+            label="Active"
+            data-testid="collector-active"
+            @update:model-value="(value: boolean) => onToggle(c, value)"
+          />
+          <q-btn
+            flat
+            round
+            dense
+            icon="more_vert"
+            :aria-label="`More actions for ${humanize(c.source)}`"
+            data-testid="collector-menu"
+          >
+            <q-tooltip>{{ `More actions for ${humanize(c.source)}` }}</q-tooltip>
+            <q-menu>
+              <q-list style="min-width: 220px">
+                <q-item clickable v-close-popup :data-testid="`action-dry-run-${c.source}`" @click="openDryRun(c)">
+                  <q-item-section avatar><q-icon name="science" /></q-item-section>
+                  <q-item-section>Preview (dry run)</q-item-section>
+                </q-item>
+                <q-item clickable v-close-popup :data-testid="`action-reset-${c.source}`" @click="openReset(c)">
+                  <q-item-section avatar><q-icon name="history" /></q-item-section>
+                  <q-item-section>Start over from…</q-item-section>
+                </q-item>
+                <q-item
+                  clickable
+                  v-close-popup
+                  :disable="c.consecutive_failures === 0"
+                  :data-testid="`action-clear-${c.source}`"
+                  @click="confirmClear(c)"
+                >
+                  <q-item-section avatar><q-icon name="healing" /></q-item-section>
+                  <q-item-section>Clear failures</q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
+          </q-btn>
         </q-card-actions>
       </q-card>
-    </template>
+    </AsyncState>
 
     <!-- Dry run -->
     <q-dialog :model-value="dryOpen" @update:model-value="(open: boolean) => { if (!open) closeDryRun() }">
       <q-card style="min-width: 360px; max-width: 640px; width: 100%" data-testid="dry-dialog">
         <q-card-section>
-          <div class="text-h6">Dry run: {{ drySource }}</div>
+          <div class="text-h6">Preview: {{ drySource ? humanize(drySource) : '' }}</div>
           <div class="text-grey-8">Reads from the source and stores nothing.</div>
         </q-card-section>
 
@@ -165,28 +165,29 @@
 
           <div v-else-if="dryStage === 'running'" class="row items-center q-gutter-sm" data-testid="dry-running">
             <q-spinner size="sm" color="primary" />
-            <span>Collecting. This can take a while; the page checks every 2 seconds.</span>
+            <span>Collecting. This can take a while.</span>
           </div>
 
           <template v-else-if="dryStage === 'done' && dryResult">
-            <div data-testid="dry-summary">
-              {{ dryResult.status }}: {{ dryResult.detail }}
+            <div class="row items-center q-gutter-sm" data-testid="dry-summary">
+              <StatusChip kind="run" :value="dryResult.status" dense />
+              <span>{{ dryResult.detail }}</span>
             </div>
             <div class="text-grey-8" data-testid="dry-window">
-              Window: {{ dryResult.window.hours }} hours ({{ absoluteTime(dryResult.window.since) }} to
-              {{ absoluteTime(dryResult.window.until) }}), {{ dryResult.duration_ms }} ms
+              {{ dryResult.window.hours }}-hour window: {{ formatDate(dryResult.window.since) }} to
+              {{ formatDate(dryResult.window.until) }} · {{ formatDuration(dryResult.duration_ms) }}
             </div>
-            <div data-testid="dry-count">{{ dryResult.count }} items</div>
+            <div data-testid="dry-count">{{ formatNumber(dryResult.count) }} items</div>
             <div v-if="Object.keys(dryResult.by_type).length">
               <q-chip v-for="(count, type) in dryResult.by_type" :key="type" dense data-testid="dry-type">
-                {{ type }}: {{ count }}
+                {{ humanize(String(type)) }}: {{ formatNumber(count) }}
               </q-chip>
             </div>
             <div v-if="!dryResult.items.length" class="text-grey" data-testid="dry-no-items">No items listed</div>
             <q-list v-else separator bordered>
               <q-item v-for="(item, index) in dryResult.items" :key="`${item.external_id}-${index}`" data-testid="dry-item">
                 <q-item-section>
-                  <q-item-label caption>{{ item.item_type }} · {{ absoluteTime(item.occurred_at) }}</q-item-label>
+                  <q-item-label caption>{{ humanize(item.item_type) }} · {{ formatDate(item.occurred_at) }}</q-item-label>
                   <q-item-label style="white-space: pre-wrap; overflow-wrap: anywhere">{{ item.preview }}</q-item-label>
                 </q-item-section>
               </q-item>
@@ -223,17 +224,19 @@
       </q-card>
     </q-dialog>
 
-    <!-- Reset watermark -->
+    <!-- Start over (reset) -->
     <q-dialog :model-value="resetSource !== null" @update:model-value="(open: boolean) => { if (!open) closeReset() }">
       <q-card style="min-width: 360px; max-width: 560px; width: 100%" data-testid="reset-dialog">
         <q-card-section>
-          <div class="text-h6">Reset watermark: {{ resetSource }}</div>
+          <div class="text-h6">Start over: {{ resetSource ? humanize(resetSource) : '' }}</div>
         </q-card-section>
 
         <q-card-section class="q-gutter-sm">
           <template v-if="resetOutcome === null">
-            <div class="text-body2" data-testid="reset-note-static">{{ RESET_NOTE_STATIC }}</div>
-            <div class="column">
+            <q-expansion-item dense label="What does this mean?" data-testid="reset-note-toggle">
+              <div class="text-body2 q-pa-sm" data-testid="reset-note-static">{{ RESET_NOTE_STATIC }}</div>
+            </q-expansion-item>
+            <div class="column q-mt-sm">
               <q-radio
                 v-for="option in RESET_OPTIONS"
                 :key="option.key"
@@ -245,14 +248,14 @@
               />
             </div>
             <div v-if="resetChoice === null" class="text-grey-8" data-testid="reset-none-hint">
-              Removing the watermark also clears the failure streak.
+              Starting over from scratch also clears the failure count.
             </div>
           </template>
 
           <template v-else>
             <div data-testid="reset-result">
-              <template v-if="resetOutcome.watermark">Watermark is now {{ absoluteTime(resetOutcome.watermark) }}.</template>
-              <template v-else>Watermark removed.</template>
+              <template v-if="resetOutcome.watermark">Collecting now starts from {{ formatDate(resetOutcome.watermark) }}.</template>
+              <template v-else>Collecting will start from scratch next run.</template>
             </div>
             <div class="text-body2" data-testid="reset-note">{{ resetOutcome.note }}</div>
           </template>
@@ -273,7 +276,7 @@
             v-if="resetOutcome === null"
             color="negative"
             no-caps
-            label="Reset"
+            label="Start over"
             :loading="resetting"
             data-testid="reset-confirm"
             @click="onReset"
@@ -286,7 +289,7 @@
     <q-dialog :model-value="itemsSource !== null" @update:model-value="(open: boolean) => { if (!open) closeItems() }">
       <q-card style="min-width: 360px; max-width: 760px; width: 100%" data-testid="items-dialog">
         <q-card-section>
-          <div class="text-h6">Items: {{ itemsSource }}</div>
+          <div class="text-h6">Items: {{ itemsSource ? humanize(itemsSource) : '' }}</div>
           <q-banner dense class="bg-warning text-black q-mt-sm" data-testid="items-notice">
             Items contain private message content. Do not share what is shown here.
           </q-banner>
@@ -320,7 +323,7 @@
             <q-list separator bordered>
               <q-item v-for="item in items" :key="item.id" clickable data-testid="item-row" @click="openItem(item)">
                 <q-item-section>
-                  <q-item-label caption>{{ item.item_type }} · {{ absoluteTime(item.occurred_at) }}</q-item-label>
+                  <q-item-label caption>{{ humanize(item.item_type) }} · {{ formatDate(item.occurred_at) }}</q-item-label>
                   <q-item-label style="white-space: pre-wrap; overflow-wrap: anywhere">{{ item.preview }}</q-item-label>
                 </q-item-section>
               </q-item>
@@ -343,7 +346,7 @@
         <q-card-section v-else class="q-gutter-sm">
           <div class="row items-center q-gutter-sm">
             <q-btn flat dense no-caps icon="arrow_back" label="Back to the list" data-testid="detail-back" @click="closeDetail" />
-            <span class="text-grey-8">{{ detailRow.item_type }} · {{ absoluteTime(detailRow.occurred_at) }}</span>
+            <span class="text-grey-8">{{ humanize(detailRow.item_type) }} · {{ formatDate(detailRow.occurred_at) }}</span>
           </div>
           <div v-if="detailLoading" class="row justify-center q-pa-md" data-testid="detail-loading">
             <q-spinner size="md" color="primary" />
@@ -369,7 +372,10 @@
 
 <script setup lang="ts">
 import { useQuasar } from 'quasar'
-import { ApiError, parseUtc } from '~/composables/useApi'
+import PageHeader from '~/components/ui/PageHeader.vue'
+import AsyncState from '~/components/ui/AsyncState.vue'
+import StatusChip from '~/components/ui/StatusChip.vue'
+import { ApiError } from '~/composables/useApi'
 import type { CollectorState, DryRunResult, ItemDetail, ItemRow, ResetResult } from '~/composables/useApi'
 
 const api = useApi()
@@ -380,7 +386,6 @@ const loading = ref(true)
 const loadError = ref<string | null>(null)
 
 const running = reactive<Record<string, boolean>>({})
-const clearing = reactive<Record<string, boolean>>({})
 const toggleErrors = reactive<Record<string, string | undefined>>({})
 // One flag for every toggle: active_sources is a single document that each toggle reads, edits and
 // writes back, so two in flight at once would let the later write drop the earlier change.
@@ -395,15 +400,15 @@ const DRY_MAX_HOURS = 168
 const DRY_MAX_LIMIT = 50
 const ITEMS_PAGE = 50
 
-// Same text as RESET_NOTE in api/routers/collectors.py, shown before the reset so the choice is informed;
-// the note in the response is shown after.
-const RESET_NOTE_STATIC =
-  'The next run collects from the watermark minus a 30 minute overlap, but never further back than 7 days. ' +
-  'A watermark newer than about 24 hours behaves like no watermark: the run collects the last 24 hours.'
+const WATERMARK_TOOLTIP =
+  'If a collector has not run in about a day, the next run collects the last 24 hours instead of resuming here.'
 
-function errorText(error: unknown): string {
-  return error instanceof ApiError ? error.message : 'Something went wrong'
-}
+// Same text as RESET_NOTE in api/routers/collectors.py, shown before starting over so the choice is
+// informed; the note in the response is shown after.
+const RESET_NOTE_STATIC =
+  'The next run collects from the point chosen here minus a 30 minute overlap, but never further back than ' +
+  '7 days. A point newer than about 24 hours behaves the same as starting from scratch: the run collects ' +
+  'the last 24 hours.'
 
 // `silent` refreshes in place: after an action the list must not collapse into the spinner.
 async function load(silent = false) {
@@ -416,39 +421,6 @@ async function load(silent = false) {
   } finally {
     loading.value = false
   }
-}
-
-function relativeTime(iso: string): string {
-  const then = parseUtc(iso).getTime()
-  if (Number.isNaN(then)) return ''
-  const seconds = Math.round((then - Date.now()) / 1000)
-  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
-    ['day', 86400],
-    ['hour', 3600],
-    ['minute', 60],
-  ]
-  const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
-  for (const [unit, size] of units) {
-    if (Math.abs(seconds) >= size) return formatter.format(Math.round(seconds / size), unit)
-  }
-  return formatter.format(seconds, 'second')
-}
-
-function absoluteTime(iso: string): string {
-  const date = parseUtc(iso)
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString()
-}
-
-function statusColor(status: string | null): string {
-  if (status === 'ok' || status === 'success') return 'positive'
-  if (status === null) return 'grey'
-  return 'negative'
-}
-
-// The watermark only advances past a failing window after stuck_threshold failures in a row, so the
-// warning starts one failure before that. A zero streak never warns, even for a threshold of 1.
-function streakWarns(c: CollectorState): boolean {
-  return c.consecutive_failures > 0 && c.consecutive_failures >= c.stuck_threshold - 1
 }
 
 async function onToggle(c: CollectorState, value: boolean) {
@@ -467,7 +439,7 @@ async function onToggle(c: CollectorState, value: boolean) {
     c.active = previous
     const message = errorText(error)
     toggleErrors[c.source] = message
-    $q.notify({ type: 'negative', message: `Could not change ${c.source}: ${message}` })
+    $q.notify({ type: 'negative', message: `Could not change ${humanize(c.source)}: ${message}` })
   } finally {
     toggling.value = false
   }
@@ -507,11 +479,11 @@ async function pollRuns() {
         endWatch(source)
         $q.notify({
           type: attempt?.status === 'ok' || attempt?.status === 'success' ? 'positive' : 'warning',
-          message: `${source}: run finished (${attempt?.status ?? 'unknown'})`,
+          message: `${humanize(source)}: run finished (${attempt?.status ?? 'unknown'})`,
         })
       } else if (Date.now() - watch.startedAt > RUN_TIMEOUT_MS) {
         endWatch(source)
-        $q.notify({ type: 'warning', message: `${source}: still running; reload to see the result later` })
+        $q.notify({ type: 'warning', message: `${humanize(source)}: still running; reload to see the result later` })
       }
     }
   } catch {
@@ -536,16 +508,29 @@ async function onRun(c: CollectorState) {
       type: 'negative',
       message: error instanceof ApiError && error.status === 409
         ? 'A run is already in progress'
-        : `Could not start ${c.source}: ${errorText(error)}`,
+        : `Could not start ${humanize(c.source)}: ${errorText(error)}`,
     })
     return
   }
-  $q.notify({ type: 'positive', message: `Started ${c.source}` })
+  $q.notify({ type: 'positive', message: `Started ${humanize(c.source)}` })
   runWatch.set(c.source, { baseline: c.last_attempt?.at ?? null, startedAt: Date.now() })
   if (runTimer === null) {
     runPollFailures = 0
     runTimer = setInterval(() => void pollRuns(), RUN_POLL_MS)
   }
+}
+
+/** Confirms before starting a run: collecting writes data, so a stray click should not trigger it. */
+function confirmRun(c: CollectorState) {
+  $q.dialog({
+    title: 'Run now?',
+    message: `Collect from ${humanize(c.source)} now?`,
+    persistent: true,
+    cancel: { label: 'Cancel', flat: true, noCaps: true },
+    ok: { label: 'Run now', color: 'primary', noCaps: true },
+  }).onOk(() => {
+    void onRun(c)
+  })
 }
 
 // --- dry run -------------------------------------------------------------------------------------
@@ -661,7 +646,7 @@ async function onStartDryRun() {
   }
 }
 
-// --- reset watermark -----------------------------------------------------------------------------
+// --- start over (reset watermark) -----------------------------------------------------------------
 
 const RESET_OPTIONS: Array<{ key: string; value: number | null; label: string }> = [
   ...[1, 2, 3, 4, 5, 6, 7].map((days) => ({
@@ -669,7 +654,7 @@ const RESET_OPTIONS: Array<{ key: string; value: number | null; label: string }>
     value: days,
     label: days === 1 ? '1 day back' : `${days} days back`,
   })),
-  { key: 'none', value: null, label: 'No watermark' },
+  { key: 'none', value: null, label: 'From scratch' },
 ]
 
 const resetSource = ref<string | null>(null)
@@ -697,7 +682,7 @@ async function onReset() {
   resetError.value = null
   try {
     resetOutcome.value = await api.resetCollector(source, resetChoice.value ?? undefined)
-    $q.notify({ type: 'positive', message: `Reset the watermark of ${source}` })
+    $q.notify({ type: 'positive', message: `${humanize(source)} will start over` })
     await load(true)
   } catch (error) {
     resetError.value = errorText(error)
@@ -709,16 +694,26 @@ async function onReset() {
 // --- clear failures ------------------------------------------------------------------------------
 
 async function onClear(c: CollectorState) {
-  clearing[c.source] = true
   try {
     await api.clearFailures(c.source)
-    $q.notify({ type: 'positive', message: `Cleared the failure streak of ${c.source}` })
+    $q.notify({ type: 'positive', message: `Cleared the failures of ${humanize(c.source)}` })
     await load(true)
   } catch (error) {
-    $q.notify({ type: 'negative', message: `Could not clear ${c.source}: ${errorText(error)}` })
-  } finally {
-    clearing[c.source] = false
+    $q.notify({ type: 'negative', message: `Could not clear ${humanize(c.source)}: ${errorText(error)}` })
   }
+}
+
+/** Confirms before clearing: it discards the record of what failed. */
+function confirmClear(c: CollectorState) {
+  $q.dialog({
+    title: 'Clear failures?',
+    message: `Clear the failure count for ${humanize(c.source)}? SignalSlate will try again as if nothing failed.`,
+    persistent: true,
+    cancel: { label: 'Cancel', flat: true, noCaps: true },
+    ok: { label: 'Clear failures', color: 'negative', noCaps: true },
+  }).onOk(() => {
+    void onClear(c)
+  })
 }
 
 // --- items ---------------------------------------------------------------------------------------
