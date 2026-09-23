@@ -5,15 +5,7 @@ import type { VueWrapper } from '@vue/test-utils'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import { QLayout, QPageContainer } from 'quasar'
 import CollectorsPage from '~/pages/collectors.vue'
-import type {
-  CollectorState,
-  DigestConfig,
-  DryRunJob,
-  DryRunResult,
-  ItemDetail,
-  ItemPage,
-  ItemRow,
-} from '~/composables/useApi'
+import type { CollectorState, DigestConfig, DryRunJob, DryRunResult } from '~/composables/useApi'
 
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString().replace(/\.\d+Z$/, 'Z')
 
@@ -28,10 +20,6 @@ function collector(overrides: Partial<CollectorState> = {}): CollectorState {
     item_count: 42,
     ...overrides,
   }
-}
-
-function itemRow(id: number, overrides: Partial<ItemRow> = {}): ItemRow {
-  return { id, item_type: 'message', external_id: `ext-${id}`, occurred_at: ago(60), preview: `preview ${id}`, ...overrides }
 }
 
 const DRY_RESULT: DryRunResult = {
@@ -65,8 +53,6 @@ interface State {
   dryRun: () => DryRunJob | Error
   reset: (body: { days_back: number | null }) => unknown
   clear: () => unknown
-  items: (params: Record<string, unknown>) => ItemPage | Error
-  item: (id: number) => ItemDetail | Error
 }
 
 let calls: Call[]
@@ -85,8 +71,6 @@ function freshState(): State {
     dryRun: () => ({ status: 'done', result: DRY_RESULT }),
     reset: (body) => ({ source: 'zoom', watermark: null, note: `API note for ${JSON.stringify(body)}` }),
     clear: () => ({ source: 'zoom', consecutive_failures: 0 }),
-    items: () => ({ items: [], next_before_id: null, total: 0 }),
-    item: (id) => ({ id, item_type: 'message', external_id: `ext-${id}`, occurred_at: ago(60), payload: '{}', truncated: false }),
   }
 }
 
@@ -112,9 +96,6 @@ function stubApi() {
       if (method === 'POST' && path.endsWith('/dry-run')) return answer(state.startDryRun)
       if (method === 'POST' && path.endsWith('/reset')) return answer(state.reset(body))
       if (method === 'POST' && path.endsWith('/clear-failures')) return answer(state.clear())
-      const itemMatch = /^\/api\/collectors\/[^/]+\/items\/(\d+)$/.exec(path)
-      if (method === 'GET' && itemMatch) return answer(state.item(Number(itemMatch[1])))
-      if (method === 'GET' && /^\/api\/collectors\/[^/]+\/items$/.test(path)) return answer(state.items(options.params ?? {}))
       throw new Error(`unexpected ${method} ${path}`)
     },
   )
@@ -583,112 +564,11 @@ describe('start over (reset watermark) and clear failures', () => {
     expect(post?.headers?.['X-Requested-With']).toBe('signalslate')
     expect(rowOf('zoom').querySelector('[data-testid="streak-warning"]')).toBeNull()
   })
-})
 
-describe('item browser', () => {
-  async function openItems() {
+  it('the Items button links to the source items route', async () => {
     await mountPage()
-    inRow('zoom', 'collector-browse').click()
-    await vi.waitFor(() => expect($('items-dialog')).not.toBeNull())
-    await flushPromises()
-  }
-
-  it('shows the private-content notice and the empty state', async () => {
-    await openItems()
-    expect($('items-notice')?.textContent).toContain('private message content')
-    expect($('items-empty')).not.toBeNull()
-  })
-
-  it('pages with next_before_id and appends the next page', async () => {
-    state.items = (params) =>
-      params.before_id === undefined
-        ? { items: [itemRow(9), itemRow(8)], next_before_id: 8, total: 3 }
-        : { items: [itemRow(7)], next_before_id: null, total: 3 }
-    await openItems()
-
-    expect($$('item-row').map((row) => row.textContent)).toEqual([
-      expect.stringContaining('preview 9'),
-      expect.stringContaining('preview 8'),
-    ])
-    expect($('items-total')?.textContent).toContain('Showing 2 of 3')
-    const first = calls.find((call) => call.path === '/api/collectors/zoom/items')
-    expect(first?.params).toMatchObject({ limit: 50 })
-    expect(first?.params?.before_id).toBeUndefined()
-
-    await click('items-more')
-
-    const itemCalls = calls.filter((call) => call.path === '/api/collectors/zoom/items')
-    expect(itemCalls[1]?.params?.before_id).toBe(8)
-    expect($$('item-row')).toHaveLength(3)
-    expect($$('item-row')[2]?.textContent).toContain('preview 7')
-    expect($('items-more')).toBeNull()
-    expect($('items-total')?.textContent).toContain('Showing 3 of 3')
-  })
-
-  it('the item type filter restarts the list with item_type', async () => {
-    state.items = (params) =>
-      params.item_type === 'file'
-        ? { items: [itemRow(4, { item_type: 'file', preview: 'only file' })], next_before_id: null, total: 1 }
-        : { items: [itemRow(9), itemRow(8)], next_before_id: 8, total: 5 }
-    await openItems()
-    expect($$('item-row')).toHaveLength(2)
-
-    await type('items-filter', 'file')
-    body.querySelector('[data-testid="items-dialog"] form')?.dispatchEvent(new Event('submit', { cancelable: true }))
-    await flushPromises()
-
-    const last = calls.filter((call) => call.path === '/api/collectors/zoom/items').at(-1)
-    expect(last?.params?.item_type).toBe('file')
-    expect(last?.params?.before_id).toBeUndefined()
-    expect($$('item-row').map((row) => row.textContent)).toEqual([expect.stringContaining('only file')])
-    expect($('items-more')).toBeNull()
-  })
-
-  it('shows the error state with a retry', async () => {
-    state.items = () => apiFailure(500, 'The store is unavailable')
-    await openItems()
-    expect($('items-error')?.textContent).toContain('The store is unavailable')
-
-    state.items = () => ({ items: [itemRow(1)], next_before_id: null, total: 1 })
-    $('items-error')?.querySelector('button')?.click()
-    await flushPromises()
-    expect($('items-error')).toBeNull()
-    expect($$('item-row')).toHaveLength(1)
-  })
-
-  it('renders a payload that contains HTML as text inside a pre, not as markup', async () => {
-    const payload = JSON.stringify({ body: '<img src=x onerror=alert(1)><b>bold</b>', from: 'a@example.com' }, null, 2)
-    state.items = () => ({ items: [itemRow(5, { preview: '<i>preview</i>' })], next_before_id: null, total: 1 })
-    state.item = (id) => ({ id, item_type: 'message', external_id: 'ext-5', occurred_at: ago(60), payload, truncated: true })
-    await openItems()
-
-    // The list preview is text too.
-    expect($$('item-row')[0]?.querySelector('i')).toBeNull()
-
-    await click('item-row')
-    await vi.waitFor(() => expect($('detail-payload')).not.toBeNull())
-
-    const pre = $('detail-payload')
-    expect(pre?.tagName).toBe('PRE')
-    expect(pre?.textContent).toBe(payload)
-    expect(pre?.querySelector('img')).toBeNull()
-    expect(pre?.querySelector('b')).toBeNull()
-    expect(body.querySelector('[data-testid="items-dialog"] img')).toBeNull()
-    expect($('detail-truncated')).not.toBeNull()
-    expect(calls.some((call) => call.path === '/api/collectors/zoom/items/5')).toBe(true)
-
-    await click('detail-back')
-    expect($('detail-payload')).toBeNull()
-    expect($$('item-row')).toHaveLength(1)
-  })
-
-  it('shows the API error when an item cannot be loaded', async () => {
-    state.items = () => ({ items: [itemRow(5)], next_before_id: null, total: 1 })
-    state.item = () => apiFailure(404, { code: 'item_not_found', message: 'Item not found' })
-    await openItems()
-    await click('item-row')
-    await vi.waitFor(() => expect($('detail-error')).not.toBeNull())
-    expect($('detail-error')?.textContent).toContain('Item not found')
-    expect($('detail-payload')).toBeNull()
+    const link = inRow('zoom', 'collector-browse') as HTMLAnchorElement
+    expect(link.getAttribute('href')).toBe('/collectors/zoom')
   })
 })
+
