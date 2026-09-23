@@ -1,0 +1,65 @@
+{
+  "$schema": "blitz-check-report/1.0",
+  "result": "FAIL",
+  "ts": "2026-09-23T19:55:44Z",
+  "ref": "e27212448f08bc28d3dc63e5a61a938fcee30882",
+  "scope": "plan",
+  "plan": "console-ux-overhaul",
+  "stacks": [
+    "python",
+    "node"
+  ],
+  "lanes": {
+    "deterministic": {
+      "selected": 41,
+      "ran": 36,
+      "pass": 30,
+      "finding": 6,
+      "error": 5
+    },
+    "semantic": {
+      "selected": 5,
+      "ran": 5,
+      "pass": 2,
+      "finding": 3,
+      "error": 0
+    }
+  },
+  "findings": [
+    {
+      "id": "critic",
+      "severity": "P1",
+      "where": "web/components/JobApplyDialog.vue:146",
+      "what": "Footer Close bypasses DialogShell dirty guard; unsaved cover letter lost (T-020 held-out)"
+    },
+    {
+      "id": "survey:frontend-A",
+      "severity": "P3",
+      "where": "web/pages/jobs/applications.vue:78",
+      "what": "Applications table not sortable"
+    },
+    {
+      "id": "survey:frontend-A",
+      "severity": "P3",
+      "where": "web/pages/connections.vue:76",
+      "what": "Raw ok/error test status instead of StatusChip"
+    },
+    {
+      "id": "survey:patterns",
+      "severity": "P3",
+      "where": "web/components/DomainTable.vue:168",
+      "what": "Mail-posture badge logic duplicated with DomainDetailDialog"
+    }
+  ],
+  "cannot_verify": [
+    "rendered UI at 375/1440 light+dark (e2e not run)"
+  ],
+  "critic": {
+    "mode": "reject",
+    "verdict": "REJECT"
+  },
+  "tasks": {
+    "verified": 21,
+    "failed": 0
+  }
+}

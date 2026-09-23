@@ -64,3 +64,4 @@ Concern (T-019, low): answer-bank Edit posts a new row (no PATCH/DELETE endpoint
 ## 2026-09-23T03:37:45Z verify T-021 ok=true
 ## 2026-09-23T03:37:45Z integration pass: nuxt build ok; web vitest 468/468; pytest 2903 passed; typecheck clean; every top-level page has PageHeader, every data view has AsyncState (directly or via its panel); no per-file helper copies; no unlabelled icon-only buttons
 ## 2026-09-23T03:37:45Z build complete 21/21
+## 2026-09-23T19:55:44Z check FAIL check-report.md

@@ -1,0 +1,67 @@
+{
+  "$schema": "blitz-ratchet/1.0",
+  "ref": "e27212448f08bc28d3dc63e5a61a938fcee30882",
+  "plan": "console-ux-overhaul",
+  "updated_at": "2026-09-23T19:50:02Z",
+  "metrics": {
+    "test_count": {
+      "baseline": 404,
+      "current": 404,
+      "min_allowed": 404,
+      "direction": "up",
+      "note": "web vitest it()/test() in web/tests; python tests tracked by pytest (2903 passing)"
+    },
+    "type_errors": {
+      "baseline": 0,
+      "current": 0,
+      "max_allowed": 0,
+      "direction": "down",
+      "absolute_floor": 0,
+      "note": "cd web && npx nuxt typecheck"
+    },
+    "as_any_count": {
+      "baseline": 0,
+      "current": 0,
+      "max_allowed": 0,
+      "direction": "down"
+    },
+    "lint_violations": {
+      "baseline": null,
+      "current": null,
+      "max_allowed": null,
+      "direction": "down",
+      "note": "no linter configured (web has no eslint; python has no ruff/flake8)"
+    },
+    "completeness_score": {
+      "baseline": null,
+      "current": null,
+      "min_allowed": null,
+      "direction": "up",
+      "note": "not measured"
+    },
+    "mocks_in_src": {
+      "baseline": 0,
+      "current": 0,
+      "max_allowed": 0,
+      "direction": "down"
+    },
+    "todo_count": {
+      "baseline": 0,
+      "current": 0,
+      "max_allowed": 0,
+      "direction": "down"
+    },
+    "stale_worktree_branch_count": {
+      "baseline": 21,
+      "current": 21,
+      "max_allowed": 21,
+      "direction": "down",
+      "note": "agent worktrees left by the console-ux-overhaul build; prune with /blitz:sessions worktrees --apply"
+    }
+  },
+  "auto_revert": {
+    "enabled": true,
+    "needs_human_label": "ratchet-regression"
+  },
+  "history": []
+}
