@@ -3,65 +3,89 @@
     <q-card-section class="q-gutter-sm">
       <div class="text-h6">Domain ideas</div>
 
-      <div>
-        <div class="row items-center q-gutter-xs">
-          <q-input
-            v-model="seedInput"
-            dense
-            outlined
-            label="Seed word"
-            data-testid="ideas-seed-input"
-            @keyup.enter="addSeed"
-          />
-          <q-btn flat dense no-caps label="Add" data-testid="ideas-seed-add" @click="addSeed" />
-        </div>
-        <div class="row items-center q-gutter-xs q-mt-xs" data-testid="ideas-seeds">
+      <q-select
+        v-model="seeds"
+        multiple
+        use-chips
+        new-value-mode="add-unique"
+        dense
+        outlined
+        label="Seed words"
+        hint="Type a word and press Enter to add it"
+        data-testid="ideas-seed-input"
+        @new-value="onNewSeed"
+      >
+        <template #selected-item="scope">
           <q-chip
-            v-for="word in seeds"
-            :key="word"
             removable
-            :data-testid="`ideas-seed-${word}`"
-            @remove="removeSeed(word)"
+            dense
+            :data-testid="`ideas-seed-${scope.opt}`"
+            @remove="scope.removeAtIndex(scope.index)"
           >
-            {{ word }}
+            {{ scope.opt }}
           </q-chip>
-        </div>
-      </div>
+        </template>
+      </q-select>
 
-      <div>
-        <div class="row items-center q-gutter-xs">
-          <q-input
-            v-model="tldInput"
-            dense
-            outlined
-            label="TLD"
-            data-testid="ideas-tld-input"
-            @keyup.enter="addTld"
-          />
-          <q-btn flat dense no-caps label="Add" data-testid="ideas-tld-add" @click="addTld" />
-        </div>
-        <div class="row items-center q-gutter-xs q-mt-xs" data-testid="ideas-tlds">
+      <q-select
+        v-model="tlds"
+        multiple
+        use-chips
+        new-value-mode="add-unique"
+        dense
+        outlined
+        label="TLDs"
+        hint="Type a TLD, e.g. com, and press Enter"
+        data-testid="ideas-tld-input"
+        @new-value="onNewTld"
+      >
+        <template #selected-item="scope">
           <q-chip
-            v-for="tld in tlds"
-            :key="tld"
             removable
-            :data-testid="`ideas-tld-${tld}`"
-            @remove="removeTld(tld)"
+            dense
+            :data-testid="`ideas-tld-${scope.opt}`"
+            @remove="scope.removeAtIndex(scope.index)"
           >
-            .{{ tld }}
+            .{{ scope.opt }}
           </q-chip>
-        </div>
-      </div>
+        </template>
+      </q-select>
 
       <q-input
         v-model="brief"
         type="textarea"
         outlined
         dense
-        label="Brief (optional, required to use Claude)"
+        label="Describe the project (optional)"
+        hint="Used to generate smarter name ideas with Claude"
         data-testid="ideas-brief"
       />
       <q-toggle v-model="useLlm" label="Use Claude to brainstorm additional names" data-testid="ideas-use-llm" />
+
+      <div class="row items-center q-gutter-sm">
+        <q-select
+          v-model="registrarConnectionId"
+          :options="registrarOptions"
+          emit-value
+          map-options
+          dense
+          outlined
+          clearable
+          label="Registrar connection"
+          style="min-width: 220px"
+          data-testid="ideas-registrar-select"
+        />
+        <NuxtLink
+          v-if="!connectionsError && registrarOptions.length === 0"
+          to="/connections"
+          data-testid="ideas-connect-registrar"
+        >
+          Connect a registrar
+        </NuxtLink>
+      </div>
+      <q-banner v-if="connectionsError" dense class="bg-negative text-white" data-testid="ideas-connections-error">
+        {{ connectionsError }}
+      </q-banner>
 
       <div class="row items-center q-gutter-sm">
         <q-btn
@@ -102,18 +126,6 @@
 
       <template v-else>
         <div class="row items-center q-gutter-sm q-mb-sm">
-          <q-select
-            v-model="registrarConnectionId"
-            :options="registrarOptions"
-            emit-value
-            map-options
-            dense
-            outlined
-            clearable
-            label="Registrar connection"
-            style="min-width: 220px"
-            data-testid="ideas-registrar-select"
-          />
           <q-btn
             color="primary"
             no-caps
@@ -133,9 +145,6 @@
         </q-banner>
         <q-banner v-if="checkError" dense class="bg-negative text-white" data-testid="ideas-check-error">
           {{ checkError }}
-        </q-banner>
-        <q-banner v-if="connectionsError" dense class="bg-negative text-white" data-testid="ideas-connections-error">
-          {{ connectionsError }}
         </q-banner>
 
         <div style="overflow-x: auto">
@@ -161,13 +170,13 @@
                 </td>
                 <td>{{ candidate.name }}</td>
                 <td>
-                  <q-badge :color="statusColor(candidate.status)" :data-testid="`ideas-status-${candidate.name}`">
-                    {{ statusLabel(candidate.status) }}
-                  </q-badge>
+                  <span :data-testid="`ideas-status-${candidate.name}`">
+                    <StatusChip kind="domain" :value="candidate.status" dense />
+                  </span>
                 </td>
                 <td :data-testid="`ideas-quote-${candidate.name}`">
                   <template v-if="checkResults[candidate.name]">
-                    {{ formatMoney(checkResults[candidate.name].price) }} {{ checkResults[candidate.name].currency }}
+                    {{ formatMoney(Number(checkResults[candidate.name].price), checkResults[candidate.name].currency) }}
                     <q-badge v-if="checkResults[candidate.name].premium" color="warning" text-color="black">
                       Premium
                     </q-badge>
@@ -175,6 +184,17 @@
                   <span v-else class="text-grey-8">&mdash;</span>
                 </td>
                 <td>
+                  <q-btn
+                    color="primary"
+                    dense
+                    no-caps
+                    label="Buy"
+                    :disable="buyDisabled"
+                    :data-testid="`ideas-buy-${candidate.name}`"
+                    @click="onBuyClick(candidate.name)"
+                  >
+                    <q-tooltip v-if="buyDisabledReason">{{ buyDisabledReason }}</q-tooltip>
+                  </q-btn>
                   <q-btn
                     flat
                     dense
@@ -191,16 +211,6 @@
                   <span v-if="watchErrors[candidate.name]" class="text-negative q-ml-xs" :data-testid="`ideas-watch-error-${candidate.name}`">
                     {{ watchErrors[candidate.name] }}
                   </span>
-                  <q-btn
-                    flat
-                    dense
-                    no-caps
-                    color="primary"
-                    label="Buy"
-                    :disable="!registrarConnectionId"
-                    :data-testid="`ideas-buy-${candidate.name}`"
-                    @click="onBuyClick(candidate.name)"
-                  />
                 </td>
               </tr>
             </tbody>
@@ -214,8 +224,10 @@
       :open="buyOpen"
       :name="buyName"
       :connection-id="buyConnectionId"
+      :connection-label="buyConnectionLabel"
       @update:open="buyOpen = $event"
       @closed="buyOpen = false"
+      @purchased="onPurchased"
     />
   </q-card>
 </template>
@@ -225,7 +237,9 @@ import { ApiError } from '~/composables/useApi'
 import { useApi } from '~/composables/useApi'
 import type { ConnectionView } from '~/composables/useApi'
 import { useDomainsApi } from '~/composables/useDomainsApi'
-import type { CandidateOut, QuoteOut } from '~/composables/useDomainsApi'
+import type { CandidateOut, PurchaseOut, QuoteOut } from '~/composables/useDomainsApi'
+import DomainPurchaseDialog from '~/components/DomainPurchaseDialog.vue'
+import StatusChip from '~/components/ui/StatusChip.vue'
 
 // api/routers/domain_buy.py CheckBody.names: list[str] = Field(min_length=1, max_length=50).
 const MAX_CHECK_NAMES = 50
@@ -233,41 +247,27 @@ const MAX_CHECK_NAMES = 50
 const api = useApi()
 const domainsApi = useDomainsApi()
 
-function errorMessage(err: unknown): string {
-  return err instanceof ApiError ? err.message : 'Something went wrong'
-}
+const emit = defineEmits<{
+  purchased: [purchase: PurchaseOut]
+}>()
 
-function formatMoney(value: string | number): string {
-  const amount = Number(value)
-  return Number.isFinite(amount) ? amount.toFixed(2) : String(value)
-}
-
-// Seed words
-const seedInput = ref('')
+// Seed words. The q-select owns its own typed-text buffer; `add-unique` mode via the `new-value`
+// handler below normalizes (trim/lowercase) before adding to `seeds`.
 const seeds = ref<string[]>([])
 
-function addSeed() {
-  const value = seedInput.value.trim().toLowerCase()
-  if (value && !seeds.value.includes(value)) seeds.value = [...seeds.value, value]
-  seedInput.value = ''
-}
-
-function removeSeed(word: string) {
-  seeds.value = seeds.value.filter((w) => w !== word)
+function onNewSeed(value: string, done: (value?: string, mode?: 'add-unique') => void) {
+  const normalized = value.trim().toLowerCase()
+  if (normalized) done(normalized, 'add-unique')
+  else done()
 }
 
 // TLDs
-const tldInput = ref('')
 const tlds = ref<string[]>([])
 
-function addTld() {
-  const value = tldInput.value.trim().toLowerCase().replace(/^\.+/, '')
-  if (value && !tlds.value.includes(value)) tlds.value = [...tlds.value, value]
-  tldInput.value = ''
-}
-
-function removeTld(tld: string) {
-  tlds.value = tlds.value.filter((t) => t !== tld)
+function onNewTld(value: string, done: (value?: string, mode?: 'add-unique') => void) {
+  const normalized = value.trim().toLowerCase().replace(/^\.+/, '')
+  if (normalized) done(normalized, 'add-unique')
+  else done()
 }
 
 // Brief + LLM toggle
@@ -304,7 +304,7 @@ async function onGenerate() {
     checkError.value = null
     notEligibleNote.value = null
   } catch (err) {
-    generateError.value = errorMessage(err)
+    generateError.value = errorText(err)
   } finally {
     generating.value = false
   }
@@ -327,23 +327,12 @@ function toggleSelect(name: string, checked: boolean) {
   }
 }
 
-function statusLabel(status: string): string {
-  if (status === 'likely_available') return 'Likely available'
-  if (status === 'taken') return 'Taken'
-  return 'Unknown'
-}
-
-function statusColor(status: string): string {
-  if (status === 'likely_available') return 'positive'
-  if (status === 'taken') return 'negative'
-  return 'grey-6'
-}
-
 // Registrar connections (namecheap/godaddy support check(); wordpress raises Unsupported, so it is
 // left out of this picker).
 const connections = ref<ConnectionView[]>([])
 const connectionsError = ref<string | null>(null)
 const registrarConnectionId = ref<string | null>(null)
+const purchasingEnabled = ref<boolean | null>(null)
 
 const registrarOptions = computed(() =>
   connections.value
@@ -356,12 +345,31 @@ async function loadConnections() {
   try {
     connections.value = await api.listConnections()
   } catch (err) {
-    connectionsError.value = errorMessage(err)
+    connectionsError.value = errorText(err)
+  }
+}
+
+async function loadPurchaseSettings() {
+  try {
+    const settings = await domainsApi.getPurchaseSettings()
+    purchasingEnabled.value = settings.enabled
+  } catch {
+    // Buy stays enabled-by-default on this failure; the purchase dialog itself surfaces the real
+    // settings error when the user actually tries to buy.
+    purchasingEnabled.value = null
   }
 }
 
 onMounted(() => {
   void loadConnections()
+  void loadPurchaseSettings()
+})
+
+const buyDisabled = computed(() => !registrarConnectionId.value || purchasingEnabled.value === false)
+const buyDisabledReason = computed(() => {
+  if (!registrarConnectionId.value) return 'Select a registrar connection first.'
+  if (purchasingEnabled.value === false) return 'Purchasing is turned off on this server.'
+  return null
 })
 
 // Registrar check
@@ -388,7 +396,7 @@ async function onCheck() {
     checkResults.value = next
   } catch (err) {
     if (err instanceof ApiError && err.code === 'not_eligible') notEligibleNote.value = err.message
-    else checkError.value = errorMessage(err)
+    else checkError.value = errorText(err)
   } finally {
     checking.value = false
   }
@@ -408,7 +416,7 @@ async function onWatch(name: string) {
     await domainsApi.addDomain({ name, ownership: 'watched' })
     watchedNames.value = new Set(watchedNames.value).add(name)
   } catch (err) {
-    watchErrors.value = { ...watchErrors.value, [name]: errorMessage(err) }
+    watchErrors.value = { ...watchErrors.value, [name]: errorText(err) }
   } finally {
     watchingName.value = null
   }
@@ -418,11 +426,20 @@ async function onWatch(name: string) {
 const buyOpen = ref(false)
 const buyName = ref('')
 const buyConnectionId = ref('')
+const buyConnectionLabel = ref<string | undefined>(undefined)
 
 function onBuyClick(name: string) {
   if (!registrarConnectionId.value) return
+  const connection = connections.value.find((c) => c.id === registrarConnectionId.value)
   buyName.value = name
   buyConnectionId.value = registrarConnectionId.value
+  buyConnectionLabel.value = connection ? `${connection.label} (${connection.kind})` : undefined
   buyOpen.value = true
+}
+
+/** Bubbles a completed purchase attempt to the ideas route, which notifies once and nudges the
+ * shared domains refresh signal so Portfolio/Watchlist/Purchases refetch next time they're visited. */
+function onPurchased(purchase: PurchaseOut) {
+  emit('purchased', purchase)
 }
 </script>

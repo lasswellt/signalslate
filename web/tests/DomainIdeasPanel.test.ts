@@ -122,12 +122,34 @@ async function mountPanel() {
   return wrapper
 }
 
+/** Finds a q-select by its `data-testid`, driving it the same way as the pre-existing registrar
+ * select tests: directly via its component `v-model` event, bypassing QSelect's popup DOM. */
+function findSelect(testid: string) {
+  const wrapper = mounted[mounted.length - 1]!
+  // QSelect forwards data-testid to its internal focus-target input, not its own root element, so
+  // match on that rather than the component's own top-level attrs.
+  const select = wrapper.findAllComponents({ name: 'QSelect' }).find((c) => c.find(`[data-testid="${testid}"]`).exists())
+  if (!select) throw new Error(`no select ${testid}`)
+  return select
+}
+
+async function addChip(testid: string, value: string) {
+  const select = findSelect(testid)
+  const current = (select.props('modelValue') as string[] | null) ?? []
+  await select.vm.$emit('update:model-value', [...current, value])
+  await flushPromises()
+}
+
+async function selectValue(testid: string, value: string) {
+  const select = findSelect(testid)
+  await select.vm.$emit('update:model-value', value)
+  await flushPromises()
+}
+
 /** Fills in a seed word and a TLD and clicks Generate, resolving once the results table renders. */
 async function generate() {
-  await setInput('ideas-seed-input', 'acmehq')
-  await click('ideas-seed-add')
-  await setInput('ideas-tld-input', 'com')
-  await click('ideas-tld-add')
+  await addChip('ideas-seed-input', 'acmehq')
+  await addChip('ideas-tld-input', 'com')
   await click('ideas-generate')
 }
 
@@ -152,17 +174,15 @@ afterEach(() => {
 })
 
 describe('seeds and TLDs', () => {
-  it('adds and removes seed and TLD chips, gating Generate on having at least one of each', async () => {
+  it('adds seed and TLD chips via q-select, gating Generate on having at least one of each', async () => {
     await mountPanel()
     expect($<HTMLButtonElement>('ideas-generate')?.disabled).toBe(true)
 
-    await setInput('ideas-seed-input', 'acmehq')
-    await click('ideas-seed-add')
+    await addChip('ideas-seed-input', 'acmehq')
     expect($('ideas-seed-acmehq')).not.toBeNull()
     expect($<HTMLButtonElement>('ideas-generate')?.disabled).toBe(true)
 
-    await setInput('ideas-tld-input', 'com')
-    await click('ideas-tld-add')
+    await addChip('ideas-tld-input', 'com')
     expect($('ideas-tld-com')).not.toBeNull()
     expect($<HTMLButtonElement>('ideas-generate')?.disabled).toBe(false)
   })
@@ -218,9 +238,7 @@ describe('checking with a registrar', () => {
     await generate()
 
     await click('ideas-select-acmehq.com')
-    const select = mounted[mounted.length - 1]!.findAllComponents({ name: 'QSelect' })[0]!
-    await select.vm.$emit('update:model-value', 'godaddy:main')
-    await flushPromises()
+    await selectValue('ideas-registrar-select', 'godaddy:main')
     expect($<HTMLButtonElement>('ideas-check')?.disabled).toBe(false)
 
     await click('ideas-check')
@@ -238,9 +256,7 @@ describe('checking with a registrar', () => {
     await generate()
 
     await click('ideas-select-acmehq.com')
-    const select = mounted[mounted.length - 1]!.findAllComponents({ name: 'QSelect' })[0]!
-    await select.vm.$emit('update:model-value', 'godaddy:main')
-    await flushPromises()
+    await selectValue('ideas-registrar-select', 'godaddy:main')
 
     await click('ideas-check')
     expect($('ideas-not-eligible')?.textContent).toContain('availability needs >=50 domains or $20/mo spend')
@@ -276,9 +292,7 @@ describe('buy', () => {
     await mountPanel()
     await generate()
 
-    const select = mounted[mounted.length - 1]!.findAllComponents({ name: 'QSelect' })[0]!
-    await select.vm.$emit('update:model-value', 'godaddy:main')
-    await flushPromises()
+    await selectValue('ideas-registrar-select', 'godaddy:main')
 
     await click('ideas-buy-acmehq.com')
     expect($('domain-purchase-dialog')).not.toBeNull()

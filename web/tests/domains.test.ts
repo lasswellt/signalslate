@@ -486,7 +486,10 @@ describe('purchases route (/domains/purchases)', () => {
   it('shows the purchases list', async () => {
     stubApi({ purchases: [purchase()] })
     await mountPage('/domains/purchases')
-    expect($('purchases-table')?.textContent).toContain('quote-1')
+    // api/routers/domain_buy.py's PurchaseOut has no domain name (only quote_id, an opaque store id);
+    // the table shows the purchase's own id instead of that internal id.
+    expect($('purchases-table')?.textContent).toContain('#1')
+    expect($('purchases-table')?.textContent).toContain('12.00')
   })
 
   it('shows the purchases empty state', async () => {
