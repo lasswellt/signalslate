@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "console-ux-overhaul",
-  "updated": "2026-09-23T03:20:42Z",
+  "updated": "2026-09-23T03:29:28Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1054,11 +1054,53 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "in_progress",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-23T03:29:28Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "cd web && npx vitest run tests/DomainIdeasPanel.test.ts tests/DomainPurchaseDialog.test.ts tests/domains.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 4097,
+            "tail": "nUpdate:modelValue\" prop.\n\nstderr | tests/DomainIdeasPanel.test.ts > watch > shows an inline error when watching fails\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\nstderr | tests/DomainIdeasPanel.test.ts > buy > opens the purchase dialog for the selected registrar connection\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\nstderr | tests/DomainIdeasPanel.test.ts > buy > opens the purchase dialog for the selected registrar connection\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\nstderr | tests/DomainIdeasPanel.test.ts > buy > opens the purchase dialog for the selected registrar connection\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n···stderr | tests/DomainIdeasPanel.test.ts > buy > keeps Buy disabled until a registrar connection is selected\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\nstderr | tests/DomainIdeasPanel.test.ts > buy > keeps Buy disabled until a registrar connection is selected\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n························\n\n Test Files  3 passed (3)\n      Tests  50 passed (50)\n   Start at  23:29:25\n   Duration  2.85s (tests 44%, transform 39%, environment 8%, import 7%, setup 2%)\n\n  Transform  transforming modules took 3.01s · 39% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-09-23T03:29:28Z"
+          },
+          {
+            "cmd": "test -f web/pages/domains/purchases.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:29:28Z"
+          },
+          {
+            "cmd": "grep -q '@purchased' web/components/DomainIdeasPanel.vue web/pages/domains/ideas.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:29:28Z"
+          },
+          {
+            "cmd": "! grep -q 'DOMAINS_PURCHASE_ENABLED' web/components/DomainPurchaseDialog.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:29:28Z"
+          },
+          {
+            "cmd": "! grep -q 'quote_id' web/pages/domains/purchases.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:29:28Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": ""
     },

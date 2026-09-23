@@ -55,3 +55,5 @@ Note (2026-09-23T03:19:24Z): main has 1 failing test (jobs.test.ts 'job-title' t
 Ruling: regression-fix — T-018 dropped the open/closed status filter and 3-way remote filter; restored as q-btn-toggles, closed postings marked; job-title → dialog-title after T-020 (T-018, round 2)
 ## 2026-09-23T03:20:42Z build T-019 start (attempt 1) wave 5
 Note (2026-09-23T03:21:24Z): late T-018 commit 96e5181 (job-title→dialog-title) superseded by main-thread fix on main; not merged.
+## 2026-09-23T03:31:06Z verify T-015 ok=true
+Ruling: scope-expansion — PurchaseOut lacked a domain name; main thread added read-only name/currency (owner allowed small read-only API additions) (T-015, round 2)
