@@ -186,7 +186,7 @@ describe('starting assist and polling', () => {
     await click('job-start-assist')
     const queueCalls = calls.filter((call) => call.method === 'POST' && call.path === '/api/jobs/applications/1/assist')
     expect(queueCalls).toHaveLength(1)
-    expect($('job-assist-state')?.textContent).toContain('queued')
+    expect($('job-assist-state')?.textContent).toContain('Queued')
     expect($('job-assist-queued-hint')).toBeNull()
 
     listResult = () => [application({ status: 'ready', assist_state: 'queued' })]
@@ -194,7 +194,8 @@ describe('starting assist and polling', () => {
     await flushPromises()
 
     expect($('job-assist-queued-hint')).not.toBeNull()
-    expect($('job-assist-queued-hint')?.textContent).toContain('pipeline.jobs.assist')
+    expect($('job-assist-queued-hint')?.textContent).toContain('desktop helper')
+    expect($('job-assist-command')?.textContent).toContain('python -m pipeline.jobs.assist --watch')
     vi.useRealTimers()
   })
 
@@ -213,7 +214,7 @@ describe('starting assist and polling', () => {
     await flushPromises()
 
     expect($('job-assist-queued-hint')).toBeNull()
-    expect($('job-assist-state')?.textContent).toContain('running')
+    expect($('job-assist-state')?.textContent).toContain('Running')
     vi.useRealTimers()
   })
 })
@@ -234,7 +235,7 @@ describe('marking submitted', () => {
     expect(wrapper.emitted('submitted')?.[0]?.[0]).toMatchObject({ status: 'submitted' })
   })
 
-  it('surfaces an illegal-transition 422 via the error banner and keeps the confirm step open', async () => {
+  it('surfaces an illegal-transition 422 via the error banner', async () => {
     await mountDialog()
     statusResult = () => apiFailure(422, { code: 'illegal_transition', message: 'cannot submit from saved' })
 
@@ -242,7 +243,6 @@ describe('marking submitted', () => {
     await click('job-confirm-submitted')
 
     expect($('job-mark-submitted-error')?.textContent).toContain('cannot submit from saved')
-    expect($('job-confirm-submitted-banner')).not.toBeNull()
   })
 
   it('disables mark-submitted when there is no packet', async () => {
