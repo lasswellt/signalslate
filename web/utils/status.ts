@@ -151,6 +151,49 @@ function fitMeta(value: number | null): StatusMeta {
   return { color: 'negative', icon: 'error', label }
 }
 
+/** Normalized mail-posture flags shared by DomainTable and DomainDetailDialog; each adapts its own API shape into this. */
+export interface MailPosture {
+  spf: boolean
+  dkim: boolean
+  /** Raw DMARC policy (reject/quarantine/none), or null when no DMARC record exists. */
+  dmarcPolicy: string | null
+  mtaSts: boolean
+  bimi: boolean
+}
+
+export interface MailBadge {
+  key: string
+  label: string
+  color: string
+  icon: string
+}
+
+/**
+ * Shared SPF/DMARC/DKIM/MTA-STS/BIMI badges. DMARC has three states (enforced/weak/missing); the
+ * rest are present/missing. `dmarcPolicyLabel` preserves each caller's original wording: false gives
+ * DomainTable's generic "DMARC enforced"/"DMARC weak"/"DMARC missing"; true gives
+ * DomainDetailDialog's literal "DMARC <policy>"/"DMARC missing".
+ * @param mail - Normalized mail-posture flags.
+ * @param dmarcPolicyLabel - When true, a non-missing DMARC label shows the raw policy value.
+ * @returns One badge per mail control, in SPF/DMARC/DKIM/MTA-STS/BIMI order.
+ */
+export function mailBadges(mail: MailPosture, dmarcPolicyLabel = false): MailBadge[] {
+  const dmarcColor = mail.dmarcPolicy === 'reject' ? 'positive' : mail.dmarcPolicy ? 'warning' : 'negative'
+  const dmarcLabel = mail.dmarcPolicy === null
+    ? 'DMARC missing'
+    : dmarcPolicyLabel
+      ? `DMARC ${mail.dmarcPolicy}`
+      : mail.dmarcPolicy === 'reject' ? 'DMARC enforced' : 'DMARC weak'
+  const dmarcIcon = mail.dmarcPolicy === 'reject' ? 'check_circle' : mail.dmarcPolicy ? 'warning' : 'error'
+  return [
+    { key: 'spf', label: mail.spf ? 'SPF present' : 'SPF missing', color: mail.spf ? 'positive' : 'negative', icon: mail.spf ? 'check_circle' : 'error' },
+    { key: 'dmarc', label: dmarcLabel, color: dmarcColor, icon: dmarcIcon },
+    { key: 'dkim', label: mail.dkim ? 'DKIM present' : 'DKIM missing', color: mail.dkim ? 'positive' : 'negative', icon: mail.dkim ? 'check_circle' : 'error' },
+    { key: 'mta-sts', label: mail.mtaSts ? 'MTA-STS present' : 'MTA-STS missing', color: mail.mtaSts ? 'positive' : 'negative', icon: mail.mtaSts ? 'check_circle' : 'error' },
+    { key: 'bimi', label: mail.bimi ? 'BIMI present' : 'BIMI missing', color: mail.bimi ? 'positive' : 'negative', icon: mail.bimi ? 'check_circle' : 'error' },
+  ]
+}
+
 /**
  * Maps a status kind + raw value to a Quasar color, an icon name and a human label.
  * @param kind - Which status vocabulary `value` belongs to.

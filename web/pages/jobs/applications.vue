@@ -64,6 +64,7 @@ import type { QTableColumn } from 'quasar'
 import AsyncState from '~/components/ui/AsyncState.vue'
 import StatusChip from '~/components/ui/StatusChip.vue'
 import JobApplyDialog from '~/components/JobApplyDialog.vue'
+import { parseUtc } from '~/composables/useApi'
 import { useJobsApi } from '~/composables/useJobsApi'
 import type { ApplicationOut } from '~/composables/useJobsApi'
 
@@ -75,12 +76,18 @@ const loadError = ref<string | null>(null)
 
 const pagination = ref({ sortBy: 'created_at', descending: true, rowsPerPage: 25, page: 1 })
 
+// Chronological compare for the Created column: values are ISO timestamps (Z suffix), parsed via
+// parseUtc so a naive string compare quirk can never creep in.
+function sortByCreatedAt(a: string, b: string): number {
+  return parseUtc(a).getTime() - parseUtc(b).getTime()
+}
+
 const columns: QTableColumn[] = [
-  { name: 'posting_title', label: 'Job', field: 'posting_title', align: 'left' },
-  { name: 'company_name', label: 'Company', field: 'company_name', align: 'left' },
-  { name: 'status', label: 'Status', field: 'status', align: 'left' },
+  { name: 'posting_title', label: 'Job', field: 'posting_title', align: 'left', sortable: true },
+  { name: 'company_name', label: 'Company', field: 'company_name', align: 'left', sortable: true },
+  { name: 'status', label: 'Status', field: 'status', align: 'left', sortable: true },
   { name: 'assist_state', label: 'Assistant', field: 'assist_state', align: 'left' },
-  { name: 'created_at', label: 'Created', field: 'created_at', align: 'left' },
+  { name: 'created_at', label: 'Created', field: 'created_at', align: 'left', sortable: true, sort: sortByCreatedAt },
 ]
 
 async function load(silent = false) {

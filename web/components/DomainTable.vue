@@ -46,7 +46,7 @@
             <span v-else-if="rowProps.row.mail.status !== 'ok'" class="text-grey-8">Unavailable</span>
             <div v-else class="row q-gutter-xs">
               <q-badge
-                v-for="badge in mailBadges(rowProps.row.mail)"
+                v-for="badge in domainMailBadges(rowProps.row.mail)"
                 :key="badge.key"
                 :color="badge.color"
                 :data-testid="`mail-badge-${rowProps.row.name}-${badge.key}`"
@@ -63,6 +63,7 @@
 
 <script setup lang="ts">
 import { parseUtc } from '~/composables/useApi'
+import { mailBadges, type MailBadge } from '~/utils/status'
 import type { DomainOut } from '~/composables/useDomainsApi'
 
 /**
@@ -152,32 +153,13 @@ function statusSortValue(row: DomainOut): number {
   return 3
 }
 
-interface MailBadge {
-  key: string
-  label: string
-  color: string
-}
-
 /**
- * Per-record mail-posture badges: text conveys the state (never colour alone). DMARC has three
- * states (enforced/weak/missing) matching DomainDetailDialog's mailBadges semantics; the rest are
- * present/missing.
+ * Adapts this table's mail-posture summary shape into the shared `mailBadges()` input.
  * @param mail - The domain's mail posture summary.
- * @returns One badge per mail control.
+ * @returns One badge per mail control (SPF/DMARC/DKIM/MTA-STS/BIMI).
  */
-function mailBadges(mail: DomainOut['mail']): MailBadge[] {
-  const dmarc: MailBadge = mail.dmarc_policy === 'reject'
-    ? { key: 'dmarc', label: 'DMARC enforced', color: 'positive' }
-    : mail.dmarc_policy
-      ? { key: 'dmarc', label: 'DMARC weak', color: 'warning' }
-      : { key: 'dmarc', label: 'DMARC missing', color: 'negative' }
-  return [
-    { key: 'spf', label: mail.spf ? 'SPF present' : 'SPF missing', color: mail.spf ? 'positive' : 'negative' },
-    dmarc,
-    { key: 'dkim', label: mail.dkim ? 'DKIM present' : 'DKIM missing', color: mail.dkim ? 'positive' : 'negative' },
-    { key: 'mta-sts', label: mail.mta_sts ? 'MTA-STS present' : 'MTA-STS missing', color: mail.mta_sts ? 'positive' : 'negative' },
-    { key: 'bimi', label: mail.bimi ? 'BIMI present' : 'BIMI missing', color: mail.bimi ? 'positive' : 'negative' },
-  ]
+function domainMailBadges(mail: DomainOut['mail']): MailBadge[] {
+  return mailBadges({ spf: mail.spf, dkim: mail.dkim, dmarcPolicy: mail.dmarc_policy, mtaSts: mail.mta_sts, bimi: mail.bimi })
 }
 </script>
 

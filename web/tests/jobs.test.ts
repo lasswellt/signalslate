@@ -173,6 +173,7 @@ describe('jobs postings page', () => {
   })
 
   it('re-fetches postings with the min-score filter applied', async () => {
+    vi.useFakeTimers()
     stubApi({ postings: [posting()] })
     await mount(IndexHarness)
 
@@ -180,10 +181,14 @@ describe('jobs postings page', () => {
     if (!input) throw new Error('no min score input')
     input.value = '75'
     input.dispatchEvent(new Event('input'))
+
+    // The input's :debounce="300" delays the v-model update before the watch can re-fetch.
+    await vi.advanceTimersByTimeAsync(300)
     await flushPromises()
 
     const call = calls.find((c) => c.method === 'GET' && c.path === '/api/jobs/postings' && c.params?.min_score === '75')
     expect(call).toBeDefined()
+    vi.useRealTimers()
   })
 
   it('debounces the text search before re-fetching', async () => {
@@ -249,6 +254,7 @@ describe('jobs postings page', () => {
   })
 
   it('shows the no-match empty state with Clear filters when a filter is active and nothing matches', async () => {
+    vi.useFakeTimers()
     stubApi({ postings: [] })
     await mount(IndexHarness)
 
@@ -256,11 +262,15 @@ describe('jobs postings page', () => {
     if (!input) throw new Error('no min score input')
     input.value = '90'
     input.dispatchEvent(new Event('input'))
+
+    // The input's :debounce="300" delays the v-model update before the watch can re-fetch.
+    await vi.advanceTimersByTimeAsync(300)
     await flushPromises()
 
     expect($('postings-empty')).not.toBeNull()
     expect($('postings-empty-none')).toBeNull()
     expect($('postings-clear-filters')).not.toBeNull()
+    vi.useRealTimers()
   })
 
   it('opens JobDetailDialog when a posting row is clicked', async () => {

@@ -20,6 +20,7 @@
           type="number"
           :min="0"
           :max="100"
+          :debounce="300"
           label="Min fit score"
           data-testid="postings-filter-min-score"
         />

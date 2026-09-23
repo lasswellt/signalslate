@@ -74,7 +74,7 @@
                 </q-banner>
                 <div class="row q-gutter-sm">
                   <q-badge
-                    v-for="badge in mailBadges"
+                    v-for="badge in mailBadgeList"
                     :key="badge.key"
                     :color="badge.color"
                     :data-testid="`mail-badge-${badge.key}`"
@@ -214,6 +214,7 @@ import { useDomainsApi } from '~/composables/useDomainsApi'
 import type { InspectOut, SnapshotSummary } from '~/composables/useDomainsApi'
 import DialogShell from '~/components/ui/DialogShell.vue'
 import StatusChip from '~/components/ui/StatusChip.vue'
+import { mailBadges, type MailBadge, type MailPosture } from '~/utils/status'
 
 const props = defineProps<{
   open: boolean
@@ -281,12 +282,6 @@ interface DnsRecordView {
   error: string | null
 }
 
-interface MailBadge {
-  key: string
-  label: string
-  color: string
-}
-
 interface Snapshot {
   dns: unknown
   mail: unknown
@@ -338,31 +333,25 @@ const mailSection = computed<Record<string, unknown> | null>(() => (isRecord(sna
 const mailStatus = computed(() => asString(mailSection.value?.status) ?? 'error')
 const mailError = computed(() => asString(mailSection.value?.error))
 const isParked = computed(() => asStringArray(mailSection.value?.flags).some((flag) => flag.includes('parked')))
-const mailBadges = computed<MailBadge[]>(() => {
+
+/** Adapts this dialog's raw inspect-payload mail shape into the shared `mailBadges()` input. */
+const mailPosture = computed<MailPosture | null>(() => {
   const mail = mailSection.value
-  if (!mail) return []
+  if (!mail) return null
   const spf = isRecord(mail.spf) ? mail.spf : null
   const dmarc = isRecord(mail.dmarc) ? mail.dmarc : null
   const dkimEntries = isRecord(mail.dkim) ? Object.values(mail.dkim) : []
-  const dkimPresent = dkimEntries.some((entry) => isRecord(entry) && asBool(entry.present))
   const mtaSts = isRecord(mail.mta_sts) ? mail.mta_sts : null
   const bimi = isRecord(mail.bimi) ? mail.bimi : null
-  const spfPresent = asBool(spf?.present)
-  const dmarcPolicy = asString(dmarc?.policy)
-  const mtaStsFetched = asBool(mtaSts?.policy_fetched)
-  const bimiPresent = asBool(bimi?.present)
-  return [
-    { key: 'spf', label: spfPresent ? 'SPF present' : 'SPF missing', color: spfPresent ? 'positive' : 'negative' },
-    {
-      key: 'dmarc',
-      label: dmarcPolicy ? `DMARC ${dmarcPolicy}` : 'DMARC missing',
-      color: dmarcPolicy === 'reject' ? 'positive' : dmarcPolicy ? 'warning' : 'negative',
-    },
-    { key: 'dkim', label: dkimPresent ? 'DKIM present' : 'DKIM missing', color: dkimPresent ? 'positive' : 'negative' },
-    { key: 'mta-sts', label: mtaStsFetched ? 'MTA-STS present' : 'MTA-STS missing', color: mtaStsFetched ? 'positive' : 'negative' },
-    { key: 'bimi', label: bimiPresent ? 'BIMI present' : 'BIMI missing', color: bimiPresent ? 'positive' : 'negative' },
-  ]
+  return {
+    spf: asBool(spf?.present),
+    dkim: dkimEntries.some((entry) => isRecord(entry) && asBool(entry.present)),
+    dmarcPolicy: asString(dmarc?.policy),
+    mtaSts: asBool(mtaSts?.policy_fetched),
+    bimi: asBool(bimi?.present),
+  }
 })
+const mailBadgeList = computed<MailBadge[]>(() => (mailPosture.value ? mailBadges(mailPosture.value, true) : []))
 
 const rdapSection = computed<Record<string, unknown> | null>(() => (isRecord(snapshot.value?.rdap) ? snapshot.value.rdap : null))
 const rdapStatus = computed(() => asString(rdapSection.value?.status) ?? 'error')

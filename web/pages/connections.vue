@@ -67,13 +67,9 @@
             <div v-if="toggleErrors[conn.id]" class="q-mt-sm text-negative" data-testid="toggle-error">
               {{ toggleErrors[conn.id] }}
             </div>
-            <div
-              v-if="testResults[conn.id]"
-              class="q-mt-sm"
-              :class="testResults[conn.id]?.status === 'ok' ? 'text-positive' : 'text-negative'"
-              data-testid="test-result"
-            >
-              {{ testResults[conn.id]?.status }}: {{ testResults[conn.id]?.detail }}
+            <div v-if="testResults[conn.id]" class="row items-center q-gutter-sm q-mt-sm" data-testid="test-result">
+              <StatusChip kind="health" :value="testResults[conn.id]?.status ?? null" dense />
+              <span>{{ testResults[conn.id]?.detail }}</span>
             </div>
           </q-card-section>
 
