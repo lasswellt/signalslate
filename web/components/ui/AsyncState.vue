@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import EmptyState from './EmptyState.vue'
 /**
  * Wraps a data-driven view's three states (loading / error / empty) plus the loaded content,
  * per DESIGN.md's "Empty / loading / error states" section. Pages/panels pass their fetch state in
@@ -58,13 +59,15 @@ defineSlots<{
     <q-btn flat no-caps color="primary" label="Retry" data-testid="retry" @click="$emit('retry')" />
   </div>
 
-  <div v-else-if="empty" data-testid="empty-state" class="column items-center text-center q-pa-lg">
+  <template v-else-if="empty">
     <slot name="empty">
-      <q-icon :name="props.emptyIcon" size="48px" color="grey-5" />
-      <div v-if="props.emptyTitle" class="text-subtitle1 q-mt-sm">{{ props.emptyTitle }}</div>
-      <div class="text-body2 text-grey-7 q-mt-xs">{{ props.emptyMessage }}</div>
+      <EmptyState
+        :icon="props.emptyIcon"
+        :title="props.emptyTitle ?? props.emptyMessage"
+        :message="props.emptyTitle ? props.emptyMessage : undefined"
+      />
     </slot>
-  </div>
+  </template>
 
   <slot v-else />
 </template>
