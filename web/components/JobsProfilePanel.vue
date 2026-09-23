@@ -227,7 +227,7 @@
               v-model="resumeFile"
               dense
               outlined
-              accept=".pdf,.docx"
+              accept=".pdf,application/pdf"
               label="Choose a resume file"
               data-testid="jobs-resume-file"
               @update:model-value="resumeError = null"
