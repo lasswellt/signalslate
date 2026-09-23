@@ -39,3 +39,4 @@ Ruling: integration — reconcile ConnectionDialog.test.ts 'connections page' bl
 ## 2026-09-23T03:07:05Z build wave 2 4/4 done
 ## 2026-09-23T03:09:11Z verify T-012 ok=true
 ## 2026-09-23T03:09:11Z build T-013 start (attempt 1) wave 4
+## 2026-09-23T03:11:03Z verify T-008 ok=true

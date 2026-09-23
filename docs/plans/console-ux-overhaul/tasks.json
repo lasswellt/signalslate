@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "console-ux-overhaul",
-  "updated": "2026-09-23T03:09:11Z",
+  "updated": "2026-09-23T03:10:56Z",
   "tasks": [
     {
       "id": "T-001",
@@ -542,11 +542,46 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "in_progress",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-23T03:10:56Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "cd web && npx vitest run tests/history --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3641,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/history-detail.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/history.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n···························\n\n Test Files  2 passed (2)\n      Tests  27 passed (27)\n   Start at  23:10:53\n   Duration  2.42s (transform 50%, tests 32%, environment 8%, import 8%, setup 2%)\n\n  Transform  transforming modules took 2.32s · 50% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-09-23T03:10:55Z"
+          },
+          {
+            "cmd": "grep -q 'rowsPerPage' web/pages/history.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:10:55Z"
+          },
+          {
+            "cmd": "grep -q 'HealthList' 'web/pages/history/[id].vue'",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:10:56Z"
+          },
+          {
+            "cmd": "! grep -nE 'function (formatDate|statusColor)' web/pages/history.vue 'web/pages/history/[id].vue'",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:10:56Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": ""
     },
