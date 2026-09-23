@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "console-ux-overhaul",
-  "updated": "2026-09-23T03:07:05Z",
+  "updated": "2026-09-23T03:09:11Z",
   "tasks": [
     {
       "id": "T-001",
@@ -801,11 +801,46 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "in_progress",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-23T03:09:11Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "cd web && npx vitest run tests/collectors.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 4700,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/collectors.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·····························\n\n Test Files  1 passed (1)\n      Tests  29 passed (29)\n   Start at  23:09:07\n   Duration  3.41s (tests 54%, transform 34%, environment 5%, import 5%, setup 1%)",
+            "recorded_at": "2026-09-23T03:09:11Z"
+          },
+          {
+            "cmd": "grep -q 'StatusChip' web/pages/collectors.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:09:11Z"
+          },
+          {
+            "cmd": "! grep -qE '>\\s*Watermark' web/pages/collectors.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:09:11Z"
+          },
+          {
+            "cmd": "! grep -nE 'function (statusColor|errorText|relativeTime)' web/pages/collectors.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:09:11Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": ""
     },
@@ -836,7 +871,7 @@
         }
       ],
       "passes": false,
-      "status": "open",
+      "status": "in_progress",
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": null,
