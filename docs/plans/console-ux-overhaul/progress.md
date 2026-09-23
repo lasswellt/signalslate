@@ -15,3 +15,11 @@ Concern (T-002, low): domains.vue purchaseStatusColor uses submitted/confirmed/f
 ## 2026-09-23T02:40:39Z build T-004 start (attempt 1) wave 1
 ## 2026-09-23T02:40:39Z build T-005 start (attempt 1) wave 1
 ## 2026-09-23T02:40:39Z build T-006 start (attempt 1) wave 1
+## 2026-09-23T02:46:47Z verify T-004 ok=true
+## 2026-09-23T02:46:47Z verify T-005 ok=true
+## 2026-09-23T02:46:47Z verify T-006 ok=true
+## 2026-09-23T02:46:47Z build wave 1 3/3 done
+## 2026-09-23T02:46:47Z build T-007 start (attempt 1) wave 2
+## 2026-09-23T02:46:47Z build T-009 start (attempt 1) wave 2
+## 2026-09-23T02:46:47Z build T-010 start (attempt 1) wave 2
+## 2026-09-23T02:46:47Z build T-011 start (attempt 1) wave 2
