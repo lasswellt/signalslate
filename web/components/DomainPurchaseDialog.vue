@@ -1,12 +1,14 @@
 <template>
   <!-- Not persistent: a click outside or Esc is just Cancel here, same as the Cancel button; nothing
        typed survives a reopen (reset() runs every time the dialog opens). -->
-  <q-dialog :model-value="open" @update:model-value="onModelUpdate">
-    <q-card style="min-width: 360px; max-width: 480px; width: 100%" data-testid="domain-purchase-dialog">
-      <q-card-section>
-        <div class="text-h6" data-testid="dialog-title">Buy {{ name }}</div>
-      </q-card-section>
-
+  <div data-testid="domain-purchase-dialog">
+    <DialogShell
+      :model-value="open"
+      :title="dialogTitle"
+      :busy="submitting"
+      @update:model-value="(value: boolean) => emit('update:open', value)"
+      @close="() => emit('closed')"
+    >
       <q-card-section v-if="loading" data-testid="purchase-loading">
         <q-skeleton type="text" width="60%" />
         <q-skeleton type="text" width="40%" />
@@ -18,66 +20,64 @@
         <q-btn flat no-caps label="Retry" data-testid="purchase-retry" @click="load" />
       </q-card-section>
 
-      <template v-else-if="result">
-        <q-card-section data-testid="purchase-result">
-          <q-banner dense :class="resultBannerClass">{{ resultMessage }}</q-banner>
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat no-caps label="Close" data-testid="purchase-close" @click="close" />
-        </q-card-actions>
-      </template>
+      <q-card-section v-else-if="result" data-testid="purchase-result">
+        <q-banner dense :class="resultBannerClass">{{ resultMessage }}</q-banner>
+      </q-card-section>
 
-      <template v-else-if="quote && settings">
-        <q-card-section class="q-gutter-sm" data-testid="purchase-quote">
-          <div data-testid="purchase-registrar">Registrar connection: {{ connectionId }}</div>
+      <q-card-section v-else-if="quote && settings" class="q-gutter-sm" data-testid="purchase-quote">
+        <q-banner v-if="!settings.enabled" dense class="bg-warning text-black" data-testid="purchase-disabled-note">
+          Purchasing is turned off on this server. An administrator can enable it in the server settings.
+        </q-banner>
 
-          <div class="row items-center q-gutter-xs">
-            <span data-testid="purchase-first-year-price">First year: {{ formatMoney(quote.price) }} {{ quote.currency }}</span>
-            <q-badge v-if="quote.premium" color="warning" text-color="black" data-testid="purchase-premium-badge">Premium</q-badge>
-          </div>
-          <div data-testid="purchase-renewal-price">Renewal: {{ formatMoney(quote.renewal_price ?? quote.price) }} {{ quote.currency }}/yr</div>
-          <div data-testid="purchase-remaining-cap">Remaining today: {{ formatMoney(settings.remaining_today) }}</div>
+        <div data-testid="purchase-registrar">Registrar connection: {{ registrarLabel }}</div>
 
-          <div v-if="!isExpired" data-testid="purchase-countdown">Quote expires in {{ countdownText }}</div>
-          <div v-else class="row items-center q-gutter-sm" data-testid="purchase-expired">
-            <span>Quote expired.</span>
-            <q-btn flat dense no-caps color="primary" label="Get new quote" :loading="loading" data-testid="purchase-get-new-quote" @click="load" />
-          </div>
+        <div class="row items-center q-gutter-xs">
+          <span data-testid="purchase-first-year-price">First year: {{ formatMoney(Number(quote.price), quote.currency) }}</span>
+          <q-badge v-if="quote.premium" color="warning" text-color="black" data-testid="purchase-premium-badge">Premium</q-badge>
+        </div>
+        <div data-testid="purchase-renewal-price">Renewal: {{ formatMoney(Number(quote.renewal_price ?? quote.price), quote.currency) }}/yr</div>
+        <div data-testid="purchase-remaining-cap">Spending limit left today: {{ formatMoney(Number(settings.remaining_today), quote.currency) }}</div>
 
-          <q-select
-            v-model="years"
-            :options="YEAR_OPTIONS"
-            emit-value
-            map-options
-            label="Years"
-            outlined
-            dense
-            :disable="submitting"
-            data-testid="purchase-years"
-          />
-          <div data-testid="purchase-total">Total for {{ years }} year{{ years === 1 ? '' : 's' }}: {{ formatMoney(totalPrice) }} {{ quote.currency }}</div>
+        <div v-if="!isExpired" data-testid="purchase-countdown">Quote expires in {{ countdownText }}</div>
+        <div v-else class="row items-center q-gutter-sm" data-testid="purchase-expired">
+          <span>Quote expired.</span>
+          <q-btn flat dense no-caps color="primary" label="Get new quote" :loading="loading" data-testid="purchase-get-new-quote" @click="load" />
+        </div>
 
-          <q-input
-            v-model="confirmName"
-            label="Type the domain name to confirm"
-            outlined
-            dense
-            autocomplete="off"
-            :disable="submitting"
-            data-testid="purchase-confirm-name"
-          />
+        <q-select
+          v-model="years"
+          :options="YEAR_OPTIONS"
+          emit-value
+          map-options
+          label="Years"
+          outlined
+          dense
+          :disable="submitting"
+          data-testid="purchase-years"
+        />
+        <div data-testid="purchase-total">Total for {{ years }} year{{ years === 1 ? '' : 's' }}: {{ formatMoney(totalPrice, quote.currency) }}</div>
 
-          <q-banner v-if="!settings.enabled" dense class="bg-grey-3" data-testid="purchase-disabled-note">
-            Domain purchasing is disabled (DOMAINS_PURCHASE_ENABLED). Enable it to buy this domain.
-          </q-banner>
+        <q-input
+          v-model="confirmName"
+          label="Type the domain name to confirm"
+          outlined
+          dense
+          autocomplete="off"
+          :disable="submitting"
+          data-testid="purchase-confirm-name"
+        />
 
-          <q-banner v-if="submitError" dense class="bg-negative text-white" data-testid="purchase-error">
-            {{ submitError }}
-          </q-banner>
-        </q-card-section>
+        <q-banner v-if="submitError" dense class="bg-negative text-white" data-testid="purchase-error">
+          {{ submitError }}
+        </q-banner>
+      </q-card-section>
 
-        <q-card-actions align="right">
-          <q-btn flat no-caps label="Cancel" :disable="submitting" data-testid="purchase-cancel" @click="close" />
+      <template #actions>
+        <template v-if="result">
+          <q-btn flat no-caps label="Close" data-testid="purchase-close" @click="requestCloseNow" />
+        </template>
+        <template v-else-if="quote && settings">
+          <q-btn flat no-caps label="Cancel" :disable="submitting" data-testid="purchase-cancel" @click="requestCloseNow" />
           <q-btn
             color="primary"
             no-caps
@@ -87,21 +87,25 @@
             data-testid="purchase-buy"
             @click="onBuy"
           />
-        </q-card-actions>
+        </template>
       </template>
-    </q-card>
-  </q-dialog>
+    </DialogShell>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ApiError, parseUtc } from '~/composables/useApi'
 import { useDomainsApi } from '~/composables/useDomainsApi'
 import type { PurchaseOut, PurchaseRefusedReason, PurchaseSettingsOut, StoredQuoteOut } from '~/composables/useDomainsApi'
+import DialogShell from '~/components/ui/DialogShell.vue'
 
 const props = defineProps<{
   open: boolean
   name: string
   connectionId: string
+  /** Human label for the registrar connection (e.g. "Main GoDaddy (godaddy)"), when the caller has
+   * one on hand. Falls back to a humanized connectionId so this dialog never shows nothing. */
+  connectionLabel?: string
 }>()
 
 const emit = defineEmits<{
@@ -112,6 +116,9 @@ const emit = defineEmits<{
 
 const api = useDomainsApi()
 
+const dialogTitle = computed(() => `Buy ${props.name}`)
+const registrarLabel = computed(() => props.connectionLabel || humanize(props.connectionId))
+
 const YEAR_OPTIONS = Array.from({ length: 10 }, (_, index) => ({
   label: `${index + 1} year${index === 0 ? '' : 's'}`,
   value: index + 1,
@@ -121,11 +128,11 @@ const YEAR_OPTIONS = Array.from({ length: 10 }, (_, index) => ({
 // purchase.py) as-is as the 422 `code`; every value here mirrors PurchaseRefusedReason exactly.
 const REASON_LABELS: Record<PurchaseRefusedReason, string> = {
   missing_registrant_contact: 'No registrant contact is on file for this connection.',
-  purchase_disabled: 'Domain purchasing is disabled (DOMAINS_PURCHASE_ENABLED).',
+  purchase_disabled: 'Domain purchasing is disabled on this server. An administrator can enable it in the server settings.',
   quote_not_found: 'This quote could not be found; get a new one.',
   quote_expired: 'This quote has expired; get a new one.',
   name_mismatch: 'The typed name does not match the quoted domain.',
-  premium_blocked: 'Premium domains are disabled (DOMAINS_ALLOW_PREMIUM).',
+  premium_blocked: 'Premium domains are disabled on this server.',
   invalid_years: 'Years must be between 1 and 10.',
   invalid_price: 'The quote has an invalid price.',
   price_exceeds_cap: 'The total price exceeds the configured maximum price.',
@@ -151,13 +158,8 @@ const nowMs = ref(Date.now())
 let timer: ReturnType<typeof setInterval> | null = null
 
 function errorMessage(err: unknown): string {
-  if (err instanceof ApiError) return isReasonCode(err.code) ? REASON_LABELS[err.code] : err.message
-  return 'Something went wrong'
-}
-
-function formatMoney(value: string | number): string {
-  const amount = Number(value)
-  return Number.isFinite(amount) ? amount.toFixed(2) : String(value)
+  if (err instanceof ApiError && isReasonCode(err.code)) return REASON_LABELS[err.code]
+  return errorText(err)
 }
 
 /** Loads purchase settings and issues a fresh quote; run on open and again for "Get new quote". */
@@ -261,14 +263,11 @@ function reset() {
   result.value = null
 }
 
-function close() {
+/** Cancel/Close button handler: closes immediately, bypassing DialogShell's own busy/dirty guard
+ * (these buttons already gate themselves with :disable). */
+function requestCloseNow() {
   emit('update:open', false)
   emit('closed')
-}
-
-function onModelUpdate(value: boolean) {
-  emit('update:open', value)
-  if (!value) emit('closed')
 }
 
 watch(

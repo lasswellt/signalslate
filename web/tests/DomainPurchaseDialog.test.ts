@@ -150,7 +150,7 @@ describe('loading the quote', () => {
 describe('quote display', () => {
   it('shows registrar connection, first-year and renewal price, remaining cap, and no premium badge', async () => {
     await mountDialog()
-    expect($('purchase-registrar')?.textContent).toContain('godaddy:main')
+    expect($('purchase-registrar')?.textContent).toContain('Godaddy:main')
     expect($('purchase-first-year-price')?.textContent).toContain('12.00')
     expect($('purchase-renewal-price')?.textContent).toContain('15.00')
     expect($('purchase-remaining-cap')?.textContent).toContain('850.00')
@@ -218,7 +218,7 @@ describe('buy button gating', () => {
     await mountDialog()
     await setInput('purchase-confirm-name', 'example.com')
     expect($<HTMLButtonElement>('purchase-buy')?.disabled).toBe(true)
-    expect($('purchase-disabled-note')?.textContent).toContain('DOMAINS_PURCHASE_ENABLED')
+    expect($('purchase-disabled-note')?.textContent).toContain('Purchasing is turned off on this server')
   })
 
   it('stays disabled when the typed name does not exactly match', async () => {
