@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "console-ux-overhaul",
-  "updated": "2026-09-23T02:33:27Z",
+  "updated": "2026-09-23T02:40:22Z",
   "tasks": [
     {
       "id": "T-001",
@@ -30,11 +30,46 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "in_progress",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-23T02:40:01Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "cd web && npx vitest run tests/format.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 2974,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/format.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n··············································\n\n Test Files  1 passed (1)\n      Tests  46 passed (46)\n   Start at  22:39:59\n   Duration  1.72s (tests 80%, environment 11%, transform 4%, setup 3%, import 1%)",
+            "recorded_at": "2026-09-23T02:40:01Z"
+          },
+          {
+            "cmd": "grep -qE 'export function formatMoney' web/utils/format.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T02:40:01Z"
+          },
+          {
+            "cmd": "grep -qE 'export function (formatDuration|relativeTime|humanize)' web/utils/format.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T02:40:01Z"
+          },
+          {
+            "cmd": "grep -q 'Intl.NumberFormat' web/utils/format.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T02:40:01Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Replaces 6 formatDate copies (index, history, [id], collectors, domains, jobs, dialogs) and relativeTime copies (connections:209, collectors:421). Nuxt auto-imports web/utils/."
     },
@@ -62,11 +97,39 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "in_progress",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-23T02:40:04Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "cd web && npx vitest run tests/status.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3103,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/status.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·············\n\n Test Files  1 passed (1)\n      Tests  13 passed (13)\n   Start at  22:40:02\n   Duration  1.81s (tests 82%, environment 10%, transform 4%, setup 2%, import 1%)",
+            "recorded_at": "2026-09-23T02:40:04Z"
+          },
+          {
+            "cmd": "grep -qE 'export function statusMeta' web/utils/status.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T02:40:04Z"
+          },
+          {
+            "cmd": "grep -qE 'export function errorText' web/utils/errors.ts",
+            "exit": 0,
+            "duration_ms": 3,
+            "tail": "",
+            "recorded_at": "2026-09-23T02:40:04Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "partial -> warning everywhere (collectors.vue:442 shows it red today). Covers run/health, purchase, application, confidence, fit mappers."
     },
@@ -102,11 +165,53 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "in_progress",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-23T02:40:22Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "test -f web/DESIGN.md",
+            "exit": 0,
+            "duration_ms": 3,
+            "tail": "",
+            "recorded_at": "2026-09-23T02:40:18Z"
+          },
+          {
+            "cmd": "grep -q 'brand' web/nuxt.config.ts",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-23T02:40:18Z"
+          },
+          {
+            "cmd": "grep -qE \"'Dark'\" web/nuxt.config.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T02:40:18Z"
+          },
+          {
+            "cmd": "grep -q 'page-container' web/assets/css/app.scss",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T02:40:18Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/smoke.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3235,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/smoke.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·\n\n Test Files  1 passed (1)\n      Tests  1 passed (1)\n   Start at  22:40:20\n   Duration  1.91s (transform 39%, tests 38%, environment 10%, import 9%, setup 2%)",
+            "recorded_at": "2026-09-23T02:40:22Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Calm ops console: neutral surfaces, one accent, compact density, status = icon+label. If dark:auto breaks happy-dom, stub matchMedia in test setup."
     },
@@ -640,11 +745,46 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "in_progress",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-23T02:40:06Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "venv/bin/pytest tests/test_api_job_apply.py -q",
+            "exit": 0,
+            "duration_ms": 1654,
+            "tail": "...............................                                          [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.12/site-packages/starlette/testclient.py:40\n  /home/lasswellt/Projects/signalslate/venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n31 passed, 1 warning in 1.32s",
+            "recorded_at": "2026-09-23T02:40:06Z"
+          },
+          {
+            "cmd": "grep -q 'posting_title' api/routers/job_apply.py",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-23T02:40:06Z"
+          },
+          {
+            "cmd": "grep -q 'posting_title' web/composables/useJobsApi.ts",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-23T02:40:06Z"
+          },
+          {
+            "cmd": "grep -q 'posting_title' tests/test_api_job_apply.py",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T02:40:06Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Read-only addition; no schema migration. ApplicationOut at api/routers/job_apply.py:432."
     },
