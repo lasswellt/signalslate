@@ -157,7 +157,8 @@ const result = ref<PurchaseOut | null>(null)
 const nowMs = ref(Date.now())
 let timer: ReturnType<typeof setInterval> | null = null
 
-function errorMessage(err: unknown): string {
+// Refusal codes get their plain-language label; everything else goes through the shared errorText.
+function purchaseErrorText(err: unknown): string {
   if (err instanceof ApiError && isReasonCode(err.code)) return REASON_LABELS[err.code]
   return errorText(err)
 }
@@ -174,7 +175,7 @@ async function load() {
     settings.value = loadedSettings
     quote.value = loadedQuote
   } catch (err) {
-    loadError.value = errorMessage(err)
+    loadError.value = purchaseErrorText(err)
   } finally {
     loading.value = false
   }
@@ -246,7 +247,7 @@ async function onBuy() {
     result.value = purchase
     emit('purchased', purchase)
   } catch (err) {
-    submitError.value = errorMessage(err)
+    submitError.value = purchaseErrorText(err)
   } finally {
     submitting.value = false
   }
