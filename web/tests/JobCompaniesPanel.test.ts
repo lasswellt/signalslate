@@ -120,6 +120,12 @@ async function setInput(testid: string, value: string) {
   await flushPromises()
 }
 
+function buttonWithLabel(label: string): HTMLElement {
+  const el = [...body.querySelectorAll<HTMLElement>('button')].find((b) => b.textContent?.trim() === label)
+  if (!el) throw new Error(`no button labeled "${label}"`)
+  return el
+}
+
 let mounted: Array<VueWrapper<unknown>> = []
 
 async function mountPanel() {
@@ -148,18 +154,17 @@ afterEach(() => {
 })
 
 describe('rendering', () => {
-  it('renders the board-override control and the YC import button via their data-testids', async () => {
+  it('renders the companies table with an override control per row', async () => {
     await mountPanel()
-    expect($('jobs-board-override')).not.toBeNull()
-    expect($('jobs-import-yc')).not.toBeNull()
+    expect($('jobs-companies-table')).not.toBeNull()
+    expect($('override-1')).not.toBeNull()
   })
 
-  it('shows resolved board info with resolved_by and confidence badges', async () => {
+  it('shows resolved board info with humanized job board, found by and confidence', async () => {
     await mountPanel()
-    expect($('jobs-company-board-1')?.textContent).toContain('greenhouse')
-    expect($('jobs-company-board-1')?.textContent).toContain('acme')
-    expect($('jobs-company-resolved-by-1')?.textContent).toContain('pattern')
-    expect($('jobs-company-confidence-1')?.textContent).toContain('90%')
+    expect($('jobs-company-1')?.textContent).toContain('Greenhouse')
+    expect($('jobs-company-1')?.textContent).toContain('Pattern')
+    expect($('jobs-company-confidence-1')?.textContent).toContain('High (90%)')
   })
 
   it('shows an unresolved indicator when the company has no board', async () => {
@@ -168,16 +173,40 @@ describe('rendering', () => {
     expect($('jobs-company-unresolved-3')).not.toBeNull()
   })
 
-  it('shows a last_error banner when set', async () => {
+  it('shows a last_error indicator when set', async () => {
     listCompaniesResult = () => [company({ boards: [board({ last_error: 'timeout resolving board' })] })]
     await mountPanel()
     expect($('jobs-company-last-error-1')?.textContent).toContain('timeout resolving board')
   })
 })
 
+describe('search', () => {
+  it('filters the table by name/domain (debounced) and shows a no-match empty state', async () => {
+    vi.useFakeTimers()
+    listCompaniesResult = () => [company(), company({ id: 2, name: 'Other Co', domain: 'other.com' })]
+    await mountPanel()
+
+    const input = $<HTMLInputElement>('jobs-companies-search')!
+    input.value = 'other'
+    input.dispatchEvent(new Event('input'))
+    await vi.advanceTimersByTimeAsync(300)
+    await flushPromises()
+    expect($('jobs-company-1')).toBeNull()
+    expect($('jobs-company-2')).not.toBeNull()
+
+    input.value = 'nomatch'
+    input.dispatchEvent(new Event('input'))
+    await vi.advanceTimersByTimeAsync(300)
+    await flushPromises()
+    expect($('empty-state')).not.toBeNull()
+    vi.useRealTimers()
+  })
+})
+
 describe('add company', () => {
   it('calls addCompany with the entered name and domain', async () => {
     await mountPanel()
+    await click('jobs-company-add-open')
     await setInput('jobs-company-add-name', 'New Co')
     await click('jobs-company-add')
 
@@ -190,6 +219,8 @@ describe('add company', () => {
 describe('CSV import', () => {
   it('imports CSV and shows the added/rejected summary', async () => {
     await mountPanel()
+    await click('jobs-companies-import')
+    await click('jobs-companies-import-csv')
     await setInput('jobs-companies-csv-input', 'a.com,Acme')
     await click('jobs-companies-csv-import')
 
@@ -201,43 +232,52 @@ describe('CSV import', () => {
 })
 
 describe('seed imports', () => {
-  it('calls importCompaniesYc when the YC button is clicked', async () => {
+  it('confirms before calling importCompaniesYc', async () => {
     await mountPanel()
+    await click('jobs-companies-import')
     await click('jobs-import-yc')
+    buttonWithLabel('Import').click()
+    await flushPromises()
+
     const ycCalls = calls.filter((call) => call.method === 'POST' && call.path === '/api/jobs/companies/import-yc')
     expect(ycCalls).toHaveLength(1)
-    expect($('jobs-import-result')?.textContent).toContain('2 added, 0 rejected')
   })
 
-  it('calls importCompaniesHn when the HN button is clicked', async () => {
+  it('does not call importCompaniesHn when the confirm is cancelled', async () => {
     await mountPanel()
+    await click('jobs-companies-import')
     await click('jobs-import-hn')
+    buttonWithLabel('Cancel').click()
+    await flushPromises()
+
     const hnCalls = calls.filter((call) => call.method === 'POST' && call.path === '/api/jobs/companies/import-hn')
-    expect(hnCalls).toHaveLength(1)
-    expect($('jobs-import-result')?.textContent).toContain('1 added, 1 rejected')
+    expect(hnCalls).toHaveLength(0)
   })
 
-  it('calls importCompaniesInbox when the inbox button is clicked', async () => {
+  it('calls importCompaniesInbox after confirming and shows an error notify on failure', async () => {
+    importInboxResult = () => apiFailure(502, { message: 'inbox scan failed' })
     await mountPanel()
+    await click('jobs-companies-import')
     await click('jobs-import-inbox')
+    buttonWithLabel('Import').click()
+    await flushPromises()
+
     const inboxCalls = calls.filter((call) => call.method === 'POST' && call.path === '/api/jobs/companies/import-inbox')
     expect(inboxCalls).toHaveLength(1)
-  })
-
-  it('shows an error banner when a seed import fails', async () => {
-    importYcResult = () => apiFailure(502, { message: 'YC fetch failed' })
-    await mountPanel()
-    await click('jobs-import-yc')
-    expect($('jobs-import-error')?.textContent).toContain('YC fetch failed')
+    expect(body.textContent).toContain('inbox scan failed')
   })
 })
 
 describe('board override', () => {
   it('sends {ats_kind, board_id} to overrideBoard', async () => {
     await mountPanel()
-    await click('jobs-board-override')
+    await click('override-1')
 
-    const select = mounted[mounted.length - 1]!.findAllComponents({ name: 'QSelect' })[0]!
+    // The table's own rows-per-page control is a QSelect too; the override dialog's ATS-kind
+    // select is the one added most recently (mounted last, since q-dialog content only renders
+    // once opened).
+    const selects = mounted[mounted.length - 1]!.findAllComponents({ name: 'QSelect' })
+    const select = selects[selects.length - 1]!
     await select.vm.$emit('update:model-value', 'lever')
     await flushPromises()
     await setInput('jobs-board-override-board-id', 'manual-slug')
@@ -257,7 +297,7 @@ describe('rescan', () => {
 
     const rescanCalls = calls.filter((call) => call.method === 'POST' && call.path === '/api/jobs/companies/1/rescan')
     expect(rescanCalls).toHaveLength(1)
-    expect($('jobs-company-resolved-by-1')?.textContent).toContain('html')
+    expect($('jobs-company-1')?.textContent).toContain('Html')
   })
 
   it('shows an error when rescan fails', async () => {

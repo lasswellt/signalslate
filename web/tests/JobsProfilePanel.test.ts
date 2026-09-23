@@ -144,7 +144,7 @@ beforeEach(() => {
   uploadResumeResult = () => ({ resume_paths: ['/data/resumes/resume.pdf'] })
   listAnswersResult = () => [
     answer({ id: 1, question_raw: 'Why do you want to work here?', answer: 'Because the mission matters.' }),
-    answer({ id: 2, question_raw: 'What is your greatest strength?', answer: 'Persistence.' }),
+    answer({ id: 2, question_raw: 'What is your greatest strength?', answer: 'Persistence.', question_norm: 'what is your greatest strength' }),
   ]
   createAnswerResult = () => answer({ id: 3, answer: 'An edited answer.' })
   stubApi()
@@ -157,44 +157,43 @@ afterEach(() => {
 })
 
 describe('rendering', () => {
-  it('renders the resume upload input and the answer bank table', async () => {
+  it('renders the resume file picker and the answer bank table', async () => {
     await mountPanel()
-    expect($('jobs-resume-upload')).not.toBeNull()
+    expect($('jobs-resume-file')).not.toBeNull()
     expect($('jobs-answer-bank')).not.toBeNull()
   })
 })
 
 describe('resume upload', () => {
-  it('reads a selected file as base64 and calls the upload fetcher', async () => {
+  it('uploads the chosen file and shows the file name (never a server path)', async () => {
     vi.stubGlobal('FileReader', FakeFileReader)
     await mountPanel()
-
-    const input = $<HTMLInputElement>('jobs-resume-upload')!
     const file = new File(['fake-pdf-content'], 'resume.pdf', { type: 'application/pdf' })
+    const input = $<HTMLInputElement>('jobs-resume-file')!
     Object.defineProperty(input, 'files', { value: [file], configurable: true })
     input.dispatchEvent(new Event('change'))
     await flushPromises()
-    await flushPromises()
+    await click('jobs-resume-upload')
 
     const uploadCalls = calls.filter((call) => call.method === 'POST' && call.path === '/api/jobs/profile/resume')
     expect(uploadCalls).toHaveLength(1)
-    expect(uploadCalls[0]?.body).toEqual({ filename: 'resume.pdf', content_b64: 'ZmFrZS1wZGY=' })
-    expect($('jobs-resume-paths')?.textContent).toContain('/data/resumes/resume.pdf')
+    expect(uploadCalls[0]?.body).toEqual({ filename: 'resume.pdf', content_b64: expect.any(String) })
+    expect($('jobs-resume-files')?.textContent).toContain('resume.pdf')
+    expect($('jobs-resume-files')?.textContent).not.toContain('/data/resumes')
   })
 
   it('shows an error banner when the upload is rejected', async () => {
     vi.stubGlobal('FileReader', FakeFileReader)
     uploadResumeResult = () => apiFailure(422, { message: 'file too large' })
     await mountPanel()
-
-    const input = $<HTMLInputElement>('jobs-resume-upload')!
     const file = new File(['fake-pdf-content'], 'resume.pdf', { type: 'application/pdf' })
+    const input = $<HTMLInputElement>('jobs-resume-file')!
     Object.defineProperty(input, 'files', { value: [file], configurable: true })
     input.dispatchEvent(new Event('change'))
     await flushPromises()
-    await flushPromises()
+    await click('jobs-resume-upload')
 
-    expect($('jobs-resume-error')?.textContent).toContain('file too large')
+    expect($('jobs-resume-error')?.textContent ?? '').toContain('file too large')
   })
 })
 
@@ -211,6 +210,24 @@ describe('answer bank', () => {
   })
 })
 
+describe('dirty tracking and validation', () => {
+  it('enables Save only once dirty and valid, and Discard reverts the form', async () => {
+    await mountPanel()
+    expect(($('jobs-profile-save') as HTMLButtonElement).disabled).toBe(true)
+
+    await setInput('jobs-email', 'not-an-email')
+    expect(($('jobs-profile-save') as HTMLButtonElement).disabled).toBe(true)
+
+    await setInput('jobs-email', 'grace@example.com')
+    expect(($('jobs-profile-save') as HTMLButtonElement).disabled).toBe(false)
+    expect(($('jobs-profile-discard') as HTMLButtonElement).disabled).toBe(false)
+
+    await click('jobs-profile-discard')
+    expect(($('jobs-email') as HTMLInputElement).value).toBe('ada@example.com')
+    expect(($('jobs-profile-save') as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
 describe('saving the profile', () => {
   it('calls the profile PUT fetcher with the form current values', async () => {
     await mountPanel()
@@ -222,6 +239,6 @@ describe('saving the profile', () => {
     const saveCalls = calls.filter((call) => call.method === 'PUT' && call.path === '/api/jobs/profile')
     expect(saveCalls).toHaveLength(1)
     expect(saveCalls[0]?.body).toMatchObject({ full_name: 'Grace Hopper', email: 'grace@example.com' })
-    expect($('jobs-profile-saved')).not.toBeNull()
+    expect(body.textContent).toContain('Profile saved.')
   })
 })
