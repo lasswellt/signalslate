@@ -107,7 +107,7 @@ from sqlmodel import col, select
 from api.serialize import iso_z
 from pipeline import db
 from pipeline.clock import utcnow
-from pipeline.db import DB_PATH, AnswerBank, JobApplication, JobPosting, JobsProfile
+from pipeline.db import DB_PATH, AnswerBank, JobApplication, JobBoard, JobCompany, JobPosting, JobsProfile
 from pipeline.jobs import apply, normalize_title, packet
 from pipeline.jobs.assist import mapping
 
@@ -432,6 +432,8 @@ class PacketEditBody(BaseModel):
 class ApplicationOut(BaseModel):
     id: int
     posting_id: int
+    posting_title: Optional[str] = None
+    company_name: Optional[str] = None
     status: str
     packet: Optional[dict[str, Any]]
     cover_letter_path: Optional[str]
@@ -442,11 +444,17 @@ class ApplicationOut(BaseModel):
     submitted_at: Optional[str]
 
 
-def _application_out(row: JobApplication) -> ApplicationOut:
+def _application_out(
+    row: JobApplication,
+    posting_title: Optional[str] = None,
+    company_name: Optional[str] = None,
+) -> ApplicationOut:
     assert row.id is not None  # row came from a select()/get() or a just-committed insert
     return ApplicationOut(
         id=row.id,
         posting_id=row.posting_id,
+        posting_title=posting_title,
+        company_name=company_name,
         status=row.status,
         packet=json.loads(row.packet) if row.packet else None,
         cover_letter_path=row.cover_letter_path,
@@ -458,6 +466,58 @@ def _application_out(row: JobApplication) -> ApplicationOut:
     )
 
 
+def _posting_title_and_company(session, posting_id: int) -> tuple[Optional[str], Optional[str]]:
+    """Looks up one posting's title and its company's name via JobPosting -> JobBoard -> JobCompany,
+    for every single-row ApplicationOut call site (create/status/packet/assist/claim/session update).
+    list_applications uses _posting_titles_and_companies below instead, to avoid an N+1 query per
+    row (mirrors jobs.py's list_postings prefetch pattern)."""
+    posting = session.get(JobPosting, posting_id)
+    if posting is None:
+        return None, None
+    board = session.get(JobBoard, posting.board_id)
+    company_name = None
+    if board is not None:
+        company = session.get(JobCompany, board.company_id)
+        company_name = company.name if company is not None else None
+    return posting.title, company_name
+
+
+def _posting_titles_and_companies(
+    session, posting_ids: set[int]
+) -> dict[int, tuple[Optional[str], Optional[str]]]:
+    """Batch version of _posting_title_and_company for list_applications: one JobPosting query, one
+    JobBoard query and one JobCompany query for however many distinct postings/boards/companies the
+    listed applications reference, instead of a query per row."""
+    if not posting_ids:
+        return {}
+    postings = {
+        row.id: row
+        for row in session.exec(select(JobPosting).where(col(JobPosting.id).in_(posting_ids))).all()
+    }
+    board_ids = {posting.board_id for posting in postings.values()}
+    boards = {
+        row.id: row
+        for row in (
+            session.exec(select(JobBoard).where(col(JobBoard.id).in_(board_ids))).all() if board_ids else []
+        )
+    }
+    company_ids = {board.company_id for board in boards.values()}
+    companies = {
+        row.id: row.name
+        for row in (
+            session.exec(select(JobCompany).where(col(JobCompany.id).in_(company_ids))).all()
+            if company_ids
+            else []
+        )
+    }
+    out: dict[int, tuple[Optional[str], Optional[str]]] = {}
+    for posting_id, posting in postings.items():
+        board = boards.get(posting.board_id)
+        company_name = companies.get(board.company_id) if board is not None else None
+        out[posting_id] = (posting.title, company_name)
+    return out
+
+
 @router.get("/jobs/applications", response_model=list[ApplicationOut])
 def list_applications(status: Optional[_APPLICATION_STATUSES] = None) -> list[ApplicationOut]:
     """Every application, newest first, optionally filtered to one of the 8 canonical statuses."""
@@ -466,7 +526,8 @@ def list_applications(status: Optional[_APPLICATION_STATUSES] = None) -> list[Ap
         if status is not None:
             statement = statement.where(JobApplication.status == status)
         rows = session.exec(statement.order_by(col(JobApplication.created_at).desc())).all()
-        return [_application_out(row) for row in rows]
+        lookup = _posting_titles_and_companies(session, {row.posting_id for row in rows})
+        return [_application_out(row, *lookup.get(row.posting_id, (None, None))) for row in rows]
 
 
 @router.post("/jobs/applications", status_code=201, response_model=ApplicationOut)
@@ -486,7 +547,8 @@ def create_application(body: ApplicationCreateBody) -> ApplicationOut:
         session.add(row)
         session.commit()
         session.refresh(row)
-        return _application_out(row)
+        posting_title, company_name = _posting_title_and_company(session, row.posting_id)
+        return _application_out(row, posting_title, company_name)
 
 
 @router.patch("/jobs/applications/{id}", response_model=ApplicationOut)
@@ -506,7 +568,8 @@ def update_application_status(id: int, body: ApplicationStatusBody) -> Applicati
         session.add(row)
         session.commit()
         session.refresh(row)
-        return _application_out(row)
+        posting_title, company_name = _posting_title_and_company(session, row.posting_id)
+        return _application_out(row, posting_title, company_name)
 
 
 @router.post("/jobs/applications/{id}/packet", response_model=ApplicationOut)
@@ -522,7 +585,8 @@ def prepare_application_packet(id: int) -> ApplicationOut:
         if not ok:
             raise _coded(422, "packet_failed", reason)
         session.refresh(row)
-        return _application_out(row)
+        posting_title, company_name = _posting_title_and_company(session, row.posting_id)
+        return _application_out(row, posting_title, company_name)
 
 
 @router.put("/jobs/applications/{id}/packet", response_model=ApplicationOut)
@@ -539,7 +603,8 @@ def edit_application_packet(id: int, body: PacketEditBody) -> ApplicationOut:
         session.add(row)
         session.commit()
         session.refresh(row)
-        return _application_out(row)
+        posting_title, company_name = _posting_title_and_company(session, row.posting_id)
+        return _application_out(row, posting_title, company_name)
 
 
 # --- Apply assist: queue / claim / progress / files (T-024) ---------------------------------------
@@ -598,7 +663,8 @@ def queue_assist(id: int) -> ApplicationOut:
         session.add(row)
         session.commit()
         session.refresh(row)
-        return _application_out(row)
+        posting_title, company_name = _posting_title_and_company(session, row.posting_id)
+        return _application_out(row, posting_title, company_name)
 
 
 @router.get("/jobs/assist/queue", response_model=Optional[ApplicationOut])
@@ -613,7 +679,8 @@ def get_assist_queue_head() -> Optional[ApplicationOut]:
         ).first()
         if row is None:
             return None
-        return _application_out(row)
+        posting_title, company_name = _posting_title_and_company(session, row.posting_id)
+        return _application_out(row, posting_title, company_name)
 
 
 @router.post("/jobs/assist/queue/{id}/claim", response_model=ApplicationOut)
@@ -632,7 +699,8 @@ def claim_assist(id: int) -> ApplicationOut:
         session.add(row)
         session.commit()
         session.refresh(row)
-        return _application_out(row)
+        posting_title, company_name = _posting_title_and_company(session, row.posting_id)
+        return _application_out(row, posting_title, company_name)
 
 
 @router.patch("/jobs/assist/sessions/{session_id}", response_model=ApplicationOut)
@@ -672,7 +740,8 @@ def update_assist_session(session_id: str, body: AssistSessionUpdateBody) -> App
         session.add(row)
         session.commit()
         session.refresh(row)
-        return _application_out(row)
+        posting_title, company_name = _posting_title_and_company(session, row.posting_id)
+        return _application_out(row, posting_title, company_name)
 
 
 class ProposeBody(BaseModel):

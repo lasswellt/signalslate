@@ -306,6 +306,8 @@ def test_create_application_from_posting(client):
     assert body["posting_id"] == posting.id
     assert body["status"] == "saved"
     assert body["packet"] is None
+    assert body["posting_title"] == "Senior Engineer"
+    assert body["company_name"] == "Acme Corp"
 
 
 def test_create_application_posting_not_found_is_404(client):
@@ -344,6 +346,8 @@ def test_list_applications_filters_by_status(client):
     resp = client.get("/api/jobs/applications", params={"status": "ready"})
     assert len(resp.json()) == 1
     assert resp.json()[0]["posting_id"] == posting2.id
+    assert resp.json()[0]["posting_title"] == "Senior Engineer"
+    assert resp.json()[0]["company_name"] == "Beta Inc"
 
 
 def test_create_application_rejects_unknown_field(client):
