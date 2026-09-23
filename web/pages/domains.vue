@@ -1,276 +1,59 @@
 <template>
-  <q-page padding class="q-gutter-md">
-    <div class="row items-center q-gutter-sm">
-      <div class="text-h5">Domains</div>
-      <q-space />
-      <q-btn
-        flat
-        no-caps
-        color="primary"
-        icon="refresh"
-        label="Sync now"
-        :loading="syncing"
-        data-testid="domains-sync"
-        @click="onSync"
-      />
-      <q-btn
-        color="primary"
-        no-caps
-        icon="add"
-        label="Add domain"
-        data-testid="domains-add-open"
-        @click="openAdd"
-      />
-      <q-btn
-        flat
-        no-caps
-        color="primary"
-        icon="upload_file"
-        label="Import CSV"
-        data-testid="domains-import-open"
-        @click="openImport"
-      />
-      <q-btn
-        flat
-        no-caps
-        color="primary"
-        icon="search"
-        label="Inspect domain"
-        data-testid="domains-inspect-open"
-        @click="openInspect"
-      />
-    </div>
+  <q-page class="page-container q-pa-md">
+    <PageHeader title="Domains" subtitle="Portfolio, watchlist and purchases">
+      <template #actions>
+        <q-btn
+          color="primary"
+          no-caps
+          icon="add"
+          label="Add domain"
+          data-testid="domains-add-open"
+          @click="openAdd"
+        />
+        <q-btn
+          flat
+          no-caps
+          color="primary"
+          icon="refresh"
+          label="Sync now"
+          :loading="syncing"
+          data-testid="domains-sync"
+          @click="onSync"
+        />
+        <q-btn
+          flat
+          round
+          dense
+          icon="more_vert"
+          aria-label="More domain actions"
+          data-testid="domains-more"
+        >
+          <q-tooltip>More domain actions</q-tooltip>
+          <q-menu>
+            <q-list style="min-width: 180px">
+              <q-item clickable v-close-popup data-testid="domains-import-open" @click="openImport">
+                <q-item-section avatar><q-icon name="upload_file" /></q-item-section>
+                <q-item-section>Import CSV</q-item-section>
+              </q-item>
+              <q-item clickable v-close-popup data-testid="domains-inspect-open" @click="openInspect">
+                <q-item-section avatar><q-icon name="search" /></q-item-section>
+                <q-item-section>Look up a domain</q-item-section>
+              </q-item>
+            </q-list>
+          </q-menu>
+        </q-btn>
+      </template>
+    </PageHeader>
 
-    <q-tabs v-model="tab" dense align="left" class="text-grey" active-color="primary" indicator-color="primary">
-      <q-tab name="portfolio" label="Portfolio" data-testid="tab-portfolio" />
-      <q-tab name="watchlist" label="Watchlist" data-testid="tab-watchlist" />
-      <q-tab name="ideas" label="Ideas" data-testid="tab-ideas" />
-      <q-tab name="purchases" label="Purchases" data-testid="tab-purchases" />
+    <q-tabs dense align="left" class="text-grey q-mt-md" active-color="primary" indicator-color="primary">
+      <q-route-tab to="/domains" exact label="Portfolio" data-testid="tab-portfolio" />
+      <q-route-tab to="/domains/watchlist" label="Watchlist" data-testid="tab-watchlist" />
+      <q-route-tab to="/domains/ideas" label="Ideas" data-testid="tab-ideas" />
+      <q-route-tab to="/domains/purchases" label="Purchases" data-testid="tab-purchases" />
     </q-tabs>
-    <q-separator />
+    <q-separator class="q-mb-md" />
 
-    <div v-if="loading" class="row justify-center q-pa-lg" data-testid="loading">
-      <q-spinner size="lg" color="primary" />
-    </div>
-
-    <template v-else>
-      <!-- Additive, not exclusive with the panels below: domains and purchases load
-           independently (Promise.allSettled), so one failing must still show whatever the
-           other one got — a banner on top of stale-but-real data, never a blank page hiding it. -->
-      <q-banner v-if="loadError" class="bg-negative text-white" data-testid="load-error">
-        {{ loadError }}
-        <template #action>
-          <q-btn flat label="Retry" @click="load()" />
-        </template>
-      </q-banner>
-
-      <q-tab-panels v-model="tab" animated>
-      <q-tab-panel name="portfolio" data-testid="panel-portfolio">
-        <div v-if="allOwnedDomains.length > 0" class="row items-center q-gutter-sm q-mb-sm">
-          <q-toggle v-model="hideExpired" label="Hide expired domains" data-testid="hide-expired-toggle" />
-          <div v-if="expiredOwnedCount > 0" class="text-grey-8 text-caption" data-testid="expired-count">
-            {{ expiredOwnedCount }} expired domain{{ expiredOwnedCount === 1 ? '' : 's' }}
-            {{ hideExpired ? 'hidden' : 'shown' }}
-          </div>
-          <q-toggle v-model="hideMissing" label="Hide missing domains" data-testid="hide-missing-toggle" />
-          <div v-if="missingOwnedCount > 0" class="text-grey-8 text-caption" data-testid="missing-count">
-            {{ missingOwnedCount }} missing domain{{ missingOwnedCount === 1 ? '' : 's' }}
-            {{ hideMissing ? 'hidden' : 'shown' }}
-          </div>
-        </div>
-
-        <div v-if="allOwnedDomains.length === 0" class="text-grey-8" data-testid="portfolio-empty">
-          No owned domains yet.
-          <NuxtLink to="/connections" data-testid="portfolio-empty-link">Connect a registrar</NuxtLink>
-          to sync your portfolio, or add one above.
-        </div>
-        <div v-else-if="ownedDomains.length === 0" class="text-grey-8" data-testid="portfolio-all-expired">
-          <template v-if="missingOwnedCount === 0">
-            All {{ expiredOwnedCount }} owned domain{{ expiredOwnedCount === 1 ? ' is' : 's are' }} expired and hidden.
-          </template>
-          <template v-else-if="expiredOwnedCount === 0">
-            All {{ missingOwnedCount }} owned domain{{ missingOwnedCount === 1 ? ' is' : 's are' }} missing and hidden.
-          </template>
-          <template v-else>
-            All {{ allOwnedDomains.length }} owned domains are expired or missing and hidden.
-          </template>
-          <q-btn
-            flat
-            no-caps
-            dense
-            color="primary"
-            label="Show all"
-            data-testid="show-expired-link"
-            @click="hideExpired = false; hideMissing = false"
-          />
-        </div>
-        <div v-else style="overflow-x: auto">
-          <q-table
-            :rows="ownedDomains"
-            :columns="columns"
-            row-key="name"
-            flat
-            bordered
-            data-testid="portfolio-table"
-          >
-            <template #body="rowProps">
-              <q-tr :props="rowProps" class="cursor-pointer" :data-testid="`domain-row-${rowProps.row.name}`" @click="openDetail(rowProps.row.name)">
-                <q-td key="name" :props="rowProps">{{ rowProps.row.name }}</q-td>
-                <q-td key="source" :props="rowProps">{{ sourceLabel(rowProps.row) }}</q-td>
-                <q-td key="expires" :props="rowProps">
-                  <span :class="expiryClass(rowProps.row.expires_at)">{{ formatDate(rowProps.row.expires_at) }}</span>
-                </q-td>
-                <q-td key="auto_renew" :props="rowProps">
-                  <q-badge :color="boolColor(rowProps.row.auto_renew)">{{ boolLabel(rowProps.row.auto_renew) }}</q-badge>
-                </q-td>
-                <q-td key="locked" :props="rowProps">
-                  <q-badge :color="boolColor(rowProps.row.locked)">{{ boolLabel(rowProps.row.locked) }}</q-badge>
-                </q-td>
-                <q-td key="ns_provider" :props="rowProps">
-                  <span class="text-grey-8">See details</span>
-                </q-td>
-                <q-td key="mail" :props="rowProps">
-                  <span v-if="rowProps.row.mail.status === 'unavailable'" class="text-grey-8">Not synced</span>
-                  <span v-else-if="rowProps.row.mail.status !== 'ok'" class="text-grey-8">Unavailable</span>
-                  <div v-else class="row q-gutter-xs">
-                    <q-badge
-                      v-for="badge in mailBadges(rowProps.row.mail)"
-                      :key="badge.key"
-                      :color="badge.color"
-                      :data-testid="`mail-badge-${rowProps.row.name}-${badge.key}`"
-                    >
-                      {{ badge.label }}
-                    </q-badge>
-                  </div>
-                </q-td>
-                <q-td key="missing_since" :props="rowProps">
-                  <span v-if="rowProps.row.missing_since" class="text-negative">{{ formatDate(rowProps.row.missing_since) }}</span>
-                  <span v-else class="text-grey-8">&mdash;</span>
-                </q-td>
-                <q-td key="actions" :props="rowProps" @click.stop>
-                  <q-btn
-                    flat
-                    dense
-                    no-caps
-                    color="primary"
-                    label="Inspect"
-                    :data-testid="`domain-inspect-${rowProps.row.name}`"
-                    @click="openDetail(rowProps.row.name)"
-                  />
-                </q-td>
-              </q-tr>
-            </template>
-          </q-table>
-        </div>
-      </q-tab-panel>
-
-      <q-tab-panel name="watchlist" data-testid="panel-watchlist">
-        <div v-if="allWatchedDomains.length > 0" class="row items-center q-gutter-sm q-mb-sm">
-          <q-toggle v-model="hideMissing" label="Hide missing domains" data-testid="watchlist-hide-missing-toggle" />
-          <div v-if="missingWatchedCount > 0" class="text-grey-8 text-caption" data-testid="watchlist-missing-count">
-            {{ missingWatchedCount }} missing domain{{ missingWatchedCount === 1 ? '' : 's' }}
-            {{ hideMissing ? 'hidden' : 'shown' }}
-          </div>
-        </div>
-
-        <div v-if="allWatchedDomains.length === 0" class="text-grey-8" data-testid="watchlist-empty">
-          No watched domains yet. Add one above or generate ideas to watch.
-        </div>
-        <div v-else-if="watchedDomains.length === 0" class="text-grey-8" data-testid="watchlist-all-missing">
-          All {{ missingWatchedCount }} watched domain{{ missingWatchedCount === 1 ? ' is' : 's are' }} missing and hidden.
-          <q-btn flat no-caps dense color="primary" label="Show missing" data-testid="show-missing-watchlist-link" @click="hideMissing = false" />
-        </div>
-        <div v-else style="overflow-x: auto">
-          <q-table
-            :rows="watchedDomains"
-            :columns="columns"
-            row-key="name"
-            flat
-            bordered
-            data-testid="watchlist-table"
-          >
-            <template #body="rowProps">
-              <q-tr :props="rowProps" class="cursor-pointer" :data-testid="`domain-row-${rowProps.row.name}`" @click="openDetail(rowProps.row.name)">
-                <q-td key="name" :props="rowProps">{{ rowProps.row.name }}</q-td>
-                <q-td key="source" :props="rowProps">{{ sourceLabel(rowProps.row) }}</q-td>
-                <q-td key="expires" :props="rowProps">
-                  <span :class="expiryClass(rowProps.row.expires_at)">{{ formatDate(rowProps.row.expires_at) }}</span>
-                </q-td>
-                <q-td key="auto_renew" :props="rowProps">
-                  <q-badge :color="boolColor(rowProps.row.auto_renew)">{{ boolLabel(rowProps.row.auto_renew) }}</q-badge>
-                </q-td>
-                <q-td key="locked" :props="rowProps">
-                  <q-badge :color="boolColor(rowProps.row.locked)">{{ boolLabel(rowProps.row.locked) }}</q-badge>
-                </q-td>
-                <q-td key="ns_provider" :props="rowProps">
-                  <span class="text-grey-8">See details</span>
-                </q-td>
-                <q-td key="mail" :props="rowProps">
-                  <span v-if="rowProps.row.mail.status === 'unavailable'" class="text-grey-8">Not synced</span>
-                  <span v-else-if="rowProps.row.mail.status !== 'ok'" class="text-grey-8">Unavailable</span>
-                  <div v-else class="row q-gutter-xs">
-                    <q-badge
-                      v-for="badge in mailBadges(rowProps.row.mail)"
-                      :key="badge.key"
-                      :color="badge.color"
-                      :data-testid="`mail-badge-${rowProps.row.name}-${badge.key}`"
-                    >
-                      {{ badge.label }}
-                    </q-badge>
-                  </div>
-                </q-td>
-                <q-td key="missing_since" :props="rowProps">
-                  <span v-if="rowProps.row.missing_since" class="text-negative">{{ formatDate(rowProps.row.missing_since) }}</span>
-                  <span v-else class="text-grey-8">&mdash;</span>
-                </q-td>
-                <q-td key="actions" :props="rowProps" @click.stop>
-                  <q-btn
-                    flat
-                    dense
-                    no-caps
-                    color="primary"
-                    label="Inspect"
-                    :data-testid="`domain-inspect-${rowProps.row.name}`"
-                    @click="openDetail(rowProps.row.name)"
-                  />
-                </q-td>
-              </q-tr>
-            </template>
-          </q-table>
-        </div>
-      </q-tab-panel>
-
-      <q-tab-panel name="ideas" data-testid="panel-ideas">
-        <DomainIdeasPanel v-if="tab === 'ideas'" />
-      </q-tab-panel>
-
-      <q-tab-panel name="purchases" data-testid="panel-purchases">
-        <div v-if="purchases.length === 0" class="text-grey-8" data-testid="purchases-empty">No purchases yet.</div>
-        <q-markup-table v-else dense flat bordered data-testid="purchases-table">
-          <thead>
-            <tr>
-              <th class="text-left">Quote</th>
-              <th class="text-left">Status</th>
-              <th class="text-left">Price</th>
-              <th class="text-left">Created</th>
-              <th class="text-left">Detail</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="purchase in purchases" :key="purchase.id" data-testid="purchase-row">
-              <td>{{ purchase.quote_id }}</td>
-              <td>
-                <q-badge :color="purchaseStatusColor(purchase.status)" data-testid="purchase-status">{{ purchase.status }}</q-badge>
-              </td>
-              <td>{{ purchase.price }}</td>
-              <td>{{ formatDate(purchase.created_at) }}</td>
-              <td>{{ purchase.detail ?? '—' }}</td>
-            </tr>
-          </tbody>
-        </q-markup-table>
-      </q-tab-panel>
-      </q-tab-panels>
-    </template>
+    <NuxtPage />
 
     <DomainDetailDialog :open="detailOpen" :name="detailName" @update:open="detailOpen = $event" @closed="detailOpen = false" />
 
@@ -391,157 +174,32 @@
 
 <script setup lang="ts">
 import { useQuasar } from 'quasar'
-import { ApiError, parseUtc } from '~/composables/useApi'
+import PageHeader from '~/components/ui/PageHeader.vue'
 import { useDomainsApi } from '~/composables/useDomainsApi'
-import type { DomainOut, ImportOut, PurchaseOut } from '~/composables/useDomainsApi'
-
-interface DomainColumn {
-  name: string
-  label: string
-  field: string | ((row: DomainOut) => unknown)
-  align: 'left' | 'center' | 'right'
-}
+import type { ImportOut } from '~/composables/useDomainsApi'
 
 const api = useDomainsApi()
 const $q = useQuasar()
 
-const tab = ref<'portfolio' | 'watchlist' | 'ideas' | 'purchases'>('portfolio')
-
-const domains = ref<DomainOut[]>([])
-const purchases = ref<PurchaseOut[]>([])
-const loading = ref(true)
-const loadError = ref<string | null>(null)
 const syncing = ref(false)
 
-// Hidden by default: an owned portfolio easily accumulates long-lapsed domains (GoDaddy in
-// particular has been seen returning "expires" dates years in the past for domains still listed
-// in the account), and those otherwise bury the ones that still matter. Scoped to Portfolio only
-// (not Watchlist): a watched domain going past its expiry is often exactly the event being
-// watched for — auto-hiding it there would hide the interesting case, not the noise.
-const hideExpired = ref(true)
-// A "missing" domain (missing_since set) is a sync artifact, not a status the account chose — a
-// registrar/connection stopped reporting it (dropped, transferred, or, as with WordPress.com's
-// free *.wordpress.com subdomains, never a real domain the sync should have added in the first
-// place). Defaults hidden in both tabs, unlike hideExpired: there's no "this is the interesting
-// event" case for missing the way an about-to-expire watched domain has one.
-const hideMissing = ref(true)
+// Portfolio/Watchlist/Ideas/Purchases each own their own fetch (see pages/domains/*.vue); a change
+// here (add/import/sync) bumps this counter so whichever child is currently mounted knows to refetch,
+// without the parent holding a domain list of its own. Injection keys are plain strings (not a
+// shared composable file) since only this parent and its four child route files use them.
+const refreshTick = ref(0)
+provide('domains-refresh', refreshTick)
 
-const allOwnedDomains = computed(() => domains.value.filter((d) => d.ownership === 'owned'))
-const expiredOwnedCount = computed(() => allOwnedDomains.value.filter((d) => isExpired(d.expires_at)).length)
-const missingOwnedCount = computed(() => allOwnedDomains.value.filter((d) => d.missing_since !== null).length)
-const ownedDomains = computed(() => {
-  let list = allOwnedDomains.value
-  if (hideExpired.value) list = list.filter((d) => !isExpired(d.expires_at))
-  if (hideMissing.value) list = list.filter((d) => d.missing_since === null)
-  return list
-})
-const allWatchedDomains = computed(() => domains.value.filter((d) => d.ownership === 'watched'))
-const missingWatchedCount = computed(() => allWatchedDomains.value.filter((d) => d.missing_since !== null).length)
-const watchedDomains = computed(() =>
-  hideMissing.value ? allWatchedDomains.value.filter((d) => d.missing_since === null) : allWatchedDomains.value,
-)
+const detailOpen = ref(false)
+const detailName = ref('')
 
-// NS provider is not returned by GET /api/domains (api/routers/domains.py DomainOut): it lives on
-// a per-domain snapshot with no compact summary field, so that column still points at the detail
-// dialog (DomainDetailDialog) rather than fetching every row's snapshot up front. Mail posture (the
-// `mail` column) got one: DomainOut.mail is a presence-only summary of the same latest-snapshot
-// data the dialog shows in full, so the table can render it directly (see mailBadges() below).
-const columns: DomainColumn[] = [
-  { name: 'name', label: 'Domain', field: 'name', align: 'left' },
-  { name: 'source', label: 'Source / account', field: () => null, align: 'left' },
-  { name: 'expires', label: 'Expiry', field: 'expires_at', align: 'left' },
-  { name: 'auto_renew', label: 'Auto-renew', field: 'auto_renew', align: 'center' },
-  { name: 'locked', label: 'Lock', field: 'locked', align: 'center' },
-  { name: 'ns_provider', label: 'NS provider', field: () => null, align: 'left' },
-  { name: 'mail', label: 'Mail', field: () => null, align: 'left' },
-  { name: 'missing_since', label: 'Missing since', field: 'missing_since', align: 'left' },
-  { name: 'actions', label: '', field: () => null, align: 'left' },
-]
-
-function errorText(error: unknown): string {
-  return error instanceof ApiError ? error.message : 'Something went wrong'
+function openDetail(name: string) {
+  detailName.value = name
+  detailOpen.value = true
 }
 
-async function load(silent = false) {
-  if (!silent) loading.value = true
-  loadError.value = null
-  // Settled, not Promise.all: domains and purchases are independent lists from independent
-  // routes. One failing (e.g. a route regression, a transient 5xx) must not discard the other
-  // that already succeeded — that is exactly how a real routing bug here once made a fully
-  // synced portfolio look empty, because the sibling purchases fetch happened to 404.
-  const [domainResult, purchaseResult] = await Promise.allSettled([api.listDomains(), api.listPurchases()])
-  if (domainResult.status === 'fulfilled') domains.value = domainResult.value
-  if (purchaseResult.status === 'fulfilled') purchases.value = purchaseResult.value
-  const failed = [domainResult, purchaseResult].find((result) => result.status === 'rejected')
-  loadError.value = failed ? errorText((failed as PromiseRejectedResult).reason) : null
-  loading.value = false
-}
-
-function sourceLabel(row: DomainOut): string {
-  return row.connection_id ? `${row.source} · ${row.connection_id}` : row.source
-}
-
-function formatDate(value: string | null): string {
-  if (!value) return '—'
-  const date = parseUtc(value)
-  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString()
-}
-
-function daysUntil(value: string | null): number | null {
-  if (!value) return null
-  const target = parseUtc(value).getTime()
-  if (Number.isNaN(target)) return null
-  return Math.ceil((target - Date.now()) / 86_400_000)
-}
-
-// No expires_at (null) is "unknown", never "expired": a domain the registrar reports no date for
-// must not vanish behind the hide-expired filter.
-function isExpired(value: string | null): boolean {
-  const days = daysUntil(value)
-  return days !== null && days < 0
-}
-
-function expiryClass(value: string | null): string {
-  const days = daysUntil(value)
-  return days !== null && days <= 30 ? 'text-negative text-weight-bold' : ''
-}
-
-function boolLabel(value: boolean | null): string {
-  return value === null ? 'Unknown' : value ? 'Yes' : 'No'
-}
-
-function boolColor(value: boolean | null): string {
-  return value === null ? 'grey' : value ? 'positive' : 'grey-7'
-}
-
-interface MailBadge {
-  key: string
-  label: string
-  color: string
-}
-
-// Same color semantics as DomainDetailDialog's mailBadges (positive: present/strict, warning: a
-// weaker-than-reject DMARC policy, negative: missing) but compact labels for the table cell —
-// the full per-record detail (record text, DKIM per-selector) stays in the detail dialog.
-function mailBadges(mail: DomainOut['mail']): MailBadge[] {
-  return [
-    { key: 'spf', label: 'SPF', color: mail.spf ? 'positive' : 'negative' },
-    {
-      key: 'dmarc',
-      label: 'DMARC',
-      color: mail.dmarc_policy === 'reject' ? 'positive' : mail.dmarc_policy ? 'warning' : 'negative',
-    },
-    { key: 'dkim', label: 'DKIM', color: mail.dkim ? 'positive' : 'negative' },
-    { key: 'mta-sts', label: 'MTA-STS', color: mail.mta_sts ? 'positive' : 'negative' },
-    { key: 'bimi', label: 'BIMI', color: mail.bimi ? 'positive' : 'negative' },
-  ]
-}
-
-function purchaseStatusColor(status: string): string {
-  if (status === 'submitted' || status === 'confirmed') return 'positive'
-  if (status === 'failed' || status === 'refused') return 'negative'
-  return 'grey-7'
-}
+// The detail dialog lives here (so it survives a tab switch); children request it via inject.
+provide('open-domain-detail', openDetail)
 
 async function onSync() {
   syncing.value = true
@@ -551,7 +209,7 @@ async function onSync() {
       type: 'positive',
       message: `Synced ${result.sync.length} connection(s), refreshed ${result.refresh.length} snapshot(s)`,
     })
-    await load(true)
+    refreshTick.value++
   } catch (error) {
     $q.notify({ type: 'negative', message: `Sync failed: ${errorText(error)}` })
   } finally {
@@ -581,7 +239,7 @@ async function submitAdd() {
     await api.addDomain({ name, ownership: addOwnership.value })
     addOpen.value = false
     $q.notify({ type: 'positive', message: `Added ${name}` })
-    await load(true)
+    refreshTick.value++
   } catch (error) {
     addError.value = errorText(error)
   } finally {
@@ -615,7 +273,7 @@ async function submitImport() {
   try {
     const result = await api.importDomains({ csv: importCsv.value })
     importResult.value = result
-    if (result.added.length) await load(true)
+    if (result.added.length) refreshTick.value++
   } catch (error) {
     importError.value = errorText(error)
   } finally {
@@ -637,14 +295,4 @@ function submitInspect() {
   inspectOpen.value = false
   openDetail(name)
 }
-
-const detailOpen = ref(false)
-const detailName = ref('')
-
-function openDetail(name: string) {
-  detailName.value = name
-  detailOpen.value = true
-}
-
-onMounted(() => load())
 </script>
