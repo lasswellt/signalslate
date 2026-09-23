@@ -57,3 +57,7 @@ Ruling: regression-fix — T-018 dropped the open/closed status filter and 3-way
 Note (2026-09-23T03:21:24Z): late T-018 commit 96e5181 (job-title→dialog-title) superseded by main-thread fix on main; not merged.
 ## 2026-09-23T03:31:06Z verify T-015 ok=true
 Ruling: scope-expansion — PurchaseOut lacked a domain name; main thread added read-only name/currency (owner allowed small read-only API additions) (T-015, round 2)
+## 2026-09-23T03:36:49Z verify T-019 ok=true
+Concern (T-019, low): answer-bank Edit posts a new row (no PATCH/DELETE endpoint); display dedups by question_norm. Resume accept narrowed to PDF on main.
+## 2026-09-23T03:36:49Z build waves 3-5 done (18 feature tasks + T-017)
+## 2026-09-23T03:36:49Z build T-021 start (attempt 1) wave 6

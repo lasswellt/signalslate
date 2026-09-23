@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "console-ux-overhaul",
-  "updated": "2026-09-23T03:29:28Z",
+  "updated": "2026-09-23T03:36:49Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1344,11 +1344,46 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "in_progress",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-23T03:36:49Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "cd web && npx vitest run tests/JobCompaniesPanel.test.ts tests/JobsProfilePanel.test.ts tests/jobs.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3846,
+            "tail": "tion (anonymous)], [Function (anonymous)] ] dense=\"\"  ... > \n  at <QCardSection class=\"q-gutter-sm\" > \n  at <QCard> \n  at <AsyncState loading=false error=null onRetry=fn<loadProfile> > \n  at <MountSuspendedComponent > \n  at <MountSuspendedHelper> \n  at <Anonymous ref=\"VTU_COMPONENT\" > \n  at <VTUROOT>\n\n····stderr | tests/JobsProfilePanel.test.ts > answer bank > filters rendered rows by the search text\n[Vue Router warn]: No active route record was found when calling `onBeforeRouteLeave()`. Make sure you call this function inside a component child of <router-view>. Maybe you called it inside of App.vue?\n\n···stderr | tests/JobsProfilePanel.test.ts > dirty tracking and validation > enables Save only once dirty and valid, and Discard reverts the form\n[Vue Router warn]: No active route record was found when calling `onBeforeRouteLeave()`. Make sure you call this function inside a component child of <router-view>. Maybe you called it inside of App.vue?\n\nstderr | tests/JobsProfilePanel.test.ts > saving the profile > calls the profile PUT fetcher with the form current values\n[Vue Router warn]: No active route record was found when calling `onBeforeRouteLeave()`. Make sure you call this function inside a component child of <router-view>. Maybe you called it inside of App.vue?\n\n················stderr | tests/JobCompaniesPanel.test.ts > board override > sends {ats_kind, board_id} to overrideBoard\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n·····\n\n Test Files  3 passed (3)\n      Tests  35 passed (35)\n   Start at  23:36:47\n   Duration  2.61s (transform 49%, tests 34%, environment 8%, import 7%, setup 2%)\n\n  Transform  transforming modules took 3.66s · 49% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-09-23T03:36:49Z"
+          },
+          {
+            "cmd": "test -f web/pages/jobs/profile.vue -a -f web/pages/jobs/companies.vue",
+            "exit": 0,
+            "duration_ms": 3,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:36:49Z"
+          },
+          {
+            "cmd": "grep -q 'onBeforeRouteLeave' web/components/JobsProfilePanel.vue web/pages/jobs/profile.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:36:49Z"
+          },
+          {
+            "cmd": "grep -qE 'dialog|confirm' web/components/JobCompaniesPanel.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T03:36:49Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": ""
     },
@@ -1453,7 +1488,7 @@
         }
       ],
       "passes": false,
-      "status": "open",
+      "status": "in_progress",
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": null,
