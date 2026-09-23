@@ -134,7 +134,7 @@
       </div>
     </AsyncState>
 
-    <ConnectionDialog v-model="dialogOpen" :mode="dialogMode" :connection="dialogConnection" @saved="onSaved" />
+    <ConnectionDialog v-model="dialogOpen" :mode="dialogMode" :connection="dialogConnection" :system="system" @saved="onSaved" />
 
     <OAuthDialog v-model="signInOpen" :connection="signInConnection" :system="system" @connected="onSignedIn" />
 
