@@ -68,3 +68,7 @@ Concern (T-019, low): answer-bank Edit posts a new row (no PATCH/DELETE endpoint
 ## 2026-09-23T21:14:06Z build T-022 start (attempt 1)
 ## 2026-09-23T21:15:52Z verify T-022 ok=true
 ## 2026-09-23T21:15:52Z build T-023 start (attempt 1)
+Ruling: scope-expansion — T-023 may edit web/tests/connections.test.ts (StatusChip test-result assertions) and web/tests/jobs.test.ts (await 300ms debounce); equivalent-strength assertions required (T-023, round 1)
+## 2026-09-23T21:25:37Z verify T-023 ok=true
+Concern (T-023, med): connections.test.ts test-result assertions moved from raw text/class to StatusChip aria-label + detail text (equivalent strength); jobs.test.ts min-score tests advance fake timers 300ms for the new debounce.
+## 2026-09-23T21:25:37Z build complete 23/23

@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "console-ux-overhaul",
-  "updated": "2026-09-23T21:15:52Z",
+  "updated": "2026-09-23T21:24:48Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1629,11 +1629,60 @@
           "timeout": 600
         }
       ],
-      "passes": false,
-      "status": "in_progress",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-23T21:24:48Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -q 'sortable: true' web/pages/jobs/applications.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-23T21:24:41Z"
+          },
+          {
+            "cmd": "! grep -q 'testResults\\[conn.id\\]?.status }}' web/pages/connections.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T21:24:41Z"
+          },
+          {
+            "cmd": "grep -qE 'export function mailBadges' web/utils/status.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T21:24:41Z"
+          },
+          {
+            "cmd": "! grep -qE 'function mailBadges|const mailBadges = computed\\(\\(\\) => \\[' web/components/DomainTable.vue web/components/DomainDetailDialog.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-23T21:24:41Z"
+          },
+          {
+            "cmd": "grep -A12 'minScoreFilter\"' web/pages/jobs/index.vue | grep -q 'debounce'",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-23T21:24:41Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run --reporter=dot",
+            "exit": 0,
+            "duration_ms": 6761,
+            "tail": "r | tests/DomainIdeasPanel.test.ts > buy > keeps Buy disabled until a registrar connection is selected\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\nstderr | tests/DomainIdeasPanel.test.ts > buy > keeps Buy disabled until a registrar connection is selected\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n··stdout | tests/history-detail.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/JobDetailDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n············stdout | tests/ui-basics.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n············stderr | tests/JobCompaniesPanel.test.ts > board override > sends {ats_kind, board_id} to overrideBoard\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n···stdout | tests/smoke.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······························stdout | tests/ui-shells.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······························································································\n\n Test Files  26 passed (26)\n      Tests  471 passed (471)\n   Start at  17:24:42\n   Duration  5.52s (transform 40%, tests 35%, environment 15%, import 7%, setup 2%)\n\n  Transform  transforming modules took 38.36s · 40% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-09-23T21:24:48Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check survey Minor/Info (all FP-verified): applications.vue:78-84 no sortable columns (outcome 3); connections.vue:73-76 raw ok/error test status; DomainTable.vue:168-181 vs DomainDetailDialog.vue:341-364 duplicated mail-posture badge logic (outcome 5) → move to utils/status.ts mailBadges(); jobs/index.vue:16-25 min-score input lacks :debounce."
     }
