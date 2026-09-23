@@ -1,0 +1,813 @@
+{
+  "$schema": "blitz-tasks/1.0",
+  "plan": "console-ux-overhaul",
+  "updated": "2026-09-23T01:51:30Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Shared formatters: formatDate, relativeTime, formatDuration, formatMoney (Intl), formatNumber, humanize",
+      "role": "frontend",
+      "files": [
+        "web/utils/format.ts",
+        "web/tests/format.test.ts"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "cd web && npx vitest run tests/format.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "grep -qE 'export function formatMoney' web/utils/format.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'export function (formatDuration|relativeTime|humanize)' web/utils/format.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q 'Intl.NumberFormat' web/utils/format.ts",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Replaces 6 formatDate copies (index, history, [id], collectors, domains, jobs, dialogs) and relativeTime copies (connections:209, collectors:421). Nuxt auto-imports web/utils/."
+    },
+    {
+      "id": "T-002",
+      "title": "Single statusMeta(kind,value) map {color,icon,label} + shared errorText",
+      "role": "frontend",
+      "files": [
+        "web/utils/status.ts",
+        "web/utils/errors.ts",
+        "web/tests/status.test.ts"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "cd web && npx vitest run tests/status.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "grep -qE 'export function statusMeta' web/utils/status.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'export function errorText' web/utils/errors.ts",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "partial -> warning everywhere (collectors.vue:442 shows it red today). Covers run/health, purchase, application, confidence, fit mappers."
+    },
+    {
+      "id": "T-003",
+      "title": "Theme foundation: web/DESIGN.md, Quasar brand + dark auto + Dark/LocalStorage plugins, assets/css/app.scss",
+      "role": "frontend",
+      "files": [
+        "web/DESIGN.md",
+        "web/nuxt.config.ts",
+        "web/assets/css/app.scss"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "test -f web/DESIGN.md",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q 'brand' web/nuxt.config.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE \"'Dark'\" web/nuxt.config.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q 'page-container' web/assets/css/app.scss",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/smoke.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Calm ops console: neutral surfaces, one accent, compact density, status = icon+label. If dark:auto breaks happy-dom, stub matchMedia in test setup."
+    },
+    {
+      "id": "T-004",
+      "title": "UI components: PageHeader, StatusChip (icon+label), EmptyState",
+      "role": "frontend",
+      "files": [
+        "web/components/ui/PageHeader.vue",
+        "web/components/ui/StatusChip.vue",
+        "web/components/ui/EmptyState.vue",
+        "web/tests/ui-basics.test.ts"
+      ],
+      "depends_on": [
+        "T-002",
+        "T-003"
+      ],
+      "verify": [
+        {
+          "cmd": "cd web && npx vitest run tests/ui-basics.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "grep -q 'statusMeta' web/components/ui/StatusChip.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "test -f web/components/ui/PageHeader.vue -a -f web/components/ui/EmptyState.vue",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": ""
+    },
+    {
+      "id": "T-005",
+      "title": "UI components: AsyncState (skeleton/error+retry/empty) and DialogShell (dirty guard, maximized on mobile)",
+      "role": "frontend",
+      "files": [
+        "web/components/ui/AsyncState.vue",
+        "web/components/ui/DialogShell.vue",
+        "web/tests/ui-shells.test.ts"
+      ],
+      "depends_on": [
+        "T-003"
+      ],
+      "verify": [
+        {
+          "cmd": "cd web && npx vitest run tests/ui-shells.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "grep -q 'dirty' web/components/ui/DialogShell.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'maximized' web/components/ui/DialogShell.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'retry' web/components/ui/AsyncState.vue",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": ""
+    },
+    {
+      "id": "T-006",
+      "title": "App shell: layouts/default.vue grouped drawer (Digest/Sources/Tools), breadcrumbs, dark toggle; app.vue -> NuxtLayout",
+      "role": "frontend",
+      "files": [
+        "web/layouts/default.vue",
+        "web/app.vue",
+        "web/tests/smoke.test.ts"
+      ],
+      "depends_on": [
+        "T-003"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -q 'q-drawer' web/layouts/default.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q 'NuxtLayout' web/app.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -q 'q-route-tab' web/app.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'Overview' web/layouts/default.vue && grep -qE 'Accounts' web/layouts/default.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/smoke.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Fixes malformed app.vue:12 (to=\"/history\"label=). Labels: Overview, Runs(/history), Schedule(/config), Accounts(/connections), Collectors, Domains, Jobs."
+    },
+    {
+      "id": "T-007",
+      "title": "Overview page: KPI row, loading/error states, fixed run polling, last-run link; shared HealthList",
+      "role": "frontend",
+      "files": [
+        "web/pages/index.vue",
+        "web/components/HealthList.vue",
+        "web/tests/index.test.ts"
+      ],
+      "depends_on": [
+        "T-001",
+        "T-004",
+        "T-005"
+      ],
+      "verify": [
+        {
+          "cmd": "cd web && npx vitest run tests/index.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "grep -q 'HealthList' web/pages/index.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q '/history/' web/pages/index.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'function (formatDate|statusColor)' web/pages/index.vue",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Audit: empty-state shows while loading (:22,:38); trigger error leaves spinner (:72-85); polling stops on stale run (:80). Uses existing /status, /connections, /collectors."
+    },
+    {
+      "id": "T-008",
+      "title": "Runs list + detail: pagination 25, sortable, duration, humanised trigger, states, keyboard row nav, not-found",
+      "role": "frontend",
+      "files": [
+        "web/pages/history.vue",
+        "web/pages/history/[id].vue",
+        "web/tests/history.test.ts",
+        "web/tests/history-detail.test.ts"
+      ],
+      "depends_on": [
+        "T-007"
+      ],
+      "verify": [
+        {
+          "cmd": "cd web && npx vitest run tests/history --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "grep -q 'rowsPerPage' web/pages/history.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q 'HealthList' 'web/pages/history/[id].vue'",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'function (formatDate|statusColor)' web/pages/history.vue 'web/pages/history/[id].vue'",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": ""
+    },
+    {
+      "id": "T-009",
+      "title": "Schedule page (config.vue): cron presets + human-readable preview, tracker labels, notify feedback, dirty guard, error states",
+      "role": "frontend",
+      "files": [
+        "web/pages/config.vue",
+        "web/tests/config.test.ts"
+      ],
+      "depends_on": [
+        "T-001",
+        "T-004",
+        "T-005"
+      ],
+      "verify": [
+        {
+          "cmd": "cd web && npx vitest run tests/config.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "grep -q 'PageHeader' web/pages/config.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -q \"'mstodo'\" web/pages/config.vue || grep -q 'label' web/pages/config.vue",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": ""
+    },
+    {
+      "id": "T-010",
+      "title": "Accounts page (connections.vue): label as title, grouped by kind, overflow menu with tooltips, per-card saving, consistent gating",
+      "role": "frontend",
+      "files": [
+        "web/pages/connections.vue",
+        "web/tests/connections.test.ts"
+      ],
+      "depends_on": [
+        "T-004",
+        "T-005"
+      ],
+      "verify": [
+        {
+          "cmd": "cd web && npx vitest run tests/connections.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "grep -q 'conn.label' web/pages/connections.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q 'q-menu' web/pages/connections.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'function (errorText|relativeTime)' web/pages/connections.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -q 'watermark' web/pages/connections.vue",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": ""
+    },
+    {
+      "id": "T-011",
+      "title": "ConnectionDialog kind cards + copyable redirect + password reveal + hints; OAuthDialog plain paste input and clear copy",
+      "role": "frontend",
+      "files": [
+        "web/components/ConnectionDialog.vue",
+        "web/components/OAuthDialog.vue",
+        "web/tests/ConnectionDialog.test.ts",
+        "web/tests/OAuthDialog.test.ts"
+      ],
+      "depends_on": [
+        "T-005"
+      ],
+      "verify": [
+        {
+          "cmd": "cd web && npx vitest run tests/ConnectionDialog.test.ts tests/OAuthDialog.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "grep -q 'copyToClipboard' web/components/ConnectionDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -q 'type=\"password\"' web/components/OAuthDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q 'DialogShell' web/components/ConnectionDialog.vue",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": ""
+    },
+    {
+      "id": "T-012",
+      "title": "Collectors list: StatusChip, primary Run + overflow (Dry run, Reset, Clear failures with confirm), plain-language labels",
+      "role": "frontend",
+      "files": [
+        "web/pages/collectors.vue",
+        "web/tests/collectors.test.ts"
+      ],
+      "depends_on": [
+        "T-004",
+        "T-005"
+      ],
+      "verify": [
+        {
+          "cmd": "cd web && npx vitest run tests/collectors.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "grep -q 'StatusChip' web/pages/collectors.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -qE '>\\s*Watermark' web/pages/collectors.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'function (statusColor|errorText|relativeTime)' web/pages/collectors.vue",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": ""
+    },
+    {
+      "id": "T-013",
+      "title": "Collector items route /collectors/[source] replaces nested items dialog; type filter select; formatted payload",
+      "role": "frontend",
+      "files": [
+        "web/pages/collectors/[source].vue",
+        "web/pages/collectors.vue",
+        "web/tests/collector-items.test.ts"
+      ],
+      "depends_on": [
+        "T-012"
+      ],
+      "verify": [
+        {
+          "cmd": "cd web && npx vitest run tests/collector-items.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "test -f 'web/pages/collectors/[source].vue'",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -q 'Back to the list' web/pages/collectors.vue",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": ""
+    },
+    {
+      "id": "T-014",
+      "title": "Domains parent route + portfolio/watchlist sub-routes with shared DomainTable (pagination, sort, dead NS column removed, per-tab filters)",
+      "role": "frontend",
+      "files": [
+        "web/pages/domains.vue",
+        "web/pages/domains/index.vue",
+        "web/pages/domains/watchlist.vue",
+        "web/components/DomainTable.vue",
+        "web/tests/domains.test.ts"
+      ],
+      "depends_on": [
+        "T-001",
+        "T-004",
+        "T-005"
+      ],
+      "verify": [
+        {
+          "cmd": "cd web && npx vitest run tests/domains.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "test -f web/pages/domains/watchlist.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q 'pagination' web/components/DomainTable.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -rq 'See details' web/pages/domains.vue web/pages/domains web/components/DomainTable.vue",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "SPIDR: split by route (portfolio/watchlist here, ideas/purchases in T-015), not by file. Tests must mount child pages."
+    },
+    {
+      "id": "T-015",
+      "title": "Domains ideas + purchases routes; refresh on @purchased; chip inputs; purchase dialog formatted money, no env jargon, disabled state up front",
+      "role": "frontend",
+      "files": [
+        "web/pages/domains/ideas.vue",
+        "web/pages/domains/purchases.vue",
+        "web/components/DomainIdeasPanel.vue",
+        "web/components/DomainPurchaseDialog.vue",
+        "web/tests/DomainIdeasPanel.test.ts"
+      ],
+      "depends_on": [
+        "T-014"
+      ],
+      "verify": [
+        {
+          "cmd": "cd web && npx vitest run tests/DomainIdeasPanel.test.ts tests/DomainPurchaseDialog.test.ts tests/domains.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "test -f web/pages/domains/purchases.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q '@purchased' web/components/DomainIdeasPanel.vue web/pages/domains/ideas.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -q 'DOMAINS_PURCHASE_ENABLED' web/components/DomainPurchaseDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -q 'quote_id' web/pages/domains/purchases.vue",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": ""
+    },
+    {
+      "id": "T-016",
+      "title": "DomainDetailDialog on DialogShell: humanised labels, no data_hash, bounded lists, actions",
+      "role": "frontend",
+      "files": [
+        "web/components/DomainDetailDialog.vue",
+        "web/tests/DomainDetailDialog.test.ts"
+      ],
+      "depends_on": [
+        "T-005"
+      ],
+      "verify": [
+        {
+          "cmd": "cd web && npx vitest run tests/DomainDetailDialog.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "grep -q 'DialogShell' web/components/DomainDetailDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -q 'data_hash' web/components/DomainDetailDialog.vue",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": ""
+    },
+    {
+      "id": "T-017",
+      "title": "API: ApplicationOut.posting_title and company_name via join; web type updated",
+      "role": "backend",
+      "files": [
+        "api/routers/job_apply.py",
+        "tests/test_api_job_apply.py",
+        "web/composables/useJobsApi.ts"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "venv/bin/pytest tests/test_api_job_apply.py -q",
+          "timeout": 300
+        },
+        {
+          "cmd": "grep -q 'posting_title' api/routers/job_apply.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q 'posting_title' web/composables/useJobsApi.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q 'posting_title' tests/test_api_job_apply.py",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Read-only addition; no schema migration. ApplicationOut at api/routers/job_apply.py:432."
+    },
+    {
+      "id": "T-018",
+      "title": "Jobs parent + postings/applications sub-routes: debounced filters, fit chip, title/company columns, empty vs no-match",
+      "role": "frontend",
+      "files": [
+        "web/pages/jobs.vue",
+        "web/pages/jobs/index.vue",
+        "web/pages/jobs/applications.vue",
+        "web/tests/jobs.test.ts"
+      ],
+      "depends_on": [
+        "T-001",
+        "T-004",
+        "T-005",
+        "T-017"
+      ],
+      "verify": [
+        {
+          "cmd": "cd web && npx vitest run tests/jobs.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "test -f web/pages/jobs/applications.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q 'posting_title' web/pages/jobs/applications.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'debounce' web/pages/jobs/index.vue",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": ""
+    },
+    {
+      "id": "T-019",
+      "title": "Jobs companies + profile sub-routes; companies search, import menu, confirm seeds; profile sections, sticky save, dirty guard, validation",
+      "role": "frontend",
+      "files": [
+        "web/pages/jobs/companies.vue",
+        "web/pages/jobs/profile.vue",
+        "web/components/JobCompaniesPanel.vue",
+        "web/components/JobsProfilePanel.vue"
+      ],
+      "depends_on": [
+        "T-018"
+      ],
+      "verify": [
+        {
+          "cmd": "cd web && npx vitest run tests/JobCompaniesPanel.test.ts tests/JobsProfilePanel.test.ts tests/jobs.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "test -f web/pages/jobs/profile.vue -a -f web/pages/jobs/companies.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q 'onBeforeRouteLeave' web/components/JobsProfilePanel.vue web/pages/jobs/profile.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'dialog|confirm' web/components/JobCompaniesPanel.vue",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": ""
+    },
+    {
+      "id": "T-020",
+      "title": "JobApplyDialog + JobDetailDialog on DialogShell: job/company title, dirty guard, primary action, PDF link, humanised states",
+      "role": "frontend",
+      "files": [
+        "web/components/JobApplyDialog.vue",
+        "web/components/JobDetailDialog.vue",
+        "web/tests/JobApplyDialog.test.ts"
+      ],
+      "depends_on": [
+        "T-005",
+        "T-017"
+      ],
+      "verify": [
+        {
+          "cmd": "cd web && npx vitest run tests/JobApplyDialog.test.ts tests/JobDetailDialog.test.ts --reporter=dot",
+          "timeout": 300
+        },
+        {
+          "cmd": "grep -q 'DialogShell' web/components/JobApplyDialog.vue web/components/JobDetailDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q 'applicationFileUrl' web/components/JobApplyDialog.vue",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": ""
+    },
+    {
+      "id": "T-021",
+      "title": "Consolidation sweep: no per-file helper copies, icon buttons labelled, full vitest + typecheck green",
+      "role": "test",
+      "files": [
+        "web/tests"
+      ],
+      "depends_on": [
+        "T-006",
+        "T-007",
+        "T-008",
+        "T-009",
+        "T-010",
+        "T-011",
+        "T-012",
+        "T-013",
+        "T-014",
+        "T-015",
+        "T-016",
+        "T-018",
+        "T-019",
+        "T-020"
+      ],
+      "verify": [
+        {
+          "cmd": "! grep -rnE 'function (errorText|errorMessage|formatDate|statusColor|relativeTime|formatMoney)\\b' web/pages web/components",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run --reporter=dot",
+          "timeout": 600
+        },
+        {
+          "cmd": "cd web && npx nuxt typecheck",
+          "timeout": 600
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": ""
+    }
+  ]
+}
