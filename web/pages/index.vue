@@ -1,99 +1,215 @@
 <template>
-  <q-page padding class="q-gutter-md" style="max-width: 900px">
-    <div class="row items-center justify-between">
-      <div class="text-h5">Dashboard</div>
-      <q-btn
-        color="primary"
-        icon="play_arrow"
-        :label="triggering ? 'Running…' : 'Run now'"
-        :loading="triggering"
-        @click="onTrigger"
-      />
-    </div>
+  <q-page class="page-container q-pa-md">
+    <PageHeader title="Overview">
+      <template #actions>
+        <q-btn
+          color="primary"
+          icon="play_arrow"
+          no-caps
+          :label="triggering ? 'Running…' : 'Run digest now'"
+          :loading="triggering"
+          data-testid="trigger-run"
+          @click="onTrigger"
+        />
+      </template>
+    </PageHeader>
 
-    <q-banner v-if="status?.next_scheduled_run" class="bg-grey-2">
-      Next scheduled run: {{ formatDate(status.next_scheduled_run) }}
-    </q-banner>
-
-    <q-card>
-      <q-card-section>
-        <div class="text-subtitle1 q-mb-sm">Last run</div>
-        <div v-if="!status?.last_run" class="text-grey">No runs yet.</div>
-        <div v-else>
-          <div class="row items-center q-gutter-sm">
-            <q-badge :color="statusColor(status.last_run.status)">{{ status.last_run.status }}</q-badge>
-            <span>{{ status.last_run.trigger }}</span>
-            <span class="text-grey">{{ formatDate(status.last_run.started_at) }}</span>
-          </div>
-          <div v-if="status.last_run.summary" class="q-mt-sm">{{ status.last_run.summary }}</div>
-          <div v-if="status.last_run.error" class="q-mt-sm text-negative">{{ status.last_run.error }}</div>
+    <AsyncState :loading="loading" :error="loadError" skeleton="cards" @retry="load">
+      <div class="row q-col-gutter-md q-mb-md" data-testid="kpi-row">
+        <div class="col-12 col-sm-6 col-md-3">
+          <q-card data-testid="kpi-last-run">
+            <q-card-section>
+              <div class="text-caption text-grey-7">Last run</div>
+              <div v-if="!status?.last_run" class="text-grey q-mt-xs" data-testid="kpi-last-run-empty">No runs yet</div>
+              <NuxtLink v-else class="kpi-link" :to="`/history/${status.last_run.id}`" data-testid="kpi-last-run-link">
+                <StatusChip kind="run" :value="status.last_run.status" />
+                <div class="text-caption text-grey-7 q-mt-xs">{{ relativeTime(status.last_run.started_at) }}</div>
+              </NuxtLink>
+            </q-card-section>
+          </q-card>
         </div>
-      </q-card-section>
-    </q-card>
 
-    <q-card>
-      <q-card-section>
-        <div class="text-subtitle1 q-mb-sm">Source health</div>
-        <div v-if="!status?.source_health?.length" class="text-grey">
-          No health data yet — no sources active, or no run has completed.
+        <div class="col-12 col-sm-6 col-md-3">
+          <q-card data-testid="kpi-next-run">
+            <q-card-section>
+              <div class="text-caption text-grey-7">Next run</div>
+              <div v-if="!status?.next_scheduled_run" class="text-grey q-mt-xs" data-testid="kpi-next-run-empty">
+                Not scheduled
+              </div>
+              <div v-else class="q-mt-xs" data-testid="kpi-next-run-value">
+                <div>{{ formatDate(status.next_scheduled_run) }}</div>
+                <div class="text-caption text-grey-7">{{ relativeTime(status.next_scheduled_run) }}</div>
+              </div>
+            </q-card-section>
+          </q-card>
         </div>
-        <q-list v-else bordered separator>
-          <q-item v-for="h in status.source_health" :key="h.source">
-            <q-item-section avatar>
-              <q-badge :color="h.status === 'ok' ? 'positive' : 'negative'" rounded />
-            </q-item-section>
-            <q-item-section>
-              <q-item-label>{{ h.source }}</q-item-label>
-              <q-item-label caption>{{ h.detail }}</q-item-label>
-            </q-item-section>
-            <q-item-section side>
-              <q-item-label caption>{{ formatDate(h.checked_at) }}</q-item-label>
-            </q-item-section>
-          </q-item>
-        </q-list>
-      </q-card-section>
-    </q-card>
+
+        <div class="col-12 col-sm-6 col-md-3">
+          <q-card data-testid="kpi-accounts">
+            <q-card-section>
+              <div class="text-caption text-grey-7">Accounts</div>
+              <div v-if="connectionsUnavailable" class="text-grey q-mt-xs" data-testid="kpi-accounts-unavailable">
+                Unavailable
+              </div>
+              <div v-else class="text-h6 q-mt-xs" data-testid="kpi-accounts-value">
+                {{ accountsHealthy }} healthy / {{ accountsTotal }} total
+              </div>
+            </q-card-section>
+          </q-card>
+        </div>
+
+        <div class="col-12 col-sm-6 col-md-3">
+          <q-card data-testid="kpi-collectors">
+            <q-card-section>
+              <div class="text-caption text-grey-7">Collectors</div>
+              <div v-if="collectorsUnavailable" class="text-grey q-mt-xs" data-testid="kpi-collectors-unavailable">
+                Unavailable
+              </div>
+              <div v-else class="text-h6 q-mt-xs" data-testid="kpi-collectors-value">
+                {{ collectorsFailing }} failing
+              </div>
+            </q-card-section>
+          </q-card>
+        </div>
+      </div>
+
+      <q-card data-testid="health-card">
+        <q-card-section>
+          <div class="text-subtitle1 q-mb-sm">Source health</div>
+          <HealthList :items="status?.source_health ?? []" />
+        </q-card-section>
+      </q-card>
+    </AsyncState>
   </q-page>
 </template>
 
 <script setup lang="ts">
-import { parseUtc } from '~/composables/useApi'
+import { useQuasar } from 'quasar'
+import PageHeader from '~/components/ui/PageHeader.vue'
+import AsyncState from '~/components/ui/AsyncState.vue'
+import StatusChip from '~/components/ui/StatusChip.vue'
+import HealthList from '~/components/HealthList.vue'
+import type { CollectorState, ConnectionView, StatusResponse } from '~/composables/useApi'
+
+// Poll cadence and cap for the "run finished" wait after Run digest now: fast enough to feel live,
+// capped so a stuck run doesn't poll forever.
+const POLL_INTERVAL_MS = 3000
+const POLL_CAP_MS = 5 * 60_000
 
 const api = useApi()
-const status = ref<Awaited<ReturnType<typeof api.getStatus>> | null>(null)
+const $q = useQuasar()
+
+const status = ref<StatusResponse | null>(null)
+const connections = ref<ConnectionView[] | null>(null)
+const collectors = ref<CollectorState[] | null>(null)
+const connectionsUnavailable = ref(false)
+const collectorsUnavailable = ref(false)
+
+const loading = ref(true)
+const loadError = ref<string | null>(null)
 const triggering = ref(false)
+
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let pollElapsedMs = 0
 
-async function refresh() {
-  status.value = await api.getStatus()
+const accountsHealthy = computed(() => connections.value?.filter((c) => c.health?.status === 'ok').length ?? 0)
+const accountsTotal = computed(() => connections.value?.length ?? 0)
+const collectorsFailing = computed(() => collectors.value?.filter((c) => c.consecutive_failures > 0).length ?? 0)
+
+/**
+ * Loads /status, /connections and /collectors in parallel. /status failing is a page-level error
+ * (nothing meaningful renders without it); a failing connections/collectors fetch only degrades its
+ * own KPI tile to "Unavailable" so the rest of the page still works.
+ */
+async function load() {
+  loading.value = true
+  loadError.value = null
+  connectionsUnavailable.value = false
+  collectorsUnavailable.value = false
+
+  const [statusResult, connectionsResult, collectorsResult] = await Promise.allSettled([
+    api.getStatus(),
+    api.listConnections(),
+    api.listCollectors(),
+  ])
+
+  if (statusResult.status === 'fulfilled') {
+    status.value = statusResult.value
+  } else {
+    status.value = null
+    loadError.value = errorText(statusResult.reason)
+  }
+
+  if (connectionsResult.status === 'fulfilled') {
+    connections.value = connectionsResult.value
+  } else {
+    connections.value = null
+    connectionsUnavailable.value = true
+  }
+
+  if (collectorsResult.status === 'fulfilled') {
+    collectors.value = collectorsResult.value
+  } else {
+    collectors.value = null
+    collectorsUnavailable.value = true
+  }
+
+  loading.value = false
 }
 
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+  triggering.value = false
+}
+
+/**
+ * Triggers a run and polls /status until a run other than the one that was last known finishes (or
+ * the cap elapses). Recording the pre-trigger id first means a fast health-check run that finishes
+ * before the first poll tick still counts as "new", instead of the old status !== 'running' check
+ * that could match the run already sitting there before the click.
+ */
 async function onTrigger() {
+  const previousId = status.value?.last_run?.id ?? null
   triggering.value = true
-  await api.triggerRun()
-  // Health checks finish in well under a second today; poll briefly for the new run to land.
-  let attempts = 0
+  try {
+    await api.triggerRun()
+  } catch (error) {
+    triggering.value = false
+    $q.notify({ type: 'negative', message: errorText(error) })
+    return
+  }
+
+  pollElapsedMs = 0
   pollTimer = setInterval(async () => {
-    attempts++
-    await refresh()
-    if (status.value?.last_run?.status !== 'running' || attempts > 20) {
-      if (pollTimer) clearInterval(pollTimer)
-      triggering.value = false
+    pollElapsedMs += POLL_INTERVAL_MS
+    try {
+      status.value = await api.getStatus()
+    } catch {
+      // A transient poll failure shouldn't stop the run or the spinner; the next tick retries.
     }
-  }, 500)
+    const run = status.value?.last_run
+    if (run && run.id !== previousId && run.status !== 'running') {
+      stopPolling()
+      return
+    }
+    if (pollElapsedMs >= POLL_CAP_MS) {
+      stopPolling()
+      $q.notify({ type: 'negative', message: 'The run is taking longer than expected. Check History for its status.' })
+    }
+  }, POLL_INTERVAL_MS)
 }
 
-function statusColor(s: string) {
-  return { success: 'positive', partial: 'warning', failed: 'negative', running: 'grey' }[s] ?? 'grey'
-}
-
-function formatDate(iso: string) {
-  const date = parseUtc(iso)
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString()
-}
-
-onMounted(refresh)
-onBeforeUnmount(() => {
-  if (pollTimer) clearInterval(pollTimer)
-})
+onMounted(load)
+onBeforeUnmount(stopPolling)
 </script>
+
+<style scoped lang="scss">
+.kpi-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+</style>
