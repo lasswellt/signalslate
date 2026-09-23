@@ -259,4 +259,30 @@ describe('closing', () => {
     expect(wrapper.emitted('update:open')?.at(-1)).toEqual([false])
     expect(wrapper.emitted('closed')).toHaveLength(1)
   })
+
+  it('asks for confirmation when closing with an unsaved cover letter edit', async () => {
+    const wrapper = await mountDialog()
+    await setInput('job-cover-letter', 'Unsaved edit')
+    await click('job-apply-close')
+    expect($('discard-confirm-dialog')?.textContent).toContain('Discard unsaved changes?')
+    expect(wrapper.emitted('update:open')).toBeFalsy()
+  })
+
+  it('keeps the dialog open and the dirty text when Keep editing is chosen', async () => {
+    const wrapper = await mountDialog()
+    await setInput('job-cover-letter', 'Unsaved edit')
+    await click('job-apply-close')
+    await click('keep-editing')
+    expect(wrapper.emitted('update:open')).toBeFalsy()
+    expect($<HTMLTextAreaElement>('job-cover-letter')?.value).toBe('Unsaved edit')
+  })
+
+  it('discards the unsaved cover letter edit and closes when Discard is chosen', async () => {
+    const wrapper = await mountDialog()
+    await setInput('job-cover-letter', 'Unsaved edit')
+    await click('job-apply-close')
+    await click('discard-confirm')
+    expect(wrapper.emitted('update:open')?.at(-1)).toEqual([false])
+    expect(wrapper.emitted('closed')).toHaveLength(1)
+  })
 })

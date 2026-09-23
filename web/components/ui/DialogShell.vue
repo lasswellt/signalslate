@@ -77,6 +77,10 @@ function confirmDiscard() {
   confirmOpen.value = false
   doClose()
 }
+
+// Lets a parent's own action buttons (e.g. a footer "Close") reuse the same dirty guard as the
+// header close button, Esc, and backdrop instead of closing directly.
+defineExpose({ requestClose })
 </script>
 
 <template>

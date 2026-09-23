@@ -1,5 +1,6 @@
 <template>
   <DialogShell
+    ref="shellRef"
     :model-value="open"
     :title="dialogTitle"
     :subtitle="dialogSubtitle"
@@ -143,7 +144,7 @@
     </div>
 
     <template #actions>
-      <q-btn flat no-caps label="Close" data-testid="job-apply-close" @click="close" />
+      <q-btn flat no-caps label="Close" data-testid="job-apply-close" @click="requestClose" />
       <q-btn
         v-if="application"
         unelevated
@@ -421,9 +422,12 @@ function reset() {
   submitError.value = null
 }
 
-function close() {
-  emit('update:open', false)
-  emit('closed')
+const shellRef = ref<InstanceType<typeof DialogShell> | null>(null)
+
+/** Footer "Close" reuses DialogShell's own dirty guard instead of closing directly, so an unsaved
+ * cover letter prompts the same discard-confirm as the header X, Esc, and backdrop. */
+function requestClose() {
+  shellRef.value?.requestClose()
 }
 
 function onModelUpdate(value: boolean) {
