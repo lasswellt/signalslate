@@ -131,6 +131,14 @@ describe('dark-mode status tokens as fills (white text)', () => {
       )
     ).toBe(true)
   })
+
+  it('app.scss draws the dark primary checkbox tick in on-primary ink, not white', () => {
+    expect(
+      /body\.body--dark \.q-checkbox__inner--truthy[^{]*\.q-checkbox__svg[^{]*\{[^}]*color:\s*var\(--ss-on-primary\)/.test(
+        scssSource
+      )
+    ).toBe(true)
+  })
 })
 
 describe('dark-mode status TEXT tokens vs dark surface', () => {

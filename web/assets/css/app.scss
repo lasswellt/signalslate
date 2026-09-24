@@ -74,6 +74,16 @@ body.body--dark .bg-primary {
   color: var(--ss-on-primary) !important;
 }
 
+// Quasar draws the checkbox tick/indeterminate bar in #fff over a
+// --q-primary fill; dark primary is near-white, so default-coloured
+// (primary) checkboxes need the on-primary ink instead. Checkboxes given
+// an explicit color="..." keep Quasar's white mark on their own fill.
+body.body--dark .q-checkbox__inner--truthy:not([class*='text-']) .q-checkbox__svg,
+body.body--dark .q-checkbox__inner--indet:not([class*='text-']) .q-checkbox__svg,
+body.body--dark .q-checkbox__inner.text-primary .q-checkbox__svg {
+  color: var(--ss-on-primary);
+}
+
 // Page anatomy: PageHeader sits above content; content is centered with a
 // max-width and a mobile-friendly gutter (DESIGN.md "Page anatomy").
 .page-container {
