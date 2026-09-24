@@ -1,8 +1,8 @@
 {
   "$schema": "blitz-check-report/1.0",
-  "result": "FAIL",
-  "ts": "2026-09-24T01:56:18Z",
-  "ref": "531eeb2d6d5a6bdc0ca7805c5dc00f391d789c33",
+  "result": "CONDITIONAL",
+  "ts": "2026-09-24T02:45:44Z",
+  "ref": "d93fa580c7ddddcb8ac35d6cad48a230d0c2dcd0",
   "scope": "plan",
   "plan": "console-ux-overhaul",
   "stacks": [
@@ -18,19 +18,25 @@
       "error": 5
     },
     "semantic": {
-      "selected": 2,
-      "ran": 2,
-      "pass": 2,
+      "selected": 1,
+      "ran": 1,
+      "pass": 1,
       "finding": 0,
       "error": 0
     }
   },
   "findings": [
     {
+      "id": "ratchet",
+      "severity": "P2",
+      "where": ".claude/worktrees",
+      "what": "stale_worktree_branch_count 21->22; carried as blocked T-026"
+    },
+    {
       "id": "critic",
-      "severity": "P1",
-      "where": "web/pages/history.vue:1",
-      "what": "history/[id].vue is a child route of history.vue which has no <NuxtPage/>; run detail never renders (T-008 held-out)"
+      "severity": "P3",
+      "where": "tasks.json T-008",
+      "what": "verify path stale after T-024 relocation; superseded by T-025"
     }
   ],
   "cannot_verify": [
@@ -38,10 +44,16 @@
   ],
   "critic": {
     "mode": "reject",
-    "verdict": "REJECT"
+    "verdict": "LGTM"
   },
   "tasks": {
-    "verified": 23,
-    "failed": 0
+    "verified": 24,
+    "failed": 1,
+    "superseded": {
+      "T-008": "T-025"
+    },
+    "blocked": [
+      "T-026"
+    ]
   }
 }
