@@ -1,8 +1,8 @@
 {
   "$schema": "blitz-check-report/1.0",
   "result": "FAIL",
-  "ts": "2026-09-23T19:55:44Z",
-  "ref": "e27212448f08bc28d3dc63e5a61a938fcee30882",
+  "ts": "2026-09-24T01:56:18Z",
+  "ref": "531eeb2d6d5a6bdc0ca7805c5dc00f391d789c33",
   "scope": "plan",
   "plan": "console-ux-overhaul",
   "stacks": [
@@ -13,15 +13,15 @@
     "deterministic": {
       "selected": 41,
       "ran": 36,
-      "pass": 30,
-      "finding": 6,
+      "pass": 36,
+      "finding": 0,
       "error": 5
     },
     "semantic": {
-      "selected": 5,
-      "ran": 5,
+      "selected": 2,
+      "ran": 2,
       "pass": 2,
-      "finding": 3,
+      "finding": 0,
       "error": 0
     }
   },
@@ -29,26 +29,8 @@
     {
       "id": "critic",
       "severity": "P1",
-      "where": "web/components/JobApplyDialog.vue:146",
-      "what": "Footer Close bypasses DialogShell dirty guard; unsaved cover letter lost (T-020 held-out)"
-    },
-    {
-      "id": "survey:frontend-A",
-      "severity": "P3",
-      "where": "web/pages/jobs/applications.vue:78",
-      "what": "Applications table not sortable"
-    },
-    {
-      "id": "survey:frontend-A",
-      "severity": "P3",
-      "where": "web/pages/connections.vue:76",
-      "what": "Raw ok/error test status instead of StatusChip"
-    },
-    {
-      "id": "survey:patterns",
-      "severity": "P3",
-      "where": "web/components/DomainTable.vue:168",
-      "what": "Mail-posture badge logic duplicated with DomainDetailDialog"
+      "where": "web/pages/history.vue:1",
+      "what": "history/[id].vue is a child route of history.vue which has no <NuxtPage/>; run detail never renders (T-008 held-out)"
     }
   ],
   "cannot_verify": [
@@ -59,7 +41,7 @@
     "verdict": "REJECT"
   },
   "tasks": {
-    "verified": 21,
+    "verified": 23,
     "failed": 0
   }
 }

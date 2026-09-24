@@ -72,3 +72,4 @@ Ruling: scope-expansion — T-023 may edit web/tests/connections.test.ts (Status
 ## 2026-09-23T21:25:37Z verify T-023 ok=true
 Concern (T-023, med): connections.test.ts test-result assertions moved from raw text/class to StatusChip aria-label + detail text (equivalent strength); jobs.test.ts min-score tests advance fake timers 300ms for the new debounce.
 ## 2026-09-23T21:25:37Z build complete 23/23
+## 2026-09-24T01:56:18Z check FAIL check-report.md
