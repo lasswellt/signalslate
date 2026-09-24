@@ -31,17 +31,41 @@ CSS custom properties (`--ss-*`, defined in `assets/css/app.scss`, keyed on
 Quasar brand tokens: `quasar.config.brand` (in `nuxt.config.ts`) only holds
 one set of values, so it carries the **light** palette; the **dark** palette
 is applied at runtime via `--q-*` overrides in `assets/css/app.scss` under
-`body.body--dark`:
+`body.body--dark`.
 
-| Quasar name | Light (`quasar.config.brand`) | Dark (`--q-*` override) |
-|---|---|---|
-| `primary` | `#18201F` | `#E2EAEA` |
-| `accent` | `#1B6668` | `#5DBDB9` |
-| `positive` | `#1B7A4B` (✓ Success) | `#5CC98F` |
-| `negative` | `#B3261E` (✕ Failed) | `#F2796D` |
-| `warning` | `#8A5A00` (! Partial) | `#E3A63B` |
-| `info` | `#4B55B5` (◷ Running) | `#9AA4FF` |
-| `dark` / `dark-page` | `#151D1F` / `#0E1415` | (same — dark surfaces) |
+Status colours are used two ways in this app — as **fills** (`bg-positive`,
+`bg-negative`, `bg-warning`, `bg-info`, coloured chips, all paired with white
+text) and as **text** (`text-positive`, `text-negative`, etc. directly on a
+surface). A single dark value can't serve both: white text needs a dark, fully
+saturated fill (≥4.5:1 with white), but the same colour read as text on a dark
+surface needs to be light. So dark mode splits them:
+
+- **Fills** — `--q-positive/negative/warning/info` keep the **light** brand
+  hexes in dark mode too (dark, saturated, ≥4.5:1 with white). Anything using
+  `bg-*` + `text-white` or a coloured chip stays legible.
+- **Text** — `--ss-positive-text` / `--ss-negative-text` / `--ss-warning-text`
+  / `--ss-info-text` hold the light, brand-adjacent hexes for direct-on-surface
+  text (`#5CC98F` / `#F2796D` / `#E3A63B` / `#9AA4FF`), ≥4.5:1 on
+  `--ss-surface`. `body.body--dark .text-positive` (and the negative/warning/
+  info equivalents) override Quasar's `.text-*` utilities — which are
+  `!important` — via the extra `body.body--dark` specificity, so they route to
+  these tokens instead of `--q-*`.
+- **Primary** — `--q-primary` stays `#E2EAEA` (inverted ink) in dark mode, but
+  filled primary buttons (`bg-primary text-white`) need on-primary (dark) text,
+  not white. `body.body--dark .bg-primary` forces `color: var(--ss-on-primary)
+  !important`, which beats Quasar's `.text-white { color: #fff !important }`
+  on specificity. Flat/outline buttons (`text-primary`) are unaffected and
+  keep the `#E2EAEA` text.
+
+| Quasar name | Light (`quasar.config.brand`) | Dark fill (`--q-*` override) | Dark text (`--ss-*-text`) |
+|---|---|---|---|
+| `primary` | `#18201F` | `#E2EAEA` | n/a — see on-primary rule above |
+| `accent` | `#1B6668` | `#5DBDB9` | — |
+| `positive` | `#1B7A4B` (✓ Success) | `#1B7A4B` (unchanged; white-text-safe) | `#5CC98F` |
+| `negative` | `#B3261E` (✕ Failed) | `#B3261E` (unchanged; white-text-safe) | `#F2796D` |
+| `warning` | `#8A5A00` (! Partial) | `#8A5A00` (unchanged; white-text-safe) | `#E3A63B` |
+| `info` | `#4B55B5` (◷ Running) | `#4B55B5` (unchanged; white-text-safe) | `#9AA4FF` |
+| `dark` / `dark-page` | `#151D1F` / `#0E1415` | (same — dark surfaces) | — |
 
 Logo wave: `#4DB3AF` on a `#111718` tile (light), `#5DBDB9` on a `#1C2628`
 tile (dark).

@@ -13,6 +13,10 @@ body.body--light {
   --ss-accent: #1b6668;
   --ss-accent-subtle: #e2efee;
   --ss-link: #1b6668;
+  --ss-positive-text: #1b7a4b;
+  --ss-negative-text: #b3261e;
+  --ss-warning-text: #8a5a00;
+  --ss-info-text: #4b55b5;
   background: var(--ss-bg);
   color: var(--ss-text);
 }
@@ -29,16 +33,45 @@ body.body--dark {
   --ss-accent: #5dbdb9;
   --ss-accent-subtle: #173335;
   --ss-link: #7fcfcb;
+  --ss-positive-text: #5cc98f;
+  --ss-negative-text: #f2796d;
+  --ss-warning-text: #e3a63b;
+  --ss-info-text: #9aa4ff;
   background: var(--ss-bg);
   color: var(--ss-text);
 
   --q-primary: #e2eaea;
   --q-accent: #5dbdb9;
-  --q-positive: #5cc98f;
-  --q-negative: #f2796d;
-  --q-warning: #e3a63b;
-  --q-info: #9aa4ff;
+  // Fill-safe: these back bg-positive/negative/warning/info chips and
+  // buttons, which pair with white text everywhere in the app. Use
+  // --ss-*-text (and the .text-* overrides below) for status TEXT instead.
+  --q-positive: #1b7a4b;
+  --q-negative: #b3261e;
+  --q-warning: #8a5a00;
+  --q-info: #4b55b5;
   --q-secondary: #8c9d9f;
+}
+
+// Quasar's .text-* utilities are !important; the body.body--dark prefix
+// gives these higher specificity so status TEXT (not fills) stays legible
+// on the dark surface in dark mode.
+body.body--dark .text-positive {
+  color: var(--ss-positive-text) !important;
+}
+body.body--dark .text-negative {
+  color: var(--ss-negative-text) !important;
+}
+body.body--dark .text-warning {
+  color: var(--ss-warning-text) !important;
+}
+body.body--dark .text-info {
+  color: var(--ss-info-text) !important;
+}
+
+// Dark --q-primary is inverted ink (#E2EAEA); filled primary buttons
+// (bg-primary text-white) need on-primary (dark) text, not white.
+body.body--dark .bg-primary {
+  color: var(--ss-on-primary) !important;
 }
 
 // Page anatomy: PageHeader sits above content; content is centered with a

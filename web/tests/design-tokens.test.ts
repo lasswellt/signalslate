@@ -104,9 +104,9 @@ describe('brand hexes vs white (light mode)', () => {
   })
 })
 
-describe('dark-mode status tokens vs dark surface', () => {
-  const darkSurface = getCssVarHex('body.body--dark', '--ss-surface')
-
+describe('dark-mode status tokens as fills (white text)', () => {
+  // --q-positive/negative/warning/info back Quasar bg-* fills, which pair
+  // with white text throughout the app (bg-negative text-white, chips, etc).
   const cases: Array<[string, string]> = [
     ['--q-positive', getCssVarHex('body.body--dark', '--q-positive')],
     ['--q-negative', getCssVarHex('body.body--dark', '--q-negative')],
@@ -114,14 +114,37 @@ describe('dark-mode status tokens vs dark surface', () => {
     ['--q-info', getCssVarHex('body.body--dark', '--q-info')],
   ]
 
-  it.each(cases)('%s (%s) has contrast >= 4.5 on dark surface %s', (_name, hex) => {
-    expect(contrastRatio(hex, darkSurface)).toBeGreaterThanOrEqual(AA_NORMAL)
+  it.each(cases)('%s (%s) has contrast >= 4.5 with white text', (_name, hex) => {
+    expect(contrastRatio(hex, WHITE)).toBeGreaterThanOrEqual(AA_NORMAL)
   })
 
   it('--ss-on-primary on --q-primary has contrast >= 4.5 in dark mode', () => {
     const onPrimary = getCssVarHex('body.body--dark', '--ss-on-primary')
     const primary = getCssVarHex('body.body--dark', '--q-primary')
     expect(contrastRatio(onPrimary, primary)).toBeGreaterThanOrEqual(AA_NORMAL)
+  })
+
+  it('app.scss forces on-primary text on dark bg-primary fills', () => {
+    expect(
+      /body\.body--dark \.bg-primary\s*\{[^}]*color:\s*var\(--ss-on-primary\)\s*!important/.test(
+        scssSource
+      )
+    ).toBe(true)
+  })
+})
+
+describe('dark-mode status TEXT tokens vs dark surface', () => {
+  const darkSurface = getCssVarHex('body.body--dark', '--ss-surface')
+
+  const cases: Array<[string, string]> = [
+    ['--ss-positive-text', getCssVarHex('body.body--dark', '--ss-positive-text')],
+    ['--ss-negative-text', getCssVarHex('body.body--dark', '--ss-negative-text')],
+    ['--ss-warning-text', getCssVarHex('body.body--dark', '--ss-warning-text')],
+    ['--ss-info-text', getCssVarHex('body.body--dark', '--ss-info-text')],
+  ]
+
+  it.each(cases)('%s (%s) has contrast >= 4.5 on dark surface %s', (_name, hex) => {
+    expect(contrastRatio(hex, darkSurface)).toBeGreaterThanOrEqual(AA_NORMAL)
   })
 })
 
