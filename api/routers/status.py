@@ -4,7 +4,7 @@ from fastapi import APIRouter
 
 from api.scheduler import next_run_time
 from api.serialize import iso_z
-from pipeline import connections, health
+from pipeline import config_store, connections, health
 from pipeline.db import latest_run, latest_source_health
 from pipeline.redact import redact
 
@@ -23,7 +23,9 @@ def _scrub(text: Optional[str], known: list[str]) -> Optional[str]:
 @router.get("/status")
 def get_status():
     run = latest_run()
-    source_rows = latest_source_health()
+    # Health rows outlive their account and their toggle; only declared, switched-on sources are shown.
+    shown = {s for s, on in config_store.load_config()["active_sources"].items() if on}
+    source_rows = [h for h in latest_source_health() if h.source in shown]
     # Stored secrets are scrubbed by value as well as by shape; empty (and cheap) without a vault.
     known = connections.secret_values()
 

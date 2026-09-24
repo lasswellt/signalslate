@@ -7,6 +7,9 @@
         v-model="seeds"
         multiple
         use-chips
+        use-input
+        hide-dropdown-icon
+        input-debounce="0"
         new-value-mode="add-unique"
         dense
         outlined
@@ -31,6 +34,9 @@
         v-model="tlds"
         multiple
         use-chips
+        use-input
+        hide-dropdown-icon
+        input-debounce="0"
         new-value-mode="add-unique"
         dense
         outlined

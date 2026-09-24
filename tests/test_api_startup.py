@@ -229,6 +229,21 @@ def test_status_without_runs_is_still_well_formed(home):
         assert body["next_scheduled_run"] is None
 
 
+def test_status_hides_health_of_undeclared_and_switched_off_sources(home):
+    with running_app() as client:
+        with db.get_session() as session:
+            run = db.Run(trigger="manual", status="ok")
+            session.add(run)
+            session.commit()
+            session.refresh(run)
+            assert run.id is not None
+            for source in ("slack_work", "slack_gone", "domains"):
+                session.add(db.SourceHealth(run_id=run.id, source=source, status="ok", detail=None))
+            session.commit()
+        config_store.set_source_active("domains", False)
+        assert [h["source"] for h in client.get("/api/status").json()["source_health"]] == ["slack_work"]
+
+
 def test_new_routers_are_registered_under_api(home):
     paths = {getattr(route, "path", None) for route in api_main.app.routes}
     assert {

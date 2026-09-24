@@ -771,12 +771,20 @@ def check_jobs() -> HealthResult:
     return HealthResult("jobs", "ok", f"{count} companies tracked")
 
 
+def zoom_declared() -> bool:
+    """True when a Zoom account exists: a stored "zoom" connection or any ZOOM_ credential in the env."""
+    if connections.get("zoom") is not None:
+        return True
+    env = _env()
+    return any(env.get(k) for k in ("ZOOM_ACCOUNT_ID", "ZOOM_CLIENT_ID", "ZOOM_CLIENT_SECRET"))
+
+
 def known_sources() -> list[str]:
     """Every source id the current .env declares: m365_<alias>, zoom, slack_<label>, gmail_<label>,
-    plus the always-available "domains" and "jobs" sources (local DB, no .env entry needed)."""
+    plus zoom when a Zoom account exists, and the always-available "domains" and "jobs" sources (local DB, no .env entry needed)."""
     return (
         [f"m365_{a}" for a in m365_aliases()]
-        + ["zoom"]
+        + (["zoom"] if zoom_declared() else [])
         + [f"slack_{l}" for l in slack_workspaces()]
         + [f"gmail_{l}" for l in gmail_accounts()]
         + ["domains"]
@@ -792,7 +800,7 @@ def check_all_configured(active_sources: dict[str, bool]) -> list[HealthResult]:
         if active_sources.get(f"m365_{alias}", False):
             results.append(check_m365(alias))
 
-    if active_sources.get("zoom", False):
+    if active_sources.get("zoom", False) and zoom_declared():
         results.append(check_zoom())
 
     if active_sources.get("domains", False):

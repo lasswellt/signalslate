@@ -143,7 +143,7 @@ def test_create_of_every_registrar_kind_is_201_and_write_only(client):
     assert bodies[0]["secrets_set"] == ["api_key"]
     assert bodies[1]["secrets_set"] == ["api_key", "api_secret"]
     assert bodies[2]["secrets_set"] == ["client_secret"]
-    assert [b["active"] for b in bodies] == [False, False, False]
+    assert [b["active"] for b in bodies] == [True, True, True]
     assert bodies[0]["config"] == {"label": "primary", "api_user": "ncuser", "username": "ncuser", "client_ip": "203.0.113.5"}
     assert_clean(*responses)
 
@@ -362,3 +362,29 @@ def test_no_registrar_secret_reaches_any_response_or_log_across_a_full_lifecycle
     assert_clean(*responses)
     for secret in ALL_SECRETS:
         assert secret not in caplog.text
+
+
+def test_registrar_toggle_persists_and_sync_skips_when_off(client, monkeypatch):
+    """The Active slider on a registrar writes connection_active, reads back on list, and gates sync_all."""
+    from api.routers import config as config_router
+    from pipeline.domains import inventory
+
+    monkeypatch.setattr(config_router, "reschedule", lambda: None)  # keep the global scheduler untouched
+    client.app.include_router(config_router.router, prefix="/api")
+    client.post("/api/connections", json=NAMECHEAP)
+    cfg = client.get("/api/config").json()
+    assert cfg["connection_active"] == {}
+
+    off = client.put("/api/config", json={**cfg, "connection_active": {"namecheap_primary": False}})
+    assert off.status_code == 200
+    listed = {c["id"]: c for c in client.get("/api/connections").json()}
+    assert listed["namecheap_primary"]["active"] is False
+
+    # A config save from an older client that omits connection_active must not wipe the toggle.
+    client.put("/api/config", json={k: cfg[k] for k in ("schedule_cron", "tracker", "active_sources")})
+    assert client.get("/api/config").json()["connection_active"] == {"namecheap_primary": False}
+
+    assert inventory.sync_all(registrar_factory=lambda cid: (_ for _ in ()).throw(AssertionError(cid))) == []
+
+    client.put("/api/config", json={**cfg, "connection_active": {"namecheap_primary": True}})
+    assert {c["id"]: c for c in client.get("/api/connections").json()}["namecheap_primary"]["active"] is True

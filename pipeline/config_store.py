@@ -18,13 +18,16 @@ STATIC_DEFAULTS = {
     "tracker": "mstodo",  # mstodo | todoist | none
 }
 
+# Registrar connections (namecheap/godaddy/wordpress) are not collector sources, so they have no
+# active_sources entry. Their on/off lives in connection_active instead; an id missing there is on.
+
 _lock = threading.Lock()
 
 
 def _defaults() -> dict[str, Any]:
     from pipeline.health import known_sources  # local import: health imports nothing from here
 
-    return {**STATIC_DEFAULTS, "active_sources": {s: True for s in known_sources()}}
+    return {**STATIC_DEFAULTS, "active_sources": {s: True for s in known_sources()}, "connection_active": {}}
 
 
 def _merge(stored: dict[str, Any]) -> dict[str, Any]:
@@ -35,6 +38,10 @@ def _merge(stored: dict[str, Any]) -> dict[str, Any]:
     merged["active_sources"] = {
         s: stored_sources.get(s, True) for s in defaults["active_sources"]
     }
+    stored_conn = stored.get("connection_active")
+    merged["connection_active"] = (
+        {str(k): bool(v) for k, v in stored_conn.items()} if isinstance(stored_conn, dict) else {}
+    )
     return merged
 
 
@@ -69,11 +76,14 @@ def forget_source(source_id: str) -> None:
         if not CONFIG_PATH.exists():
             return
         stored = json.loads(CONFIG_PATH.read_text())
-        sources = stored.get("active_sources")
-        if not isinstance(sources, dict) or source_id not in sources:
-            return
-        del sources[source_id]
-        CONFIG_PATH.write_text(json.dumps(stored, indent=2))
+        changed = False
+        for key in ("active_sources", "connection_active"):
+            section = stored.get(key)
+            if isinstance(section, dict) and source_id in section:
+                del section[source_id]
+                changed = True
+        if changed:
+            CONFIG_PATH.write_text(json.dumps(stored, indent=2))
 
 
 def set_source_active(source_id: str, active: bool) -> dict[str, Any]:

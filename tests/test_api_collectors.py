@@ -52,6 +52,7 @@ def env(monkeypatch, tmp_path, temp_db):
     monkeypatch.setattr(config_store, "CONFIG_PATH", tmp_path / "config.json")
     connections.set_vault(crypto.Vault([crypto.generate_key()]))
     health.set_env_overlay_provider(connections.overlay_provider, connections.is_family_key)
+    connections.create("zoom", {"account_id": "acct_Example123", "client_id": "zoomClient_Ex", "client_secret": "zs-Example-secret-77"})
     connections.create("slack", {"label": "work", "token": WORK_TOKEN})
     connections.create("slack", {"label": "team", "token": TEAM_TOKEN})
     yield tmp_path

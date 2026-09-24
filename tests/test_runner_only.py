@@ -38,7 +38,7 @@ def temp_db(monkeypatch, tmp_path):
 def declared(monkeypatch, tmp_path):
     """Two Slack workspaces declared in a tmp .env, and a tmp config.json."""
     monkeypatch.setattr(health, "ROOT", tmp_path)
-    (tmp_path / ".env").write_text("SLACK_ALPHA_TOKEN=xoxp-a\nSLACK_BETA_TOKEN=xoxp-b\n")
+    (tmp_path / ".env").write_text("ZOOM_CLIENT_ID=zid\nSLACK_ALPHA_TOKEN=xoxp-a\nSLACK_BETA_TOKEN=xoxp-b\n")
     monkeypatch.setattr(config_store, "CONFIG_PATH", tmp_path / "data" / "config.json")
 
 

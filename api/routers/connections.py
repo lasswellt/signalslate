@@ -236,6 +236,7 @@ _HANDLED = (
 def _to_out(
     view: connections.ConnectionView,
     active: dict[str, bool],
+    connection_active: dict[str, bool],
     health_rows: dict[str, db.SourceHealth],
     known: list[str],
 ) -> ConnectionOut:
@@ -248,7 +249,7 @@ def _to_out(
         config={name: str(value) for name, value in view.config.items()},
         secrets_set=view.secrets_set,
         # An id that known_sources() does not list is not collected from, whatever a stale toggle says.
-        active=active.get(view.id, False),
+        active=connection_active.get(view.id, True) if view.kind in _REGISTRAR_KINDS else active.get(view.id, False),
         health=None
         if row is None
         else HealthOut(status=row.status, detail=_scrub(row.detail, known), checked_at=iso_z(row.checked_at)),
@@ -257,7 +258,8 @@ def _to_out(
 
 def _out_for(view: connections.ConnectionView) -> ConnectionOut:
     health_rows = {row.source: row for row in db.latest_source_health()}
-    return _to_out(view, config_store.load_config()["active_sources"], health_rows, connections.secret_values())
+    config = config_store.load_config()
+    return _to_out(view, config["active_sources"], config.get("connection_active", {}), health_rows, connections.secret_values())
 
 
 def _tombstoned_ids() -> set[str]:
@@ -288,10 +290,11 @@ def _store_inactive() -> HTTPException:
 @router.get("/connections", response_model=list[ConnectionOut])
 def list_all() -> list[ConnectionOut]:
     """Every connection with its toggle and latest health. Never carries a secret."""
-    active = config_store.load_config()["active_sources"]
+    config = config_store.load_config()
+    active, connection_active = config["active_sources"], config.get("connection_active", {})
     health_rows = {row.source: row for row in db.latest_source_health()}
     known = connections.secret_values()
-    return [_to_out(view, active, health_rows, known) for view in connections.list_connections()]
+    return [_to_out(view, active, connection_active, health_rows, known) for view in connections.list_connections()]
 
 
 @router.post("/connections", status_code=201, response_model=ConnectionOut)
@@ -317,7 +320,7 @@ def create_connection(body: Annotated[CreateBody, Body()]) -> ConnectionOut:
         raise _translate(exc) from None
 
     if body.kind in _REGISTRAR_KINDS:
-        return _to_out(view, {}, {}, [])
+        return _to_out(view, {}, {}, {}, [])
 
     had_tombstone = view.id in had_tombstone_before
     if view.id not in health.known_sources():
@@ -333,7 +336,7 @@ def create_connection(body: Annotated[CreateBody, Body()]) -> ConnectionOut:
         _roll_back_create(view.id, had_tombstone)
         raise _store_inactive()
 
-    return _to_out(view, merged["active_sources"], {}, [])
+    return _to_out(view, merged["active_sources"], merged.get("connection_active", {}), {}, [])
 
 
 @router.patch("/connections/{connection_id}", response_model=ConnectionOut)

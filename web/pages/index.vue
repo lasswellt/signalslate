@@ -17,11 +17,11 @@
     <AsyncState :loading="loading" :error="loadError" skeleton="cards" @retry="load">
       <div class="row q-col-gutter-md q-mb-md" data-testid="kpi-row">
         <div class="col-12 col-sm-6 col-md-3">
-          <q-card data-testid="kpi-last-run">
+          <q-card class="kpi-card" data-testid="kpi-last-run">
             <q-card-section>
               <div class="text-caption text-grey-7">Last run</div>
-              <div v-if="!status?.last_run" class="text-grey q-mt-xs" data-testid="kpi-last-run-empty">No runs yet</div>
-              <NuxtLink v-else class="kpi-link" :to="`/history/${status.last_run.id}`" data-testid="kpi-last-run-link">
+              <div v-if="!status?.last_run" class="kpi-value text-grey" data-testid="kpi-last-run-empty">No runs yet</div>
+              <NuxtLink v-else class="kpi-link kpi-value" :to="`/history/${status.last_run.id}`" data-testid="kpi-last-run-link">
                 <StatusChip kind="run" :value="status.last_run.status" />
                 <div class="text-caption text-grey-7 q-mt-xs">{{ relativeTime(status.last_run.started_at) }}</div>
               </NuxtLink>
@@ -30,13 +30,13 @@
         </div>
 
         <div class="col-12 col-sm-6 col-md-3">
-          <q-card data-testid="kpi-next-run">
+          <q-card class="kpi-card" data-testid="kpi-next-run">
             <q-card-section>
               <div class="text-caption text-grey-7">Next run</div>
-              <div v-if="!status?.next_scheduled_run" class="text-grey q-mt-xs" data-testid="kpi-next-run-empty">
+              <div v-if="!status?.next_scheduled_run" class="kpi-value text-grey" data-testid="kpi-next-run-empty">
                 Not scheduled
               </div>
-              <div v-else class="q-mt-xs" data-testid="kpi-next-run-value">
+              <div v-else class="kpi-value" data-testid="kpi-next-run-value">
                 <div>{{ formatDate(status.next_scheduled_run) }}</div>
                 <div class="text-caption text-grey-7">{{ relativeTime(status.next_scheduled_run) }}</div>
               </div>
@@ -45,13 +45,13 @@
         </div>
 
         <div class="col-12 col-sm-6 col-md-3">
-          <q-card data-testid="kpi-accounts">
+          <q-card class="kpi-card" data-testid="kpi-accounts">
             <q-card-section>
               <div class="text-caption text-grey-7">Accounts</div>
-              <div v-if="connectionsUnavailable" class="text-grey q-mt-xs" data-testid="kpi-accounts-unavailable">
+              <div v-if="connectionsUnavailable" class="kpi-value text-grey" data-testid="kpi-accounts-unavailable">
                 Unavailable
               </div>
-              <div v-else class="text-h6 q-mt-xs" data-testid="kpi-accounts-value">
+              <div v-else class="kpi-value text-h6" data-testid="kpi-accounts-value">
                 {{ accountsHealthy }} healthy / {{ accountsTotal }} total
               </div>
             </q-card-section>
@@ -59,13 +59,13 @@
         </div>
 
         <div class="col-12 col-sm-6 col-md-3">
-          <q-card data-testid="kpi-collectors">
+          <q-card class="kpi-card" data-testid="kpi-collectors">
             <q-card-section>
               <div class="text-caption text-grey-7">Collectors</div>
-              <div v-if="collectorsUnavailable" class="text-grey q-mt-xs" data-testid="kpi-collectors-unavailable">
+              <div v-if="collectorsUnavailable" class="kpi-value text-grey" data-testid="kpi-collectors-unavailable">
                 Unavailable
               </div>
-              <div v-else class="text-h6 q-mt-xs" data-testid="kpi-collectors-value">
+              <div v-else class="kpi-value text-h6" data-testid="kpi-collectors-value">
                 {{ collectorsFailing }} failing
               </div>
             </q-card-section>
@@ -207,6 +207,15 @@ onBeforeUnmount(stopPolling)
 </script>
 
 <style scoped lang="scss">
+.kpi-card {
+  height: 100%;
+}
+
+.kpi-value {
+  margin-top: 4px;
+  min-height: 3.25rem;
+}
+
 .kpi-link {
   display: block;
   text-decoration: none;

@@ -237,6 +237,9 @@ async function load(silent = false) {
   }
 }
 
+// Registrar kinds are not collector sources; the API keeps their toggle in connection_active.
+const REGISTRAR_KINDS = new Set<string>(['namecheap', 'godaddy', 'wordpress'])
+
 async function onToggle(conn: ConnectionView, value: boolean) {
   togglingIds.add(conn.id)
   toggleErrors[conn.id] = undefined
@@ -244,11 +247,13 @@ async function onToggle(conn: ConnectionView, value: boolean) {
   conn.active = value
   try {
     const config = await api.getConfig()
-    const saved = await api.updateConfig({
-      ...config,
-      active_sources: { ...config.active_sources, [conn.id]: value },
-    })
-    conn.active = saved.active_sources[conn.id] ?? value
+    const registrar = REGISTRAR_KINDS.has(conn.kind)
+    const saved = await api.updateConfig(
+      registrar
+        ? { ...config, connection_active: { ...config.connection_active, [conn.id]: value } }
+        : { ...config, active_sources: { ...config.active_sources, [conn.id]: value } },
+    )
+    conn.active = (registrar ? saved.connection_active?.[conn.id] : saved.active_sources[conn.id]) ?? value
   } catch (error) {
     conn.active = previous
     const message = errorText(error)

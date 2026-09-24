@@ -172,9 +172,17 @@ def sync_all(*, registrar_factory: Callable[[str], Registrar] = registrar_for) -
 
     Returns:
         One SyncStatus per registrar connection (namecheap/godaddy/wordpress), in connection
-        creation order. A connection of a non-registrar kind is skipped entirely (not included).
+        creation order. A connection of a non-registrar kind, or one switched off on the Accounts page,
+        is skipped entirely (not included).
     """
-    return [_sync_one(view, registrar_factory) for view in connections.list_connections() if view.kind in _REGISTRAR_KINDS]
+    from pipeline import config_store  # local import: config_store reaches the connection store
+
+    switched = config_store.load_config().get("connection_active", {})
+    return [
+        _sync_one(view, registrar_factory)
+        for view in connections.list_connections()
+        if view.kind in _REGISTRAR_KINDS and switched.get(view.id, True)
+    ]
 
 
 def add_manual(name: str, ownership: str = "owned") -> Domain:

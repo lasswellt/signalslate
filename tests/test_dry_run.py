@@ -28,10 +28,10 @@ def pinned_clock(monkeypatch):
     monkeypatch.setattr(collect, "utcnow", lambda: NOW)
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def declared(monkeypatch, tmp_path):
     monkeypatch.setattr(health, "ROOT", tmp_path)
-    (tmp_path / ".env").write_text("SLACK_ALPHA_TOKEN=xoxp-a\n")
+    (tmp_path / ".env").write_text("ZOOM_CLIENT_ID=zid\nSLACK_ALPHA_TOKEN=xoxp-a\n")
 
 
 @pytest.fixture

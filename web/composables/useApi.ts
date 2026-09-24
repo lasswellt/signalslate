@@ -39,6 +39,8 @@ export interface DigestConfig {
   schedule_cron: string
   tracker: string
   active_sources: Record<string, boolean>
+  // Registrar connections (namecheap/godaddy/wordpress): not collector sources, so their toggle lives here.
+  connection_active?: Record<string, boolean>
 }
 
 export type ConnectionKind = 'm365' | 'zoom' | 'slack' | 'gmail' | 'namecheap' | 'godaddy' | 'wordpress'
