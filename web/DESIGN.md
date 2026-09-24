@@ -7,29 +7,44 @@ instead of re-deriving values.
 
 ## Palette
 
-Accent: indigo (`#3F5EFB`). One accent, used sparingly for primary actions,
-active nav state, and links — not for large surfaces.
+**Slate & Tide**: tinted slate neutrals, an ink primary, and a sea-teal accent
+reserved for signal/interactive chrome (focus, active nav, links, selection,
+"new" markers) — never on status chips or badges.
 
-Quasar brand tokens (set in `nuxt.config.ts` `quasar.config.brand`):
+CSS custom properties (`--ss-*`, defined in `assets/css/app.scss`, keyed on
+`body.body--light` / `body.body--dark`):
 
-| Token | Light | Dark |
+| Token | Light | Dark | Role |
+|---|---|---|---|
+| `--ss-bg` | `#F5F7F7` | `#0E1415` | page |
+| `--ss-surface` | `#FFFFFF` | `#151D1F` | cards, header |
+| `--ss-surface-2` | `#EEF2F2` | `#1C2628` | table header, hover |
+| `--ss-border` | `#DCE3E3` | `#27322F` | 1px separation (borders not shadows) |
+| `--ss-text` | `#111718` | `#E2EAEA` | body |
+| `--ss-muted` | `#526265` | `#8C9D9F` | secondary text (≥5.4:1) |
+| `--ss-primary` | `#18201F` | `#E2EAEA` | primary buttons (ink; inverts in dark) |
+| `--ss-on-primary` | `#FFFFFF` | `#0E1415` | text on primary |
+| `--ss-accent` | `#1B6668` | `#5DBDB9` | focus ring, active nav, links, selection, "new" dot — never on status |
+| `--ss-accent-subtle` | `#E2EFEE` | `#173335` | selected row, accent chip bg |
+| `--ss-link` | `#1B6668` | `#7FCFCB` | inline links (underlined) |
+
+Quasar brand tokens: `quasar.config.brand` (in `nuxt.config.ts`) only holds
+one set of values, so it carries the **light** palette; the **dark** palette
+is applied at runtime via `--q-*` overrides in `assets/css/app.scss` under
+`body.body--dark`:
+
+| Quasar name | Light (`quasar.config.brand`) | Dark (`--q-*` override) |
 |---|---|---|
-| `primary` | `#3F5EFB` | `#5B7CFF` |
-| `secondary` | `#5C6470` | `#8A93A3` |
-| `accent` | `#3F5EFB` | `#5B7CFF` |
-| `positive` | `#1F8A5E` | `#3DBE86` |
-| `negative` | `#C4392B` | `#E0574A` |
-| `info` | `#3E7CB1` | `#5FA0D6` |
-| `warning` | `#B8860B` | `#D9A441` |
-| `dark` | `#1B1E23` | `#1B1E23` |
-| `dark-page` | `#121417` | `#121417` |
+| `primary` | `#18201F` | `#E2EAEA` |
+| `accent` | `#1B6668` | `#5DBDB9` |
+| `positive` | `#1B7A4B` (✓ Success) | `#5CC98F` |
+| `negative` | `#B3261E` (✕ Failed) | `#F2796D` |
+| `warning` | `#8A5A00` (! Partial) | `#E3A63B` |
+| `info` | `#4B55B5` (◷ Running) | `#9AA4FF` |
+| `dark` / `dark-page` | `#151D1F` / `#0E1415` | (same — dark surfaces) |
 
-Neutral surfaces:
-
-- Light background: `#F6F7F9`, card/surface: `#FFFFFF`.
-- Dark background: `#121417`, card/surface: `#1B1E23`.
-- Borders replace shadows for separation: `1px solid` a low-contrast neutral
-  (light `#E3E6EA`, dark `#2A2E35`) rather than heavy box-shadow.
+Logo wave: `#4DB3AF` on a `#111718` tile (light), `#5DBDB9` on a `#1C2628`
+tile (dark).
 
 `quasar.config.dark` is `'auto'`: the console follows the OS colour-scheme
 preference. The `Dark` and `LocalStorage` plugins are enabled so a manual
@@ -40,7 +55,40 @@ override (once one exists) persists across reloads.
 - Base text size: 16px minimum (readability, accessibility floor).
 - Scale: 12px (caption/meta) / 14px (secondary/table cell) / 16px (body) /
   20px (section heading) / 24px (page title).
-- Font: Roboto (via `@quasar/extras` `roboto-font`), system fallback stack.
+- UI font: **Instrument Sans Variable** (wght 400–700), self-hosted via
+  `@fontsource-variable/instrument-sans` and wired through
+  `$typography-font-family` in `quasar.variables.scss` — no runtime CDN
+  fetch. 400 for body text, 500 for labels/buttons, 600 for headings.
+  Headings carry `letter-spacing: -0.015em`.
+- Mono font: **JetBrains Mono Variable**, self-hosted the same way, applied
+  via the `.mono` utility class. Used for IDs, run numbers, JSON, and logs;
+  `font-feature-settings: "zero" 1` for a slashed zero.
+- Tabular numerals: `font-variant-numeric: tabular-nums` on `.q-table td`,
+  `time`, and `.num` so numeric columns and counts align.
+- Digest face (reserved, Phase 4 — not bundled in `web/`): **Source Serif 4**
+  for the printed/e-ink digest body copy; not part of the console's web
+  bundle today.
+
+## Usage rules
+
+- Primary actions use `primary` (ink) — buttons, main CTAs.
+- Accent (`--ss-accent` / Quasar `accent`) is reserved for signal/interactive
+  chrome: focus rings, active nav indicator, links, selection, "new" markers.
+  **Accent is never used on status chips or badges.**
+- Status is always icon + label, never colour alone (see Status chips below).
+- Digest / e-ink status (Phase 4) is glyph + weight only, never colour: ✓
+  Success, ✕ Failed, ! Partial, ◷ Running, rendered at emphasis weight
+  650–700 rather than a colour change.
+- The contrast guard in `web/tests/design-tokens.test.ts` must stay green —
+  re-run it whenever a hex value in this document or `app.scss` changes.
+
+## Brand assets
+
+- `web/public/logo.svg` — full logo mark.
+- `web/public/favicon.svg` — 16px-simplified favicon.
+- `web/public/logo-lockup.svg` / `logo-lockup-dark.svg` — outlined Instrument
+  Sans SemiBold wordmark lockups for light/dark surfaces.
+- Wave colour: `#4DB3AF` (light tile) / `#5DBDB9` (dark tile).
 
 ## Spacing
 
