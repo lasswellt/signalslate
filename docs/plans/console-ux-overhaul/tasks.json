@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "console-ux-overhaul",
-  "updated": "2026-09-24T02:29:43Z",
+  "updated": "2026-09-24T02:31:54Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1720,11 +1720,53 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "in_progress",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-24T02:31:54Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "! test -f web/pages/history.vue",
+            "exit": 0,
+            "duration_ms": 3,
+            "tail": "",
+            "recorded_at": "2026-09-24T02:31:31Z"
+          },
+          {
+            "cmd": "test -f web/pages/history/index.vue",
+            "exit": 0,
+            "duration_ms": 3,
+            "tail": "",
+            "recorded_at": "2026-09-24T02:31:31Z"
+          },
+          {
+            "cmd": "grep -q \"pages/history/index.vue\" web/tests/history.test.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-24T02:31:31Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/history.test.ts tests/history-detail.test.ts tests/index.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3689,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/index.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/history.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/history-detail.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n···········································\n\n Test Files  3 passed (3)\n      Tests  43 passed (43)\n   Start at  22:31:33\n   Duration  2.42s (transform 50%, tests 31%, environment 9%, import 8%, setup 2%)\n\n  Transform  transforming modules took 3.48s · 50% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-09-24T02:31:35Z"
+          },
+          {
+            "cmd": "cd web && npx nuxt prepare >/dev/null 2>&1 && npx nuxt build >/dev/null 2>&1 && (PORT=39125 timeout 25 node .output/server/index.mjs >/dev/null 2>&1 & sleep 6; curl -s http://127.0.0.1:39125/history/1 | grep -q 'run-not-found\\|run-summary\\|data-testid=\"loading\"' && ! curl -s http://127.0.0.1:39125/history/1 | grep -q 'Every digest run, newest first')",
+            "exit": 0,
+            "duration_ms": 18732,
+            "tail": "",
+            "recorded_at": "2026-09-24T02:31:54Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check REJECT (critic held-out T-008): Nuxt makes pages/history/[id].vue a CHILD of pages/history.vue, which has no <NuxtPage/>, so /history/:id renders the Runs list (row click history.vue:136 and Overview link index.vue:24 both dead). Pre-existing at base 5cf2244 but T-008 claims list+detail. Fix: git mv web/pages/history.vue web/pages/history/index.vue (siblings, not parent/child); update the import in web/tests/history.test.ts."
     }
