@@ -792,7 +792,7 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 0;
-  background: var(--ss-surface-bg, #f6f7f9);
-  border-top: 1px solid var(--ss-border, #e3e6ea);
+  background: var(--ss-surface-2);
+  border-top: 1px solid var(--ss-border);
 }
 </style>
