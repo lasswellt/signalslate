@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="web/public/logo-lockup-dark.svg">
+    <img src="web/public/logo-lockup.svg" alt="SignalSlate" width="360">
+  </picture>
+</p>
+
 # SignalSlate
 
 Every morning, one page: mail, calendar, tasks, and chat from every account you live in,

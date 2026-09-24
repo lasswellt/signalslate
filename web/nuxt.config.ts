@@ -2,6 +2,16 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   modules: ['nuxt-quasar-ui'],
   css: ['~/assets/css/app.scss'],
+  app: {
+    head: {
+      title: 'SignalSlate',
+      link: [
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'icon', href: '/favicon.ico', sizes: '48x48' },
+        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+      ],
+    },
+  },
   quasar: {
     plugins: ['Notify', 'Dialog', 'Dark', 'LocalStorage'],
     extras: { font: 'roboto-font', fontIcons: ['material-icons'] },

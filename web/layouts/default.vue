@@ -105,7 +105,10 @@ const breadcrumbs = computed<Breadcrumb[]>(() => {
         <q-btn flat dense round icon="menu" aria-label="Toggle navigation" @click="toggleDrawer">
           <q-tooltip>Toggle navigation</q-tooltip>
         </q-btn>
-        <q-toolbar-title class="text-weight-medium">SignalSlate</q-toolbar-title>
+        <q-toolbar-title class="text-weight-medium row items-center no-wrap q-gutter-x-sm">
+          <img src="/logo.svg" alt="" width="28" height="28" />
+          <span>SignalSlate</span>
+        </q-toolbar-title>
         <q-breadcrumbs v-if="breadcrumbs.length" class="gt-xs q-mr-md" active-color="white">
           <q-breadcrumbs-el v-for="(crumb, i) in breadcrumbs" :key="i" :label="crumb.label" />
         </q-breadcrumbs>
