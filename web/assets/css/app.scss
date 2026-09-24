@@ -72,3 +72,23 @@ body.body--dark {
     color: var(--q-secondary);
   }
 }
+
+// Instrument Sans figures are proportional by default; tabular-nums keeps
+// table cells, timestamps and counts aligned (DESIGN.md Typography).
+.q-table td,
+time,
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+// Monospace utility for IDs, run numbers, JSON, logs.
+.mono {
+  font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+  font-feature-settings: "zero" 1;
+}
+
+.text-h4,
+.text-h5,
+.text-h6 {
+  letter-spacing: -0.015em;
+}

@@ -1,7 +1,11 @@
 export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   modules: ['nuxt-quasar-ui'],
-  css: ['~/assets/css/app.scss'],
+  css: [
+    '@fontsource-variable/instrument-sans',
+    '@fontsource-variable/jetbrains-mono',
+    '~/assets/css/app.scss',
+  ],
   app: {
     head: {
       title: 'SignalSlate',
@@ -14,7 +18,8 @@ export default defineNuxtConfig({
   },
   quasar: {
     plugins: ['Notify', 'Dialog', 'Dark', 'LocalStorage'],
-    extras: { font: 'roboto-font', fontIcons: ['material-icons'] },
+    extras: { fontIcons: ['material-icons'] },
+    sassVariables: '~/assets/css/quasar.variables.scss',
     config: {
       dark: 'auto',
       brand: {
