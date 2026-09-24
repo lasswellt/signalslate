@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "design-system",
-  "updated": "2026-09-24T03:41:29Z",
+  "updated": "2026-09-24T04:08:16Z",
   "tasks": [
     {
       "id": "T-001",
@@ -33,11 +33,53 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-24T03:59:54Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qiE -- '--ss-accent: *#1B6668' web/assets/css/app.scss",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-24T03:59:54Z"
+          },
+          {
+            "cmd": "grep -qiE -- '--ss-accent: *#5DBDB9' web/assets/css/app.scss",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-24T03:59:54Z"
+          },
+          {
+            "cmd": "grep -qiE -- '--q-primary: *#E2EAEA' web/assets/css/app.scss",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-24T03:59:54Z"
+          },
+          {
+            "cmd": "grep -qiE -- '--ss-surface-2: *#EEF2F2' web/assets/css/app.scss",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-24T03:59:54Z"
+          },
+          {
+            "cmd": "! grep -qE -- '--ss-surface-(bg|card)' web/assets/css/app.scss",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-24T03:59:54Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "research docs/_research/2026-09-23_design-system.md §Recommendation Tokens + §Implementation Step 1. New names --ss-bg/--ss-surface/--ss-surface-2/--ss-border/--ss-text/--ss-muted/--ss-accent/--ss-accent-subtle/--ss-link; dark body sets --q-primary/--q-accent/--q-positive/--q-negative/--q-warning/--q-info (fixes unwired dark brand pairs). Old --ss-surface-bg/--ss-surface-card removed here; consumers migrate in T-003."
     },
@@ -70,11 +112,46 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-24T04:01:26Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "cd web && npx vitest run tests/design-tokens.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3287,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/design-tokens.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·············\n\n Test Files  1 passed (1)\n      Tests  13 passed (13)\n   Start at  00:01:24\n   Duration  1.99s (tests 87%, environment 9%, setup 2%, transform 1%)",
+            "recorded_at": "2026-09-24T04:01:26Z"
+          },
+          {
+            "cmd": "grep -qE \"primary: '#18201F'\" web/nuxt.config.ts",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:01:26Z"
+          },
+          {
+            "cmd": "grep -qE \"warning: '#8A5A00'\" web/nuxt.config.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:01:26Z"
+          },
+          {
+            "cmd": "! grep -qiE '#3F5EFB|#B8860B' web/nuxt.config.ts",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:01:26Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "research docs/_research/2026-09-23_design-system.md §Recommendation Tokens, §Findings 'Colour — measured' (current warning/positive/info fail AA). Test reads nuxt.config.ts brand + app.scss body--dark vars from source text and asserts WCAG2 ratio >=4.5 for positive/negative/warning/info/secondary on #FFFFFF and dark statuses on #151D1F, and onPrimary/primary >=4.5 both modes."
     },
@@ -107,11 +184,46 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-24T04:02:13Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "! grep -rqE -- '--ss-surface-(bg|card)' web/pages web/components web/layouts web/assets",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:02:09Z"
+          },
+          {
+            "cmd": "! grep -qiE '#f6f7f9|#e3e6ea' web/pages/config.vue web/components/JobsProfilePanel.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:02:09Z"
+          },
+          {
+            "cmd": "grep -q 'var(--ss-surface-2)' web/pages/config.vue",
+            "exit": 0,
+            "duration_ms": 3,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:02:09Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/config.test.ts tests/JobsProfilePanel.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3919,
+            "tail": " [ [Function (anonymous)], [Function (anonymous)] ] dense=\"\"  ... > \n  at <QCardSection class=\"q-gutter-sm\" > \n  at <QCard> \n  at <AsyncState loading=false error=null onRetry=fn<loadProfile> > \n  at <MountSuspendedComponent > \n  at <MountSuspendedHelper> \n  at <Anonymous ref=\"VTU_COMPONENT\" > \n  at <VTUROOT>\n\nstderr | tests/JobsProfilePanel.test.ts > answer bank > filters rendered rows by the search text\n[Vue Router warn]: No active route record was found when calling `onBeforeRouteLeave()`. Make sure you call this function inside a component child of <router-view>. Maybe you called it inside of App.vue?\n\n·······stderr | tests/config.test.ts > dirty guard > blocks navigation until Discard is confirmed, and stays put on Keep editing\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n···stderr | tests/JobsProfilePanel.test.ts > dirty tracking and validation > enables Save only once dirty and valid, and Discard reverts the form\n[Vue Router warn]: No active route record was found when calling `onBeforeRouteLeave()`. Make sure you call this function inside a component child of <router-view>. Maybe you called it inside of App.vue?\n\nstderr | tests/JobsProfilePanel.test.ts > saving the profile > calls the profile PUT fetcher with the form current values\n[Vue Router warn]: No active route record was found when calling `onBeforeRouteLeave()`. Make sure you call this function inside a component child of <router-view>. Maybe you called it inside of App.vue?\n\n·····\n\n Test Files  2 passed (2)\n      Tests  16 passed (16)\n   Start at  00:02:10\n   Duration  2.66s (tests 42%, transform 41%, environment 8%, import 7%, setup 2%)\n\n  Transform  transforming modules took 2.01s · 41% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-09-24T04:02:13Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "research docs/_research/2026-09-23_design-system.md §Findings Codebase inventory: web/pages/config.vue:315-316 and web/components/JobsProfilePanel.vue:795-796 use var(--ss-surface-bg, #f6f7f9) / var(--ss-border, #e3e6ea). Replace with var(--ss-surface-2) / var(--ss-border), no hex fallback."
     },
@@ -150,11 +262,53 @@
           "timeout": 600
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-24T04:04:50Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "! grep -q 'roboto-font' web/nuxt.config.ts",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:04:38Z"
+          },
+          {
+            "cmd": "grep -q '@fontsource-variable/instrument-sans' web/package.json",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:04:38Z"
+          },
+          {
+            "cmd": "grep -q 'Instrument Sans Variable' web/assets/css/quasar.variables.scss",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:04:38Z"
+          },
+          {
+            "cmd": "grep -q 'tabular-nums' web/assets/css/app.scss",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:04:38Z"
+          },
+          {
+            "cmd": "cd web && npm run build >/dev/null 2>&1 && ! grep -rlq 'fonts.googleapis.com' .output/public",
+            "exit": 0,
+            "duration_ms": 11689,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:04:50Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "research docs/_research/2026-09-23_design-system.md §Recommendation Type, §Findings 'Typography — measured' (Instrument Sans figures proportional -> tabular-nums required; JetBrains Mono has zero feature), §Q5 LAN-only (no CDN). npm i @fontsource-variable/instrument-sans @fontsource-variable/jetbrains-mono; nuxt-quasar-ui sassVariables option points at quasar.variables.scss with $typography-font-family. .mono class: 'JetBrains Mono Variable', font-feature-settings 'zero' 1. Also updates package-lock.json."
     },
@@ -187,11 +341,46 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-24T04:06:08Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "! grep -qE '<q-header elevated' web/layouts/default.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:06:04Z"
+          },
+          {
+            "cmd": "grep -qE 'ss-surface|ss-accent' web/layouts/default.vue",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:06:04Z"
+          },
+          {
+            "cmd": "! grep -q 'active-color=\"white\"' web/layouts/default.vue",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:06:04Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/ui-shells.test.ts tests/ui-basics.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 3545,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/ui-shells.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/ui-basics.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n····················\n\n Test Files  2 passed (2)\n      Tests  20 passed (20)\n   Start at  00:06:06\n   Duration  2.25s (transform 50%, tests 30%, environment 9%, import 9%, setup 2%)\n\n  Transform  transforming modules took 2.16s · 50% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-09-24T04:06:08Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "research docs/_research/2026-09-23_design-system.md §Implementation Step 3 + §Risks row 1: with primary=ink the default q-header (bg-primary) turns near-black. Header uses var(--ss-surface) bg, 1px var(--ss-border) bottom, text var(--ss-text), no elevation; breadcrumbs active-color must stay readable (not white). Active drawer item uses accent."
     },
@@ -224,11 +413,46 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-24T04:06:52Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "! grep -qiE '#3F5EFB|#5B7CFF' web/public/logo.svg web/public/favicon.svg web/public/logo-lockup.svg web/public/logo-lockup-dark.svg",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:06:52Z"
+          },
+          {
+            "cmd": "grep -qi '#4DB3AF' web/public/logo.svg",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:06:52Z"
+          },
+          {
+            "cmd": "grep -qi '#4DB3AF\\|#5DBDB9' web/public/favicon.svg",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:06:52Z"
+          },
+          {
+            "cmd": "find web/public/favicon.ico web/public/apple-touch-icon.png web/public/logo-512.png -newer web/public/logo.svg | wc -l | grep -q 3 || [ web/public/favicon.ico -nt web/nuxt.config.ts ]",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:06:52Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "research docs/_research/2026-09-23_design-system.md §Recommendation Tokens 'logo wave' + §Implementation Step 3. Wave #3F5EFB/#5B7CFF -> #4DB3AF (dark lockup #5DBDB9 on #1C2628 tile); lockup 'slate' grey #5C6470 -> #526265, dark #8A93A3 -> #8C9D9F; tile #121417 -> #111718. Rasterise: rsvg-convert + magick (favicon.ico 16/32/48, apple-touch-icon.png 180, logo-512.png)."
     },
@@ -261,11 +485,46 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-24T04:07:57Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -q '#1B6668' web/DESIGN.md",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:07:56Z"
+          },
+          {
+            "cmd": "grep -q 'Instrument Sans' web/DESIGN.md",
+            "exit": 0,
+            "duration_ms": 5,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:07:56Z"
+          },
+          {
+            "cmd": "grep -qi 'never on status' web/DESIGN.md",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:07:56Z"
+          },
+          {
+            "cmd": "! grep -qE 'Roboto|#3F5EFB' web/DESIGN.md",
+            "exit": 0,
+            "duration_ms": 4,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:07:56Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "research docs/_research/2026-09-23_design-system.md §Recommendation (token table, type table) + rules: primary is ink; accent never on status chips/badges; status = icon + label; digest (Phase 4) status = glyph + weight, no colour; tabular-nums on numeric columns; mono for IDs/JSON."
     },
@@ -294,11 +553,32 @@
           "timeout": 600
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-09-24T04:08:16Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "cd web && npx vitest run --reporter=dot",
+            "exit": 0,
+            "duration_ms": 7196,
+            "tail": "lue\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n······stderr | tests/JobCompaniesPanel.test.ts > board override > sends {ats_kind, board_id} to overrideBoard\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n·····stdout | tests/connections.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n··stdout | tests/collector-items.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/ui-shells.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·······stdout | tests/JobDetailDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/ui-basics.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······································stdout | tests/smoke.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······stderr | tests/collector-items.test.ts > source items page > filters the loaded list by item type without another fetch\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n···········································································································\n\n Test Files  27 passed (27)\n      Tests  484 passed (484)\n   Start at  00:07:58\n   Duration  5.93s (tests 38%, transform 37%, environment 15%, import 7%, setup 3%)\n\n  Transform  transforming modules took 37.41s · 37% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-09-24T04:08:04Z"
+          },
+          {
+            "cmd": "cd web && npm run build >/dev/null 2>&1",
+            "exit": 0,
+            "duration_ms": 11730,
+            "tail": "",
+            "recorded_at": "2026-09-24T04:08:16Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Integration gate: no product code; proves the whole re-theme did not break the 471-test baseline or the build. Test-only by design."
     }
