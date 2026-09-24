@@ -77,7 +77,10 @@ body.body--dark .bg-primary {
 // Quasar draws the checkbox tick/indeterminate bar in #fff over a
 // --q-primary fill; dark primary is near-white, so default-coloured
 // (primary) checkboxes need the on-primary ink instead. Checkboxes given
-// an explicit color="..." keep Quasar's white mark on their own fill.
+// an explicit color="..." keep Quasar's white mark — but in dark mode a
+// status color (positive/negative/warning/info) is repainted with the light
+// --ss-*-text value by the .text-* overrides above, so the white mark is
+// ~2:1 there. No checkbox sets a status color today; fix before adding one.
 body.body--dark .q-checkbox__inner--truthy:not([class*='text-']) .q-checkbox__svg,
 body.body--dark .q-checkbox__inner--indet:not([class*='text-']) .q-checkbox__svg,
 body.body--dark .q-checkbox__inner.text-primary .q-checkbox__svg {
