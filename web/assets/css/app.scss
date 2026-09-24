@@ -1,23 +1,44 @@
 // Calm ops console theme: neutral surfaces, border-based separation, compact
 // density. See web/DESIGN.md for the full rationale behind these tokens.
 
-:root {
-  --ss-border-light: #e3e6ea;
-  --ss-border-dark: #2a2e35;
-}
-
 body.body--light {
-  --ss-surface-bg: #f6f7f9;
-  --ss-surface-card: #ffffff;
-  --ss-border: var(--ss-border-light);
-  background: var(--ss-surface-bg);
+  --ss-bg: #f5f7f7;
+  --ss-surface: #ffffff;
+  --ss-surface-2: #eef2f2;
+  --ss-border: #dce3e3;
+  --ss-text: #111718;
+  --ss-muted: #526265;
+  --ss-primary: #18201f;
+  --ss-on-primary: #ffffff;
+  --ss-accent: #1b6668;
+  --ss-accent-subtle: #e2efee;
+  --ss-link: #1b6668;
+  background: var(--ss-bg);
+  color: var(--ss-text);
 }
 
 body.body--dark {
-  --ss-surface-bg: #121417;
-  --ss-surface-card: #1b1e23;
-  --ss-border: var(--ss-border-dark);
-  background: var(--ss-surface-bg);
+  --ss-bg: #0e1415;
+  --ss-surface: #151d1f;
+  --ss-surface-2: #1c2628;
+  --ss-border: #27322f;
+  --ss-text: #e2eaea;
+  --ss-muted: #8c9d9f;
+  --ss-primary: #e2eaea;
+  --ss-on-primary: #0e1415;
+  --ss-accent: #5dbdb9;
+  --ss-accent-subtle: #173335;
+  --ss-link: #7fcfcb;
+  background: var(--ss-bg);
+  color: var(--ss-text);
+
+  --q-primary: #e2eaea;
+  --q-accent: #5dbdb9;
+  --q-positive: #5cc98f;
+  --q-negative: #f2796d;
+  --q-warning: #e3a63b;
+  --q-info: #9aa4ff;
+  --q-secondary: #8c9d9f;
 }
 
 // Page anatomy: PageHeader sits above content; content is centered with a
@@ -35,6 +56,7 @@ body.body--dark {
 // Cards use a border instead of a heavy shadow to separate content from the
 // page background (DESIGN.md palette / density notes).
 .q-card {
+  background: var(--ss-surface);
   border: 1px solid var(--ss-border);
   box-shadow: none;
 }
