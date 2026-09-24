@@ -100,7 +100,7 @@ const breadcrumbs = computed<Breadcrumb[]>(() => {
 
 <template>
   <q-layout view="hHh Lpr lFf">
-    <q-header elevated>
+    <q-header class="ss-header">
       <q-toolbar>
         <q-btn flat dense round icon="menu" aria-label="Toggle navigation" @click="toggleDrawer">
           <q-tooltip>Toggle navigation</q-tooltip>
@@ -109,7 +109,7 @@ const breadcrumbs = computed<Breadcrumb[]>(() => {
           <img src="/logo.svg" alt="" width="28" height="28" />
           <span>SignalSlate</span>
         </q-toolbar-title>
-        <q-breadcrumbs v-if="breadcrumbs.length" class="gt-xs q-mr-md" active-color="white">
+        <q-breadcrumbs v-if="breadcrumbs.length" class="ss-breadcrumbs gt-xs q-mr-md">
           <q-breadcrumbs-el v-for="(crumb, i) in breadcrumbs" :key="i" :label="crumb.label" />
         </q-breadcrumbs>
         <q-space />
@@ -137,7 +137,7 @@ const breadcrumbs = computed<Breadcrumb[]>(() => {
             :exact="item.exact ?? false"
             clickable
             v-ripple
-            active-class="text-primary"
+            active-class="ss-nav-active"
             :data-testid="`nav-${item.slug}`"
           >
             <q-item-section avatar>
@@ -168,3 +168,27 @@ const breadcrumbs = computed<Breadcrumb[]>(() => {
     </q-page-container>
   </q-layout>
 </template>
+
+<style scoped>
+.ss-header {
+  background: var(--ss-surface);
+  color: var(--ss-text);
+  border-bottom: 1px solid var(--ss-border);
+  box-shadow: none;
+}
+
+.ss-breadcrumbs {
+  color: var(--ss-muted);
+}
+
+.ss-breadcrumbs :deep(.q-breadcrumbs__el-icon),
+.ss-breadcrumbs :deep(.q-breadcrumbs__el:last-child) {
+  color: var(--ss-text);
+}
+
+:deep(.ss-nav-active) {
+  color: var(--ss-accent);
+  background: var(--ss-accent-subtle);
+  box-shadow: inset 3px 0 0 0 var(--ss-accent);
+}
+</style>
