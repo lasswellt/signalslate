@@ -20,3 +20,4 @@ Ruling: class=architectural tasks=8 — cross-cutting re-theme (≥6 files: toke
 Ruling: spec-defect — research tokens chose dark --q-* status/primary values as TEXT colours, but the app uses them mostly as FILLS with text-white (bg-negative x26, color=primary buttons x65); fix = fill-safe dark --q-* + dark .text-* overrides + dark .bg-primary on-primary text; guard test extended to fill pairs (integration, round 1)
 ## 2026-09-24T04:14:14Z integration round 1 ok=true (420e1ba) — CDP probe dark: bg-primary 15.2:1, bg-negative 6.5:1; light unchanged 16.6 / 6.5; suite 489 pass, typecheck + build green
 ## 2026-09-24T04:14:14Z build complete 8/8
+## 2026-09-24T04:30:18Z check CONDITIONAL check-report.md

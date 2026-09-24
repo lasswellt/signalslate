@@ -1,0 +1,72 @@
+{
+  "$schema": "blitz-check-report/1.0",
+  "result": "CONDITIONAL",
+  "ts": "2026-09-24T04:52:00Z",
+  "ref": "4999f249702c18a99fe1e7ba63cb5e5f7b10582f",
+  "scope": "plan",
+  "plan": "design-system",
+  "stacks": [
+    "python",
+    "node"
+  ],
+  "lanes": {
+    "deterministic": {
+      "selected": 41,
+      "ran": 39,
+      "pass": 39,
+      "finding": 0,
+      "error": 0,
+      "note": "8 rows errored as written (src/ hard-coded x5, prose command x2, loop metric x1); 6 re-run over plan files, 2 covered manually, 2 n/a; 7 raw hits FP-verified and dropped"
+    },
+    "semantic": {
+      "selected": 3,
+      "ran": 3,
+      "pass": 1,
+      "finding": 2,
+      "error": 0
+    }
+  },
+  "findings": [
+    {
+      "id": "critic",
+      "severity": "P2",
+      "where": "web/assets/css/app.scss:57",
+      "what": "dark primary checkbox tick 1.22:1 — fixed in cd7ca90 (15.22:1)"
+    },
+    {
+      "id": "survey:frontend",
+      "severity": "P3",
+      "where": "web/DESIGN.md:27",
+      "what": "accent focus ring documented but no :focus-visible rule (advisory 0.6)"
+    },
+    {
+      "id": "survey:patterns",
+      "severity": "P3",
+      "where": "web/nuxt.config.ts:26",
+      "what": "brand hexes duplicated with --ss-* tokens, no equality assertion (advisory 0.75)"
+    },
+    {
+      "id": "critic",
+      "severity": "P3",
+      "where": "web/assets/css/app.scss:81",
+      "what": "dark .text-* overrides repaint status-coloured control fills (latent, no current usage)"
+    }
+  ],
+  "cannot_verify": [],
+  "security_posture": {
+    "registry_validate": 0,
+    "startup_validate_strict": 2,
+    "injection": false,
+    "pre_trust_hits": 1,
+    "pre_trust_fp_verified": true
+  },
+  "critic": {
+    "mode": "reject",
+    "verdict": "LGTM"
+  },
+  "tasks": {
+    "verified": 8,
+    "failed": 0
+  },
+  "e2e_coverage": "partial"
+}

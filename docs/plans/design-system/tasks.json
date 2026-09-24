@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "design-system",
-  "updated": "2026-09-24T04:08:16Z",
+  "updated": "2026-09-24T04:28:42Z",
   "tasks": [
     {
       "id": "T-001",
@@ -38,7 +38,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-24T03:59:54Z",
+        "ts": "2026-09-24T04:28:38Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -48,35 +48,35 @@
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-24T03:59:54Z"
+            "recorded_at": "2026-09-24T04:28:38Z"
           },
           {
             "cmd": "grep -qiE -- '--ss-accent: *#5DBDB9' web/assets/css/app.scss",
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-24T03:59:54Z"
+            "recorded_at": "2026-09-24T04:28:38Z"
           },
           {
             "cmd": "grep -qiE -- '--q-primary: *#E2EAEA' web/assets/css/app.scss",
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-24T03:59:54Z"
+            "recorded_at": "2026-09-24T04:28:38Z"
           },
           {
             "cmd": "grep -qiE -- '--ss-surface-2: *#EEF2F2' web/assets/css/app.scss",
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-24T03:59:54Z"
+            "recorded_at": "2026-09-24T04:28:38Z"
           },
           {
             "cmd": "! grep -qE -- '--ss-surface-(bg|card)' web/assets/css/app.scss",
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-24T03:59:54Z"
+            "recorded_at": "2026-09-24T04:28:38Z"
           }
         ]
       },
@@ -117,7 +117,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-24T04:01:26Z",
+        "ts": "2026-09-24T04:28:42Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -125,30 +125,30 @@
           {
             "cmd": "cd web && npx vitest run tests/design-tokens.test.ts --reporter=dot",
             "exit": 0,
-            "duration_ms": 3287,
-            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/design-tokens.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·············\n\n Test Files  1 passed (1)\n      Tests  13 passed (13)\n   Start at  00:01:24\n   Duration  1.99s (tests 87%, environment 9%, setup 2%, transform 1%)",
-            "recorded_at": "2026-09-24T04:01:26Z"
+            "duration_ms": 3347,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/design-tokens.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n···················\n\n Test Files  1 passed (1)\n      Tests  19 passed (19)\n   Start at  00:28:39\n   Duration  2.03s (tests 87%, environment 9%, setup 2%, transform 1%)",
+            "recorded_at": "2026-09-24T04:28:42Z"
           },
           {
             "cmd": "grep -qE \"primary: '#18201F'\" web/nuxt.config.ts",
             "exit": 0,
-            "duration_ms": 5,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-24T04:01:26Z"
+            "recorded_at": "2026-09-24T04:28:42Z"
           },
           {
             "cmd": "grep -qE \"warning: '#8A5A00'\" web/nuxt.config.ts",
             "exit": 0,
-            "duration_ms": 4,
+            "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-24T04:01:26Z"
+            "recorded_at": "2026-09-24T04:28:42Z"
           },
           {
             "cmd": "! grep -qiE '#3F5EFB|#B8860B' web/nuxt.config.ts",
             "exit": 0,
-            "duration_ms": 5,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-24T04:01:26Z"
+            "recorded_at": "2026-09-24T04:28:42Z"
           }
         ]
       },
@@ -189,7 +189,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-24T04:02:13Z",
+        "ts": "2026-09-24T04:23:20Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -199,28 +199,28 @@
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-24T04:02:09Z"
+            "recorded_at": "2026-09-24T04:23:16Z"
           },
           {
             "cmd": "! grep -qiE '#f6f7f9|#e3e6ea' web/pages/config.vue web/components/JobsProfilePanel.vue",
             "exit": 0,
-            "duration_ms": 5,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-24T04:02:09Z"
+            "recorded_at": "2026-09-24T04:23:16Z"
           },
           {
             "cmd": "grep -q 'var(--ss-surface-2)' web/pages/config.vue",
             "exit": 0,
-            "duration_ms": 3,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-24T04:02:09Z"
+            "recorded_at": "2026-09-24T04:23:16Z"
           },
           {
             "cmd": "cd web && npx vitest run tests/config.test.ts tests/JobsProfilePanel.test.ts --reporter=dot",
             "exit": 0,
-            "duration_ms": 3919,
-            "tail": " [ [Function (anonymous)], [Function (anonymous)] ] dense=\"\"  ... > \n  at <QCardSection class=\"q-gutter-sm\" > \n  at <QCard> \n  at <AsyncState loading=false error=null onRetry=fn<loadProfile> > \n  at <MountSuspendedComponent > \n  at <MountSuspendedHelper> \n  at <Anonymous ref=\"VTU_COMPONENT\" > \n  at <VTUROOT>\n\nstderr | tests/JobsProfilePanel.test.ts > answer bank > filters rendered rows by the search text\n[Vue Router warn]: No active route record was found when calling `onBeforeRouteLeave()`. Make sure you call this function inside a component child of <router-view>. Maybe you called it inside of App.vue?\n\n·······stderr | tests/config.test.ts > dirty guard > blocks navigation until Discard is confirmed, and stays put on Keep editing\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n···stderr | tests/JobsProfilePanel.test.ts > dirty tracking and validation > enables Save only once dirty and valid, and Discard reverts the form\n[Vue Router warn]: No active route record was found when calling `onBeforeRouteLeave()`. Make sure you call this function inside a component child of <router-view>. Maybe you called it inside of App.vue?\n\nstderr | tests/JobsProfilePanel.test.ts > saving the profile > calls the profile PUT fetcher with the form current values\n[Vue Router warn]: No active route record was found when calling `onBeforeRouteLeave()`. Make sure you call this function inside a component child of <router-view>. Maybe you called it inside of App.vue?\n\n·····\n\n Test Files  2 passed (2)\n      Tests  16 passed (16)\n   Start at  00:02:10\n   Duration  2.66s (tests 42%, transform 41%, environment 8%, import 7%, setup 2%)\n\n  Transform  transforming modules took 2.01s · 41% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
-            "recorded_at": "2026-09-24T04:02:13Z"
+            "duration_ms": 3994,
+            "tail": "er> \n  at <Anonymous ref=\"VTU_COMPONENT\" > \n  at <VTUROOT>\n\n······stderr | tests/config.test.ts > save > shows the API error and leaves Save clickable (not stuck) on failure\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\nstderr | tests/JobsProfilePanel.test.ts > answer bank > filters rendered rows by the search text\n[Vue Router warn]: No active route record was found when calling `onBeforeRouteLeave()`. Make sure you call this function inside a component child of <router-view>. Maybe you called it inside of App.vue?\n\nstderr | tests/config.test.ts > dirty guard > blocks navigation until Discard is confirmed, and stays put on Keep editing\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n···stderr | tests/JobsProfilePanel.test.ts > dirty tracking and validation > enables Save only once dirty and valid, and Discard reverts the form\n[Vue Router warn]: No active route record was found when calling `onBeforeRouteLeave()`. Make sure you call this function inside a component child of <router-view>. Maybe you called it inside of App.vue?\n\nstderr | tests/JobsProfilePanel.test.ts > saving the profile > calls the profile PUT fetcher with the form current values\n[Vue Router warn]: No active route record was found when calling `onBeforeRouteLeave()`. Make sure you call this function inside a component child of <router-view>. Maybe you called it inside of App.vue?\n\n······\n\n Test Files  2 passed (2)\n      Tests  16 passed (16)\n   Start at  00:23:17\n   Duration  2.73s (tests 42%, transform 42%, environment 7%, import 7%, setup 2%)\n\n  Transform  transforming modules took 2.09s · 42% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-09-24T04:23:20Z"
           }
         ]
       },
@@ -267,7 +267,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-24T04:04:50Z",
+        "ts": "2026-09-24T04:23:32Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -275,37 +275,37 @@
           {
             "cmd": "! grep -q 'roboto-font' web/nuxt.config.ts",
             "exit": 0,
-            "duration_ms": 4,
+            "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-24T04:04:38Z"
+            "recorded_at": "2026-09-24T04:23:20Z"
           },
           {
             "cmd": "grep -q '@fontsource-variable/instrument-sans' web/package.json",
             "exit": 0,
-            "duration_ms": 4,
+            "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-24T04:04:38Z"
+            "recorded_at": "2026-09-24T04:23:20Z"
           },
           {
             "cmd": "grep -q 'Instrument Sans Variable' web/assets/css/quasar.variables.scss",
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-24T04:04:38Z"
+            "recorded_at": "2026-09-24T04:23:20Z"
           },
           {
             "cmd": "grep -q 'tabular-nums' web/assets/css/app.scss",
             "exit": 0,
-            "duration_ms": 5,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-24T04:04:38Z"
+            "recorded_at": "2026-09-24T04:23:20Z"
           },
           {
             "cmd": "cd web && npm run build >/dev/null 2>&1 && ! grep -rlq 'fonts.googleapis.com' .output/public",
             "exit": 0,
-            "duration_ms": 11689,
+            "duration_ms": 11427,
             "tail": "",
-            "recorded_at": "2026-09-24T04:04:50Z"
+            "recorded_at": "2026-09-24T04:23:32Z"
           }
         ]
       },
@@ -346,7 +346,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-24T04:06:08Z",
+        "ts": "2026-09-24T04:23:35Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -356,28 +356,28 @@
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-24T04:06:04Z"
+            "recorded_at": "2026-09-24T04:23:32Z"
           },
           {
             "cmd": "grep -qE 'ss-surface|ss-accent' web/layouts/default.vue",
             "exit": 0,
-            "duration_ms": 4,
+            "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-24T04:06:04Z"
+            "recorded_at": "2026-09-24T04:23:32Z"
           },
           {
             "cmd": "! grep -q 'active-color=\"white\"' web/layouts/default.vue",
             "exit": 0,
-            "duration_ms": 5,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-24T04:06:04Z"
+            "recorded_at": "2026-09-24T04:23:32Z"
           },
           {
             "cmd": "cd web && npx vitest run tests/ui-shells.test.ts tests/ui-basics.test.ts --reporter=dot",
             "exit": 0,
-            "duration_ms": 3545,
-            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/ui-shells.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/ui-basics.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n····················\n\n Test Files  2 passed (2)\n      Tests  20 passed (20)\n   Start at  00:06:06\n   Duration  2.25s (transform 50%, tests 30%, environment 9%, import 9%, setup 2%)\n\n  Transform  transforming modules took 2.16s · 50% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
-            "recorded_at": "2026-09-24T04:06:08Z"
+            "duration_ms": 3322,
+            "tail": "\n RUN  v5.0.1 /home/lasswellt/Projects/signalslate/web\n\nstdout | tests/ui-shells.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/ui-basics.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n····················\n\n Test Files  2 passed (2)\n      Tests  20 passed (20)\n   Start at  00:23:33\n   Duration  2.07s (transform 50%, tests 31%, environment 9%, import 8%, setup 2%)",
+            "recorded_at": "2026-09-24T04:23:35Z"
           }
         ]
       },
@@ -418,7 +418,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-24T04:06:52Z",
+        "ts": "2026-09-24T04:23:35Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -428,28 +428,28 @@
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-24T04:06:52Z"
+            "recorded_at": "2026-09-24T04:23:35Z"
           },
           {
             "cmd": "grep -qi '#4DB3AF' web/public/logo.svg",
             "exit": 0,
-            "duration_ms": 5,
+            "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-24T04:06:52Z"
+            "recorded_at": "2026-09-24T04:23:35Z"
           },
           {
             "cmd": "grep -qi '#4DB3AF\\|#5DBDB9' web/public/favicon.svg",
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-24T04:06:52Z"
+            "recorded_at": "2026-09-24T04:23:35Z"
           },
           {
             "cmd": "find web/public/favicon.ico web/public/apple-touch-icon.png web/public/logo-512.png -newer web/public/logo.svg | wc -l | grep -q 3 || [ web/public/favicon.ico -nt web/nuxt.config.ts ]",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-24T04:06:52Z"
+            "recorded_at": "2026-09-24T04:23:35Z"
           }
         ]
       },
@@ -490,7 +490,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-24T04:07:57Z",
+        "ts": "2026-09-24T04:23:35Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -498,30 +498,30 @@
           {
             "cmd": "grep -q '#1B6668' web/DESIGN.md",
             "exit": 0,
-            "duration_ms": 4,
+            "duration_ms": 3,
             "tail": "",
-            "recorded_at": "2026-09-24T04:07:56Z"
+            "recorded_at": "2026-09-24T04:23:35Z"
           },
           {
             "cmd": "grep -q 'Instrument Sans' web/DESIGN.md",
             "exit": 0,
             "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-24T04:07:56Z"
+            "recorded_at": "2026-09-24T04:23:35Z"
           },
           {
             "cmd": "grep -qi 'never on status' web/DESIGN.md",
             "exit": 0,
             "duration_ms": 4,
             "tail": "",
-            "recorded_at": "2026-09-24T04:07:56Z"
+            "recorded_at": "2026-09-24T04:23:35Z"
           },
           {
             "cmd": "! grep -qE 'Roboto|#3F5EFB' web/DESIGN.md",
             "exit": 0,
-            "duration_ms": 4,
+            "duration_ms": 5,
             "tail": "",
-            "recorded_at": "2026-09-24T04:07:56Z"
+            "recorded_at": "2026-09-24T04:23:35Z"
           }
         ]
       },
@@ -558,7 +558,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-09-24T04:08:16Z",
+        "ts": "2026-09-24T04:23:54Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -566,16 +566,16 @@
           {
             "cmd": "cd web && npx vitest run --reporter=dot",
             "exit": 0,
-            "duration_ms": 7196,
-            "tail": "lue\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n······stderr | tests/JobCompaniesPanel.test.ts > board override > sends {ats_kind, board_id} to overrideBoard\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n·····stdout | tests/connections.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n··stdout | tests/collector-items.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/ui-shells.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·······stdout | tests/JobDetailDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/ui-basics.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······································stdout | tests/smoke.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······stderr | tests/collector-items.test.ts > source items page > filters the loaded list by item type without another fetch\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n···········································································································\n\n Test Files  27 passed (27)\n      Tests  484 passed (484)\n   Start at  00:07:58\n   Duration  5.93s (tests 38%, transform 37%, environment 15%, import 7%, setup 3%)\n\n  Transform  transforming modules took 37.41s · 37% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
-            "recorded_at": "2026-09-24T04:08:04Z"
+            "duration_ms": 7375,
+            "tail": "er declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n·······stdout | tests/ui-shells.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n··········stderr | tests/JobCompaniesPanel.test.ts > board override > sends {ats_kind, board_id} to overrideBoard\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n·············stdout | tests/JobDetailDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/ui-basics.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/connections.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/collector-items.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······················stdout | tests/smoke.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·················stderr | tests/collector-items.test.ts > source items page > filters the loaded list by item type without another fetch\n[Vue warn]: Component emitted event \"update:model-value\" but it is neither declared in the emits option nor as an \"onUpdate:modelValue\" prop.\n\n················································································································\n\n Test Files  27 passed (27)\n      Tests  489 passed (489)\n   Start at  00:23:37\n   Duration  6.09s (transform 38%, tests 37%, environment 15%, import 7%, setup 3%)\n\n  Transform  transforming modules took 38.99s · 38% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-09-24T04:23:43Z"
           },
           {
             "cmd": "cd web && npm run build >/dev/null 2>&1",
             "exit": 0,
-            "duration_ms": 11730,
+            "duration_ms": 11567,
             "tail": "",
-            "recorded_at": "2026-09-24T04:08:16Z"
+            "recorded_at": "2026-09-24T04:23:54Z"
           }
         ]
       },

@@ -6,8 +6,8 @@
   "metrics": {
     "test_count": {
       "baseline": 404,
-      "current": 407,
-      "min_allowed": 407,
+      "current": 414,
+      "min_allowed": 414,
       "direction": "up",
       "note": "web vitest it()/test() in web/tests; python tests tracked by pytest (2903 passing)"
     },
@@ -53,8 +53,8 @@
     },
     "stale_worktree_branch_count": {
       "baseline": 21,
-      "current": 21,
-      "max_allowed": 21,
+      "current": 3,
+      "max_allowed": 3,
       "direction": "down",
       "note": "agent worktrees left by the console-ux-overhaul build; prune with /blitz:sessions worktrees --apply"
     }
@@ -77,6 +77,21 @@
         "mocks_in_src": 0,
         "todo_count": 0,
         "stale_worktree_branch_count": 21
+      }
+    },
+    {
+      "ref": "cd7ca90",
+      "plan": "design-system",
+      "ts": "2026-09-24T04:22:53Z",
+      "metrics": {
+        "test_count": 414,
+        "type_errors": 0,
+        "as_any_count": 0,
+        "lint_violations": null,
+        "completeness_score": null,
+        "mocks_in_src": 0,
+        "todo_count": 0,
+        "stale_worktree_branch_count": 3
       }
     }
   ]
