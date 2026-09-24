@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "console-ux-overhaul",
-  "updated": "2026-09-24T01:55:57Z",
+  "updated": "2026-09-24T02:29:43Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1721,7 +1721,7 @@
         }
       ],
       "passes": false,
-      "status": "open",
+      "status": "in_progress",
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": null,
