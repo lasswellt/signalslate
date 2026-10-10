@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T17:08:09Z",
+  "updated": "2026-10-10T17:35:04Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1545,11 +1545,32 @@
           "timeout": 900
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T17:35:04Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_e2e.py -q",
+            "exit": 0,
+            "duration_ms": 2962,
+            "tail": ".                                                                        [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.13/site-packages/starlette/testclient.py:40\n  /home/user/signalslate/venv/lib/python3.13/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 1.97s",
+            "recorded_at": "2026-10-10T17:32:29Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest -q",
+            "exit": 0,
+            "duration_ms": 154992,
+            "tail": "]\n........................................................................ [ 83%]\n........................................................................ [ 85%]\n........................................................................ [ 87%]\n........................................................................ [ 89%]\n........................................................................ [ 91%]\n........................................................................ [ 93%]\n........................................................................ [ 95%]\n........................................................................ [ 98%]\n.....................................................................    [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.13/site-packages/starlette/testclient.py:40\n  /home/user/signalslate/venv/lib/python3.13/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/user/signalslate/venv/lib/python3.13/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions\n    warnings.warn(  # deprecated in 14.0 - 2024-11-09\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/user/signalslate/venv/lib/python3.13/site-packages/uvicorn/protocols/websockets/websockets_impl.py:16: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated\n    from websockets.server import WebSocketServerProtocol\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n3450 passed, 3 skipped, 3 warnings in 152.65s (0:02:32)",
+            "recorded_at": "2026-10-10T17:35:04Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Stub Gmail + UPS/USPS HTTP at module import sites; assert no email body text lands in any table; full suite green."
     },

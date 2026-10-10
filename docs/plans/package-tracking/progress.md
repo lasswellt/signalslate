@@ -44,3 +44,6 @@ Ruling: scope — added 'package' StatusKind to web/utils/status.ts (+status.tes
 ## 2026-10-10T17:05:58Z verify T-020 ok=true
 ## 2026-10-10T17:05:58Z build T-021 start (attempt 1)
 ## 2026-10-10T17:08:09Z verify T-021 ok=true
+## 2026-10-10T17:08:09Z build T-022 start (attempt 1)
+Ruling: env — baseline full-suite red was environmental (uninitialised data/digest.db; Playwright 1243 vs installed 1194). Initialised local DB and aliased Chromium paths outside repo; full suite green. Also fixed 9 known-source expectations broken by T-016 (a3dafb9) (T-022, main thread)
+## 2026-10-10T17:35:04Z verify T-022 ok=true
