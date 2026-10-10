@@ -231,6 +231,34 @@ New traps:
 
 Revised carrier mix over the year: FedEx (most, fully covered by FedEx Delivery Manager mail), UPS (8 numbers, no UPS notification mail), USPS (6 numbers, no Informed Delivery mail), DHL Express (2), Amazon MCF (1), YunExpress (1), Walmart last-mile (Walmart only). UPS and USPS are the carriers where an API adds coverage.
 
+### Universal-pattern scan (365 days, follow-up)
+
+Method: every pattern in `jkeen/tracking_number_data` (18 couriers, 40+ formats, with their check-digit algorithms) plus extras (Walmart `555…` last-mile, labeled values after `Tracking #/Number/ID`, `Waybill`, `Parcel number`, `Pro#/ProNumber`, and tracking params in links, with Amazon SES `awstrack.me` and Mandrill `p=` wrappers decoded locally) run over the verbatim text of 203 shipping emails from 68 senders. The 203 were drawn from 884 candidates (four Gmail searches); Walmart, Home Depot and FedEx were capped at 20/20/12 because their formats repeat. The scanner is `docs/_research/assets/2026-10-10_tracking_scan.py`; it reads a local JSONL of `{id, sender, subject, body}` and passes all 20 cases in `tests/fixtures/packages/extraction_cases.json`.
+
+| Result | Count |
+|---|---|
+| Emails with at least one number | 116 of 203 |
+| Unique numbers found | 50: FedEx 16, UPS 12, USPS 9, DHL Express 2, Amazon TBA 2, YunExpress 2, Walmart `555…` 2, Home Depot UPS `1R00…` 4, SEFL freight PRO 1 |
+| Known numbers from earlier passes recovered | 30 of 33 (the 3 misses were not in the fetched sample) |
+| Candidates rejected | 30 unique numeric strings (order numbers, phone numbers, item IDs) failing checksums, plus ~130 link tokens matching no format |
+| False positives before tuning | 4 of 49 (8%) |
+| False positives after tuning | 0 of 50 |
+
+The four first-pass false positives, and the rule that removed each:
+
+| String | What it really was | Matched as | Fix |
+|---|---|---|---|
+| 11-digit | Merchant support phone number ("reach me at +…") | DHL Express (mod 7) | Weak validators (DHL Express mod 7: a random number passes 1 in 7; Purolator 12) only count with carrier context: DHL sender, "waybill", or "DHL" nearby |
+| 10-digit | Whisker "Your Shipment #" | DHL Express (mod 7) | Same, plus `Shipment #` added to the order-label exclusions |
+| 12-digit | eBay "Item ID:" | Purolator (12) | `Item ID`, `Reference ID`, `Account`, phone cues added to exclusions |
+| 14-digit | eBay link `id=` parameter | DHL E-Commerce (14), no checksum | Bare `id=` only trusted on known tracking hosts (swiship.com) |
+
+Formats not in jkeen that real mail uses: Home Depot's 28-character `1R00…` UPS id (label-only), SEFL freight 9-digit `ProNumber` (label-only, freight carrier mails its own status), Walmart `555…` (sender rule). One recall bug found and fixed: HTML-to-text output without separators glues numbers to the next word (`Tracking #: 1541729044Track`), so token boundaries must accept a following capitalised word.
+
+Emails with no number at all (87 of 203) are, in order: Walmart store-delivery and status mail (21), eBay (4), American Floor Mats (4), B&H order-status (4, numbers sit in FedEx's mail), SEFL dispatch duplicates, Collars & Co (promotions that slipped through on "arrived"), Bose (3, status mail with no number), Simplehuman, Tesla, DrZzs, Ubiquiti, Magnus. Each is either order-level status mail or noise; none hid a number the scanner missed.
+
+Conclusion: a single regex is not enough, but jkeen's patterns + checksums + three rules (weak validators need carrier context, labeled order/item/phone values are excluded, checksumless formats need a label) reach 50/50 precision on this mailbox, and the labeled-value tier picks up the non-standard formats jkeen does not know.
+
 ### Revised carrier priority for this user
 
 | Priority | Path | Covers (sample) |
@@ -259,7 +287,7 @@ Revised 2026-10-10 after the Gmail validation above. Ship a `packages` feature w
   - Walmart (`help@walmart.com`): store delivery and `555…` last-mile, keyed by order number.
   - Carrier notification mail: FedEx Delivery Manager (`TrackingUpdates@fedex.com`) and DHL On Demand (`NoReply.ODD@dhl.com`).
   - Shopify stock template (detected by subject shape, any sender) and Home Depot.
-  - Generic merchant mail: labeled fields first, then vendored jkeen regex with check digits (checksumless patterns only beside a carrier label), then carrier URLs including locally decoded `awstrack.me` and Mandrill wrappers. Merchants with no number become order-level packages fed by their own status mail.
+  - Generic merchant mail: labeled fields first (incl. `Pro#`/`ProNumber` for freight), then vendored jkeen regex with check digits (checksumless and weak-checksum patterns such as DHL Express mod 7 and Purolator only beside carrier context; order/item/phone-labeled values excluded), then carrier URLs including locally decoded `awstrack.me` and Mandrill wrappers. Merchants with no number become order-level packages fed by their own status mail.
 
   Plus a monotonic status state machine, sender-over-checksum carrier rules, order-number correlation (never `threadId`), and a `/packages` page with deep links, manual add and archive.
 - **Phase 2 (opt-in keys):** UPS Track and USPS Tracking v3 adapters behind the `CarrierAdapter` protocol (revised after the 365-day merchant survey: UPS ×8 and USPS ×6 numbers, neither with carrier notification mail). FedEx and DHL adapters stay out while their notification mail covers them.

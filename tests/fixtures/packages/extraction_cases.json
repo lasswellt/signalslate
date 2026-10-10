@@ -273,6 +273,33 @@
         "eta": "2026-09-24"
       },
       "note": "eBay names the carrier but hides the number; eBay's own OUT FOR DELIVERY and ORDER DELIVERED mails carry status. Order-level package keyed by eBay order number (subject only names the item, so correlate by item title prefix plus recency when no order number is present)."
+    },
+    {
+      "name": "ltl_freight_pro_number",
+      "sender": "batch@example-freight.test",
+      "subject": "Example Freight Pro# 100000001 Status: Out for Delivery",
+      "plain": "Example Freight Lines Shipment Status Notification ProNumber: 100000001 Pickup Date/Time: 07/13/2026 Shipper: EXAMPLE HOME PRODUCTS",
+      "links": [],
+      "expect": {
+        "carrier": "sefl",
+        "tracking_number": "100000001",
+        "status": "out_for_delivery"
+      },
+      "note": "LTL freight PRO numbers (SEFL, 9 digits) are not in jkeen. The freight carrier mails its own Dispatched / Out for Delivery / Delivered notices; capture via the 'Pro#' / 'ProNumber' label, carrier from sender."
+    },
+    {
+      "name": "glued_text_no_whitespace",
+      "sender": "order@example-led.test",
+      "subject": "Order #1000000 Update",
+      "plain": "Current StatusOrder Success📦 Tracking InformationCarrier: DHL ExpressTracking #: 9579235444Track Shipment →Expected Delivery: September 10, 2026",
+      "links": [],
+      "expect": {
+        "carrier": "dhl",
+        "tracking_number": "9579235444",
+        "order_id": "1000000",
+        "status": "in_transit"
+      },
+      "note": "HTML-to-text with no separators glues the number to the next word ('9579235444Track'). Boundaries must accept a following Capitalised word."
     }
   ]
 }
