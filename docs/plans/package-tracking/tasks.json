@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T16:50:08Z",
+  "updated": "2026-10-10T16:51:40Z",
   "tasks": [
     {
       "id": "T-001",
@@ -761,11 +761,46 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T16:51:40Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'class CarrierAdapter' pipeline/packages/carriers/base.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:51:39Z"
+          },
+          {
+            "cmd": "grep -qE 'class TrackResult' pipeline/packages/carriers/base.py",
+            "exit": 0,
+            "duration_ms": 8,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:51:39Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/carriers/base.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:51:39Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_carrier_base.py -q",
+            "exit": 0,
+            "duration_ms": 1019,
+            "tail": "..............                                                           [100%]\n14 passed in 0.50s",
+            "recorded_at": "2026-10-10T16:51:40Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Client-credentials token cached until expiry minus 60s; per-carrier min interval and hourly budget (USPS default 60/h); 429 backoff mirroring collectors/gmail.py:80-142; status normalisation to the package enum."
     },
