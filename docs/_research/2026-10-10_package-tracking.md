@@ -3,6 +3,7 @@ topic: package-tracking
 type: Feature Investigation
 date: 2026-10-10
 status: final
+critic: PASS (2026-10-10; 17 LIVE, 1 UNKNOWN UPS PDF; corrections applied)
 agents: [codebase-analyst, library-docs, web-researcher]
 agents_succeeded: 3/3  # library-docs + web-researcher returned PARTIAL (gaps listed in §Open Questions)
 citations:
@@ -21,39 +22,39 @@ citations:
   - url: "https://developers.google.com/workspace/gmail/api/reference/quota"
     title: "Gmail API usage limits"
     pub_date: "living"
-    claimed_span: "per-method quota units; per-user per-minute limit"
+    claimed_span: "messages.get 20 units; 6,000 units per user per minute"
   - url: "https://www.usps.com/business/web-tools-apis"
     title: "USPS Web Tools APIs (retirement)"
     pub_date: "2026-01"
     claimed_span: "Web Tools retired January 25, 2026"
   - url: "https://developers.usps.com/trackingv3"
-    title: "USPS Tracking 3.0"
+    title: "USPS Tracking 3.0 (page labelled Legacy)"
     pub_date: "living"
-    claimed_span: "OAuth 2.0 client credentials; tracking v3"
-  - url: "https://developer.usps.com/faq"
+    claimed_span: "Tracking 3.0 product page exists; OAuth 2.0 client-credentials detail not shown on this page (UNVERIFIED here)"
+  - url: "https://developers.usps.com/faq"
     title: "USPS developer FAQ"
     pub_date: "living"
-    claimed_span: "default 60 calls/hour; 429 over limit; higher quota by request"
+    claimed_span: "429 over quota; higher quota by service request (60 calls/hour default comes from third-party client READMEs, not this page)"
   - url: "https://developer.fedex.com/api/en-us/catalog/track/v1/docs.html"
     title: "FedEx Track API"
     pub_date: "living"
-    claimed_span: "up to 30 tracking numbers per request; account number only for reference/SPOD lookups"
+    claimed_span: "up to 30 tracking numbers per request; account number required for SPOD signature; reference tracking possible with postal code, country, ship date range"
   - url: "https://developer.dhl.com/tracking"
     title: "DHL Shipment Tracking - Unified"
     pub_date: "living"
-    claimed_span: "new apps 250 calls/day, 1 call/second"
+    claimed_span: "new apps 250 calls/day, max 1 call per 5 seconds; initial tier described as for development"
   - url: "https://filexfer.ups.com/assets/resources/webcontent/en_US/ups_api_access_agreement.pdf"
     title: "UPS API Access Agreement"
     pub_date: "living"
-    claimed_span: "Developer definition includes individuals"
+    claimed_span: "Developer definition includes individuals (UNVERIFIED: PDF text not extractable by critic)"
   - url: "https://github.com/karrioapi/karrio"
     title: "Karrio"
     pub_date: "living"
-    claimed_span: "LGPL-3.0 core; Docker self-host; tracking via each carrier's own credentials"
+    claimed_span: "LGPL-3.0 (server, plugins, core; /ee separate license); Docker self-host; 4GB recommended for hobby deploy"
   - url: "https://github.com/moralmunky/Home-Assistant-Mail-And-Packages"
     title: "HA Mail and Packages"
     pub_date: "living"
-    claimed_span: "IMAP, matches subject lines of current day's email; counts in-transit/delivered"
+    claimed_span: "connects to the email account you supply; matches subject lines of current day's email; counts in-transit/delivered"
   - url: "https://parcelsapp.com/en/shops/amazon"
     title: "ParcelsApp: Amazon tracking"
     pub_date: "living"
@@ -64,12 +65,12 @@ citations:
     claimed_span: "USPS tracking page moved; scraper selectors broke"
   - url: "https://scrapfly.io/blog/how-to-bypass-akamai-anti-scraping"
     title: "Akamai anti-scraping"
-    pub_date: "2025"
+    pub_date: "2026-10-05"
     claimed_span: "blocks can return HTTP 200 with challenge page"
   - url: "https://community.home-assistant.io/t/17track-alternatives/903146"
     title: "HA community: 17track alternatives"
     pub_date: "2025"
-    claimed_span: "17track free tier shrinking; ParcelsApp ~10 parcels/month"
+    claimed_span: "17track integration breaking changes and deprecated sensors; ParcelsApp ~10 parcels/month"
   - url: "https://support.google.com/cloud/answer/15549945"
     title: "Google Cloud: OAuth app publishing status"
     pub_date: "living"
@@ -101,7 +102,7 @@ Build a `pipeline/packages/` feature that searches each connected Gmail account 
 - The digest collector's query is only `after:<epoch> before:<epoch>` (`pipeline/collectors/gmail.py:153-155`), window from `runner.collection_window` with 24h default and 7-day `MAX_BACKFILL` (`pipeline/collectors/__init__.py:19-25`). Collected `CollectedItem` rows therefore never hold mail older than 7 days. A purchase scanner must call Gmail directly.
 - Reusable pieces in `pipeline/collectors/gmail.py`: `_call` with 429/5xx/rateLimit backoff (`:116-142`), `fetch_messages` (`format=full`, `:452`), `flatten_message` (`:393-430`); tokens via `health.gmail_token_response(label)` (`pipeline/health.py:614`), accounts via `health.gmail_accounts()` (`:301`).
 - **Gap that matters:** `_TextExtractor` keeps only text nodes (`handle_data`, `gmail.py:253`) and ignores `href`. "Track package" buttons, the most reliable tracking source, are discarded. The scanner needs its own HTML pass that keeps `a[href]` and `<script type="application/ld+json">`.
-- Quota is a non-issue at single-user scale: `messages.list` + `messages.get` per hit, already paced 0.3s in the collector (`gmail.py:53`). Gmail quota page lists per-method units and a per-user per-minute cap (exact `messages.get` cost conflicting between 5 and 20 units; irrelevant at hundreds of messages).
+- Quota is a non-issue at single-user scale: `messages.list` + `messages.get` per hit, already paced 0.3s in the collector (`gmail.py:53`). Gmail quota page lists per-method units and a per-user per-minute cap (`messages.get` = 20 units, 6,000 units/user/minute; irrelevant at hundreds of messages).
 - Token lifetime risk is already handled by the Gmail research (consent screen published to Production, `docs/_research/2026-09-20_gmail-collector-and-agents.md:23`). No new OAuth work.
 
 ### Q2. Tracking number extraction
@@ -122,17 +123,17 @@ Precision ordering, highest first:
 
 | Carrier | Free source | Auth | Limits | Individual OK? | Verdict |
 |---|---|---|---|---|---|
-| USPS | Tracking v3 at `apis.usps.com` (Web Tools XML retired 2026-01-25) | OAuth2 client credentials | 60 calls/hour default, 429 over | Yes, via Business Customer Gateway account; April 2026 "API Access Control" change unverified | Use |
+| USPS | Tracking v3 at `apis.usps.com` (Web Tools XML retired 2026-01-25) | OAuth2 client credentials (per third-party clients) | 429 over quota, increase by service request; 60 calls/hour default per third-party clients only | Yes, via Business Customer Gateway account; April 2026 "API Access Control" change unverified | Use |
 | UPS | Track API (developer.ups.com) | OAuth2 client credentials | Not published | Access agreement covers individuals; asks company name + phone; account-number need for Track unverified | Use |
-| FedEx | Track API v1 | OAuth2 client credentials | Not published; 30 numbers/request | Project creation reportedly requires linking a 9-digit FedEx account; Track itself needs no account number | Use if user has/creates a free fedex.com shipping account |
-| DHL | Shipment Tracking - Unified | API key header | 250 calls/day, 1/sec | Yes | Use |
+| FedEx | Track API v1 | OAuth2 client credentials | Not published; 30 numbers/request | Project creation reportedly requires linking a 9-digit FedEx account; Track by number needs no account number; SPOD signature does | Use if user has/creates a free fedex.com shipping account |
+| DHL | Shipment Tracking - Unified | API key header | 250 calls/day, max 1 call per 5s; starter tier labelled for development, upgrades restricted to DHL customers | Yes | Use (250/day suffices for one user) |
 | Amazon Logistics (TBA…) | None. Not trackable by third parties; requires Amazon login | n/a | n/a | n/a | Email-derived only |
 | LaserShip/OnTrac, GOFO, regional | None free | n/a | n/a | n/a | Email-derived + deep link |
 | International (S10 postal) | Origin post's site; 17TRACK free tier | varies | 17TRACK ~50-100/month | n/a | Deep link; aggregator not adopted |
 
 **Email-derived status** is the universal fallback and the only Amazon path. Merchants and Amazon send "shipped", "out for delivery", "delivered" mail that carries the same tracking number, order id, or Gmail `threadId`. Each scan re-reads new matching mail and advances package state monotonically. HA Mail and Packages proves the approach works (subject-line matching), and also shows its limit: wording drifts and small merchants send nothing after "shipped".
 
-**Polling budget** (single user, ~10-30 active packages): poll each active package every 2h, at most 12/day. USPS 60/hr and DHL 250/day both hold. Stop polling 48h after `delivered`; mark `stale` after 30 days without an event.
+**Polling budget** (single user, ~10-30 active packages): poll each active package every 2h, at most 12/day. USPS 60/hr and DHL 250/day (1 call per 5s) both hold; batch DHL numbers per call where the API allows. Stop polling 48h after `delivered`; mark `stale` after 30 days without an event.
 
 ### Q4. Scraping
 
@@ -142,10 +143,10 @@ Rejected. UPS sits behind Akamai, which returns HTTP 200 challenge pages so fail
 
 | Option | Free tier | Why not |
 |---|---|---|
-| 17TRACK API | ~50-100 numbers/month, figure conflicting | Volatile; HA's 17track integration users report breaking changes; third-party data processor |
+| 17TRACK API | ~50-100 numbers/month, figure conflicting | Volatile; HA's 17track integration users report breaking changes and deprecated sensors; third-party data processor |
 | AfterShip | API only on paid Pro (~$119/mo) | Paid |
 | Ship24, TrackingMore, ParcelsApp | 10-100/month trial-like | Volatile, ToS for personal automation unclear |
-| Karrio (LGPL-3.0, self-host) | Free | ~4 GB RAM service to wrap the same four carrier APIs you still need keys for. Overkill for one user; worth revisiting only if label purchasing ever enters scope. |
+| Karrio (LGPL-3.0, self-host) | Free | 4 GB recommended even for a hobby deploy; a full shipping platform wrapping the same carrier APIs (carrier credentials still expected, per general Karrio design, not stated on README). Overkill for one user; worth revisiting only if label purchasing ever enters scope. |
 
 ### Q6. Codebase integration
 
@@ -163,8 +164,7 @@ Pattern from `domains` and `jobs`, verified:
 
 - **Email-only vs API polling.** The contrarian pass argues email-derived status is uneven (late or missing "delivered" mail from small merchants). That is why carrier APIs stay in scope for the four big carriers. Conversely, carrier APIs add per-carrier signup friction (FedEx account link, USPS BCG, UPS company fields) for a personal tool. Resolution: make APIs opt-in per carrier, ship email-derived first, measure how often packages stall in `in_transit`.
 - **JSON-LD value.** library-docs called ParcelDelivery markup anecdotally common among large merchants; web-researcher found Gmail markup requires sender registration and no adoption stats. Both agree: parse it when present, never depend on it.
-- **USPS quota and access rules.** 60/hr comes from USPS's FAQ plus third-party packages; the April 2026 Access Control change could alter individual eligibility. Verify at signup before building the adapter.
-- **Gmail `messages.get` cost.** 5 vs 20 units, conflicting. Irrelevant at this volume.
+- **USPS quota and access rules.** USPS's FAQ confirms 429 and quota requests but not the 60/hr figure, which comes from third-party packages; the April 2026 Access Control change could alter individual eligibility. Verify at signup before building the adapter.
 - **LLM extraction.** Codebase already ships Anthropic Haiku and an extraction pattern, so it is cheap to add. It contradicts "open and free" (third-party processing of order mail). Kept optional, off by default.
 
 ## Recommendation
