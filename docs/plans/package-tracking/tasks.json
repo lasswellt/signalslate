@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T16:46:49Z",
+  "updated": "2026-10-10T16:48:14Z",
   "tasks": [
     {
       "id": "T-001",
@@ -608,11 +608,53 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T16:48:14Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def apply_email' pipeline/packages/inventory.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:48:11Z"
+          },
+          {
+            "cmd": "grep -qE 'def apply_carrier_result' pipeline/packages/inventory.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:48:12Z"
+          },
+          {
+            "cmd": "! grep -nE 'thread_id ==|threadId ==' pipeline/packages/inventory.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:48:12Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/inventory.py",
+            "exit": 0,
+            "duration_ms": 12,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:48:12Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_inventory.py -q",
+            "exit": 0,
+            "duration_ms": 2543,
+            "tail": ".............                                                            [100%]\n13 passed in 1.88s",
+            "recorded_at": "2026-10-10T16:48:14Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Correlate by (carrier, tracking_number), else (merchant domain, order_id); never threadId (Validation finding 3). Status only moves forward except exception; dedupe events by hash; stale after PACKAGES_STALE_DAYS without event."
     },
