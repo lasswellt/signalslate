@@ -26,9 +26,7 @@
 
         <div class="q-mb-md" data-testid="package-summary">
           <div class="row items-center q-gutter-sm q-mb-xs">
-            <q-chip dense :color="statusView(pkg.status).color" text-color="white" :icon="statusView(pkg.status).icon" :aria-label="`Status: ${statusView(pkg.status).label}`" data-testid="package-status">
-              {{ statusView(pkg.status).label }}
-            </q-chip>
+            <span data-testid="package-status"><StatusChip kind="package" :value="pkg.status" dense /></span>
             <q-badge v-if="pkg.archived" color="grey" data-testid="package-archived-badge">Archived</q-badge>
           </div>
           <div v-if="pkg.tracking_number" class="text-body2" data-testid="package-tracking-number">
@@ -63,7 +61,7 @@
                 <q-item v-for="(event, index) in events" :key="`${event.occurred_at ?? 'unknown'}-${index}`" data-testid="package-event">
                   <q-item-section>
                     <q-item-label>
-                      <q-chip dense outline :icon="statusView(event.status).icon">{{ statusView(event.status).label }}</q-chip>
+                      <StatusChip kind="package" :value="event.status" dense />
                       <span class="text-caption text-grey-8">{{ formatDate(event.occurred_at) }}</span>
                     </q-item-label>
                     <q-item-label v-if="event.description">{{ event.description }}</q-item-label>
@@ -127,6 +125,7 @@
 <script setup lang="ts">
 import { useQuasar } from 'quasar'
 import DialogShell from '~/components/ui/DialogShell.vue'
+import StatusChip from '~/components/ui/StatusChip.vue'
 import { usePackagesApi } from '~/composables/usePackagesApi'
 import type { PackageDetailOut } from '~/composables/usePackagesApi'
 
@@ -142,29 +141,6 @@ const emit = defineEmits<{
 
 const api = usePackagesApi()
 const $q = useQuasar()
-
-interface StatusView {
-  color: string
-  icon: string
-  label: string
-}
-
-// Package lifecycle statuses are not in the shared statusMeta() kinds, so they are mapped locally:
-// icon + label always, and never the accent teal (DESIGN.md "Status chips").
-const STATUS_VIEWS: Record<string, StatusView> = {
-  pending: { color: 'grey', icon: 'schedule', label: 'Pending' },
-  in_transit: { color: 'info', icon: 'local_shipping', label: 'In transit' },
-  out_for_delivery: { color: 'info', icon: 'delivery_dining', label: 'Out for delivery' },
-  delivered: { color: 'positive', icon: 'check_circle', label: 'Delivered' },
-  exception: { color: 'negative', icon: 'error', label: 'Exception' },
-  returned: { color: 'warning', icon: 'assignment_return', label: 'Returned' },
-  stale: { color: 'warning', icon: 'hourglass_empty', label: 'Stale' },
-  unknown: { color: 'grey', icon: 'help', label: 'Unknown' },
-}
-
-function statusView(status: string): StatusView {
-  return STATUS_VIEWS[status] ?? { color: 'grey', icon: 'help', label: humanize(status) }
-}
 
 const loading = ref(false)
 const error = ref<string | null>(null)
