@@ -63,3 +63,17 @@ def test_status_ranking():
     assert TERMINAL_STATUSES == {"delivered", "returned"}
     assert set(STATUS_RANK) <= set(STATUSES)
     assert "exception" in STATUSES and "exception" not in STATUS_RANK
+
+
+def test_settings_read_from_process_environment_without_env_file(monkeypatch):
+    """In the container compose's env_file reaches the app only as environment variables."""
+    from pipeline import health
+    from pipeline.packages import packages_settings
+
+    monkeypatch.setattr(health, "ROOT", health.ROOT / "nonexistent-root-for-test")
+    monkeypatch.setenv("PACKAGES_SCAN_DAYS", "90")
+    monkeypatch.setenv("UPS_CLIENT_ID", "id-from-process-env")
+    monkeypatch.setenv("UPS_CLIENT_SECRET", "secret-from-process-env")
+    settings = packages_settings()
+    assert settings.scan_days == 90
+    assert settings.ups_enabled

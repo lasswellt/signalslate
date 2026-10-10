@@ -88,6 +88,11 @@ class HealthResult:
     detail: str
 
 
+# Every config family read through env(). A family missing here is invisible in the container,
+# where compose's env_file reaches the process only as environment variables.
+_ENV_PREFIXES = ("M365_", "SLACK_", "ZOOM_", "MSTODO_", "GMAIL_", "DOMAINS_", "JOBS_", "PACKAGES_", "UPS_", "USPS_")
+
+
 def _raw_env() -> dict:
     """
     Config from .env, with the real environment taking precedence, and NO connection-store overlay.
@@ -100,7 +105,7 @@ def _raw_env() -> dict:
     """
     merged = dict(dotenv_values(ROOT / ".env"))
     for key, value in os.environ.items():
-        if key.startswith(("M365_", "SLACK_", "ZOOM_", "MSTODO_", "GMAIL_")) or key in _SINGLE_KEYS:
+        if key.startswith(_ENV_PREFIXES) or key in _SINGLE_KEYS:
             merged[key] = value
     return merged
 
