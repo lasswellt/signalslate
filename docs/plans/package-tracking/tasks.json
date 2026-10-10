@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T16:55:23Z",
+  "updated": "2026-10-10T16:56:10Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1041,11 +1041,46 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T16:56:10Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'PACKAGES_JOB_ID = \"packages_refresh\"' api/scheduler.py",
+            "exit": 0,
+            "duration_ms": 12,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:56:08Z"
+          },
+          {
+            "cmd": "grep -qE 'def reschedule_packages' api/scheduler.py",
+            "exit": 0,
+            "duration_ms": 12,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:56:08Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/scheduler.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:56:08Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_scheduler_packages.py tests/test_scheduler_domains.py -q",
+            "exit": 0,
+            "duration_ms": 2198,
+            "tail": "................                                                         [100%]\n16 passed in 1.46s",
+            "recorded_at": "2026-10-10T16:56:10Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Mirror DOMAINS_JOB_ID / reschedule_domains / next_domains_run_time (api/scheduler.py:59-178); log exception class only."
     },
