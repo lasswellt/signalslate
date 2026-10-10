@@ -1,0 +1,272 @@
+{
+  "name": "United States Postal Service",
+  "courier_code": "usps",
+  "tracking_numbers": [
+    {
+      "name": "USPS 20",
+      "id": "usps_20",
+      "description": "Delivery and Signature Confirmation numbers, printed without the application identifier",
+      "tracking_url": "https://tools.usps.com/go/TrackConfirmAction?tLabels=%s",
+      "regex": [
+        "\\s*(?<SerialNumber>",
+        "(?<ServiceType>([0-9]\\s*){2})",
+        "(?<ShipperId>([0-9]\\s*){9})",
+        "(?<PackageId>([0-9]\\s*){8})",
+        ")",
+        "(?<CheckDigit>[0-9]\\s*)"
+      ],
+      "validation": {
+        "checksum": {
+          "name": "mod10",
+          "modulo": 10,
+          "evens_multiplier": 3,
+          "odds_multiplier": 1,
+          "reverse": false
+        }
+      },
+      "test_numbers": {
+        "valid": [
+          "0307 1790 0005 2348 3741",
+          " 0 3 0 7   1 7 9 0   0 0 0 5   2 3 4 8   3 7 4 1 ",
+          "7112 3456 7891 2345 6787"
+        ],
+        "invalid": [
+          "0307 1790 0005 2348 3742"
+        ]
+      },
+      "additional": [
+        {
+          "name": "Service Type",
+          "regex_group_name": "ServiceType",
+          "lookup": [
+            { "matches": "01", "name": "Delivery Confirmation", "description": "Priority Mail or First-Class Mail Parcels" },
+            { "matches": "02", "name": "Delivery Confirmation", "description": "Package Services, Parcel Select or Standard Mail Parcels" },
+            { "matches_regex": "0[34]", "name": "Delivery Confirmation", "description": "Retail" },
+            { "matches": "05", "name": "Delivery Confirmation", "description": "Priority Mail or First-Class Mail Parcels, insured over $50" },
+            { "matches": "06", "name": "Delivery Confirmation", "description": "Package Services, Parcel Select or Standard Mail Parcels, insured over $50" },
+            { "matches": "07", "name": "Delivery Confirmation", "description": "Priority Mail, insured $50 or under" },
+            { "matches": "08", "name": "Delivery Confirmation", "description": "Package Services, Parcel Select or Standard Mail Parcels, insured $50 or under" },
+            { "matches": "14", "name": "Delivery Confirmation", "description": "Software vendors only, by approval" },
+            { "matches": "21", "name": "Signature Confirmation", "description": "Priority Mail or First-Class Mail Parcels" },
+            { "matches": "22", "name": "Signature Confirmation", "description": "Package Services, Parcel Select or Standard Mail Parcels" },
+            { "matches_regex": "2[34]", "name": "Signature Confirmation", "description": "Retail" },
+            { "matches": "25", "name": "Signature Confirmation", "description": "Priority Mail or First-Class Mail Parcels, insured, all values" },
+            { "matches": "26", "name": "Signature Confirmation", "description": "Package Services, Parcel Select or Standard Mail Parcels, insured, all values" },
+            { "matches": "34", "name": "Signature Confirmation", "description": "Software vendors only, by approval" },
+            { "matches": "50", "name": "Electronic File Header", "description": "Used in the file header record only, never on a package" },
+            { "matches": "56", "name": "Passive Enroute Scan", "description": "A free scan as the parcel passes through a sorting plant, with no confirmation service attached" },
+            { "matches": "73", "name": "Insured Mail", "description": "Insured only, value over $50" },
+            { "matches": "82", "name": "Merchandise Return", "description": "With Delivery Confirmation" },
+            { "matches": "83", "name": "Merchandise Return", "description": "With Delivery Confirmation, insured value $50 or under" },
+            { "matches": "85", "name": "Merchandise Return", "description": "With Delivery Confirmation, insured value over $50" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "USPS IMpb N",
+      "id": "usps_impb_n",
+      "description": "IMpb constructs N01 through N10, issued online or by a vendor or meter",
+      "glossary": {
+        "ShipperId": { "description": "The company that holds the postal permit the package was mailed under, which Publication 199 calls the Mailer ID. Nine digits when it starts with 9, six otherwise." }
+      },
+      "tracking_url": "https://tools.usps.com/go/TrackConfirmAction?tLabels=%s",
+      "regex": [
+        "\\s*((?<RoutingApplicationId>4\\s*2\\s*0\\s*)(?<DestinationZip>([0-9]\\s*){5}(?=([0-9]\\s*){22}(?![0-9])|([0-9]\\s*){26}(?![0-9])))(?<DestinationZipPlus4>([0-9]\\s*){4}(?=([0-9]\\s*){22}(?![0-9])))?)?",
+        "(?<SerialNumber>",
+        "(?<ApplicationIdentifier>9\\s*4\\s*)",
+        "(?<ServiceType>([0-9]\\s*){3})",
+        "(?=9\\s*([0-9]\\s*){8}(([0-9]\\s*){15}|([0-9]\\s*){11}|([0-9]\\s*){7})[0-9]\\s*(?![0-9])",
+        "|[0-8]\\s*([0-9]\\s*){5}(([0-9]\\s*){14}|([0-9]\\s*){10})[0-9]\\s*(?![0-9]))",
+        "(?<ShipperId>9\\s*([0-9]\\s*){8}|[0-8]\\s*([0-9]\\s*){5})",
+        "(?<PackageId>([0-9]\\s*){15}|([0-9]\\s*){14}|([0-9]\\s*){11}|([0-9]\\s*){10}|([0-9]\\s*){7})",
+        ")",
+        "(?<CheckDigit>[0-9]\\s*)"
+      ],
+      "validation": {
+        "checksum": {
+          "name": "mod10",
+          "modulo": 10,
+          "evens_multiplier": 3,
+          "odds_multiplier": 1,
+          "reverse": true
+        }
+      },
+      "test_numbers": {
+        "valid": [
+          "420787459400111206206406260787",
+          "9400111206206406260787",
+          "9400 1112 0108 0805 4830 16",
+          "9405803699300124287899",
+          "9434611206206406227577",
+          "9434611206206407667136",
+          "9400111206206407628746",
+          "9400111206206407628845"
+        ],
+        "invalid": [
+          "9434611206206407667131",
+          "9434611306206407667222",
+          "2334611306206407667222"
+        ]
+      },
+      "additional": [
+        {
+          "name": "Application Identifier",
+          "regex_group_name": "ApplicationIdentifier",
+          "lookup": [
+            { "matches": "94", "name": "Online or vendor label", "description": "Issued through USPS WebTools, or an authorized PC Postage provider" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "USPS Legacy",
+      "id": "usps_legacy",
+      "description": "Delivery and Signature Confirmation numbers, carrying the 91 application identifier",
+      "glossary": {
+        "ApplicationIdentifier": { "description": "Present only when the barcode is UCC/EAN Code 128." }
+      },
+      "regex": [
+        "\\s*(?:(?<RoutingApplicationId>4\\s*2\\s*0\\s*)(?<DestinationZip>([0-9]\\s*){5})(?<DestinationZipPlus4>([0-9]\\s*){4})?)?",
+        "(?<SerialNumber>",
+        "(?<ApplicationIdentifier>9\\s*1\\s*)?",
+        "(?<ServiceType>([0-9]\\s*){2})",
+        "(?<ShipperId>([0-9]\\s*){9})",
+        "(?<PackageId>([0-9]\\s*){8})",
+        ")",
+        "(?<CheckDigit>[0-9]\\s*)"
+      ],
+      "validation": {
+        "checksum": {
+          "name": "mod10",
+          "modulo": 10,
+          "evens_multiplier": 3,
+          "odds_multiplier": 1,
+          "reverse": false
+        },
+        "serial_number_format": {
+          "prepend_if": {
+            "matches_regex": "^(?!9\\s*1).+",
+            "content": "91"
+          }
+        }
+      },
+      "tracking_url": "https://tools.usps.com/go/TrackConfirmAction?tLabels=%s",
+      "test_numbers": {
+        "valid": [
+          "420 22153 9101026837331000039521",
+          "9101 1234 5678 9000 0000 13",
+          "7196 9010 7560 0307 7385"
+        ],
+        "invalid": [
+          "9101 1234 5678 9000 0000 14",
+          "7196 9010 7560 0307 7386"
+        ]
+      },
+      "additional": [
+        {
+          "name": "Service Type",
+          "regex_group_name": "ServiceType",
+          "lookup": [
+            { "matches": "01", "name": "Delivery Confirmation", "description": "Priority Mail or First-Class Mail Parcels" },
+            { "matches": "02", "name": "Delivery Confirmation", "description": "Package Services, Parcel Select or Standard Mail Parcels" },
+            { "matches_regex": "0[34]", "name": "Delivery Confirmation", "description": "Retail" },
+            { "matches": "05", "name": "Delivery Confirmation", "description": "Priority Mail or First-Class Mail Parcels, insured over $50" },
+            { "matches": "06", "name": "Delivery Confirmation", "description": "Package Services, Parcel Select or Standard Mail Parcels, insured over $50" },
+            { "matches": "07", "name": "Delivery Confirmation", "description": "Priority Mail, insured $50 or under" },
+            { "matches": "08", "name": "Delivery Confirmation", "description": "Package Services, Parcel Select or Standard Mail Parcels, insured $50 or under" },
+            { "matches": "14", "name": "Delivery Confirmation", "description": "Software vendors only, by approval" },
+            { "matches": "21", "name": "Signature Confirmation", "description": "Priority Mail or First-Class Mail Parcels" },
+            { "matches": "22", "name": "Signature Confirmation", "description": "Package Services, Parcel Select or Standard Mail Parcels" },
+            { "matches_regex": "2[34]", "name": "Signature Confirmation", "description": "Retail" },
+            { "matches": "25", "name": "Signature Confirmation", "description": "Priority Mail or First-Class Mail Parcels, insured, all values" },
+            { "matches": "26", "name": "Signature Confirmation", "description": "Package Services, Parcel Select or Standard Mail Parcels, insured, all values" },
+            { "matches": "34", "name": "Signature Confirmation", "description": "Software vendors only, by approval" },
+            { "matches": "50", "name": "Electronic File Header", "description": "Used in the file header record only, never on a package" },
+            { "matches": "56", "name": "Passive Enroute Scan", "description": "A free scan as the parcel passes through a sorting plant, with no confirmation service attached" },
+            { "matches": "73", "name": "Insured Mail", "description": "Insured only, value over $50" },
+            { "matches": "82", "name": "Merchandise Return", "description": "With Delivery Confirmation" },
+            { "matches": "83", "name": "Merchandise Return", "description": "With Delivery Confirmation, insured value $50 or under" },
+            { "matches": "85", "name": "Merchandise Return", "description": "With Delivery Confirmation, insured value over $50" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "USPS IMpb C",
+      "id": "usps_impb_c",
+      "description": "IMpb constructs C01 through C10, plus USPS retail",
+      "glossary": {
+        "ShipperId": { "description": "The company that holds the postal permit the package was mailed under, which Publication 199 calls the Mailer ID. Nine digits when it starts with 9, six otherwise." }
+      },
+      "regex": [
+        "\\s*(?:(?<RoutingApplicationId>4\\s*2\\s*0\\s*)(?<DestinationZip>([0-9]\\s*){5})(?<DestinationZipPlus4>([0-9]\\s*){4}(?=([0-9]\\s*){22}(?![0-9])))?)?",
+        "(?<SerialNumber>",
+        "(?<ApplicationIdentifier>9\\s*2\\s*(?=([0-9]\\s*){3}9)|9\\s*3\\s*(?=([0-9]\\s*){3}[0-8])|9\\s*5\\s*)",
+        "(?<ServiceType>([0-9]\\s*){3})",
+        "(?=9\\s*([0-9]\\s*){8}(([0-9]\\s*){11}|([0-9]\\s*){7})[0-9]\\s*(?![0-9])",
+        "|[0-8]\\s*([0-9]\\s*){5}(([0-9]\\s*){14}|([0-9]\\s*){10})[0-9]\\s*(?![0-9]))",
+        "(?<ShipperId>9\\s*([0-9]\\s*){8}|[0-8]\\s*([0-9]\\s*){5})",
+        "(?<PackageId>([0-9]\\s*){14}|([0-9]\\s*){11}|([0-9]\\s*){10}|([0-9]\\s*){7})",
+        ")",
+        "(?<CheckDigit>[0-9]\\s*)"
+      ],
+      "validation": {
+        "checksum": {
+          "name": "mod10",
+          "modulo": 10,
+          "evens_multiplier": 3,
+          "odds_multiplier": 1,
+          "reverse": false
+        }
+      },
+      "tracking_url": "https://tools.usps.com/go/TrackConfirmAction?tLabels=%s",
+      "test_numbers": {
+        "valid": [
+          "4201002334249200190132607600833457",
+          "4201028200009261290113185417468510",
+          " 4 2 0 1 0 2 8 2 0 0 0 0 9 2 6 1 2 9 0 1 1 3 1 8 5 4 1 7 4 6 8 5 1 0 ",
+          "9505 5110 6960 5048 6006 24",
+          "92748931507708513018050063",
+          "92001903060085300042901077",
+          "9361 2898 7870 0317 6337 95",
+          "9261292700768711948021",
+          "420 11213 92 6129098349792366623 8",
+          "92 6129098349792366623 8",
+          "420902459261290336128704042634",
+          "420941179261290336128704062441",
+          "420926029261290336128704067248",
+          "420902729261290336128704124163",
+          "420950549261290336128704133837",
+          "420193809261290336128704280838",
+          "420900469261290336128704216936"
+        ],
+        "invalid": [
+          "61299998820821171811",
+          "9200000000000000000000",
+          "420000000000000000000000000000",
+          "420000009200000000000000000000",
+          "4201028200009261290113185417468511"
+        ]
+      },
+      "additional": [
+        {
+          "name": "Service Type",
+          "regex_group_name": "ServiceType",
+          "lookup": [
+            { "matches": "612", "name": "Parcel Select" }
+          ]
+        },
+        {
+          "name": "Application Identifier",
+          "regex_group_name": "ApplicationIdentifier",
+          "lookup": [
+            { "matches": "92", "name": "Commercial mailer", "description": "Nine digit mailer ID, and may have been carried by another company before USPS" },
+            { "matches": "93", "name": "Commercial mailer", "description": "Six digit mailer ID, and may have been carried by another company before USPS" },
+            { "matches": "95", "name": "USPS Retail", "description": "Issued at a post office counter, an automated postal center, or a self-service kiosk" }
+          ]
+        }
+      ]
+    }
+  ]
+}
