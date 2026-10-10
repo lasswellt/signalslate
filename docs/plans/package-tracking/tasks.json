@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T17:00:42Z",
+  "updated": "2026-10-10T17:04:30Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1352,11 +1352,39 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T17:04:30Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'DialogShell' web/components/PackageDetailDialog.vue",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-10T17:04:19Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/PackageDetailDialog.vue",
+            "exit": 0,
+            "duration_ms": 12,
+            "tail": "",
+            "recorded_at": "2026-10-10T17:04:19Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/PackageDetailDialog.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 10712,
+            "tail": "\n RUN  v5.0.1 /home/user/signalslate/web\n\nstdout | tests/PackageDetailDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······\n\n Test Files  1 passed (1)\n      Tests  6 passed (6)\n   Start at  17:04:22\n   Duration  7.25s (transform 51%, tests 33%, environment 7%, import 7%, setup 2%)\n\n  Transform  transforming modules took 3.65s · 51% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-10-10T17:04:30Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "DialogShell, StatusChip icon+label per DESIGN.md; never accent teal on status."
     },

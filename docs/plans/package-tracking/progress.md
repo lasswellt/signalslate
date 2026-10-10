@@ -37,3 +37,6 @@ Ruling: spec-defect fixed inline — health._raw_env dropped DOMAINS_/JOBS_ (pre
 ## 2026-10-10T16:59:23Z verify T-017 ok=true
 ## 2026-10-10T16:59:23Z build T-018 start (attempt 1)
 ## 2026-10-10T17:00:42Z verify T-018 ok=true
+## 2026-10-10T17:01:47Z build T-019 start (attempt 1)
+Ruling: scope — added 'package' StatusKind to web/utils/status.ts (+status.test.ts) so dialog and page share StatusChip per DESIGN.md (T-019, main thread)
+## 2026-10-10T17:04:30Z verify T-019 ok=true
