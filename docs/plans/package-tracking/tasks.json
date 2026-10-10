@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T16:42:36Z",
+  "updated": "2026-10-10T16:44:58Z",
   "tasks": [
     {
       "id": "T-001",
@@ -469,11 +469,46 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T16:44:58Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def extract' pipeline/packages/extract.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:44:56Z"
+          },
+          {
+            "cmd": "grep -q 'extraction_cases.json' tests/test_packages_extract.py",
+            "exit": 0,
+            "duration_ms": 12,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:44:57Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/extract.py",
+            "exit": 0,
+            "duration_ms": 12,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:44:57Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_extract.py -q",
+            "exit": 0,
+            "duration_ms": 1357,
+            "tail": ".....s..................                                                 [100%]\n23 passed, 1 skipped in 0.83s",
+            "recorded_at": "2026-10-10T16:44:58Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Order: sender rules (walmart 555, SEFL Pro#, Home Depot labels) > labeled fields > jkeen > URL params. Exclude order/item/phone/shipment/reference-labeled values. Shopify template by subject shape. Order id capture. tests/fixtures/packages/extraction_cases.json is the acceptance set (carrier, tracking_number, order_id)."
     },
