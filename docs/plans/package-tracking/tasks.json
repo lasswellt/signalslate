@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T16:56:10Z",
+  "updated": "2026-10-10T16:57:23Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1119,11 +1119,53 @@
           "timeout": 240
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T16:57:23Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def collect_packages' pipeline/collectors/packages.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:57:15Z"
+          },
+          {
+            "cmd": "grep -qE 'source == \"packages\"' pipeline/collectors/__init__.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:57:15Z"
+          },
+          {
+            "cmd": "grep -qE '\"packages\"' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:57:15Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/packages.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:57:16Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collector_packages.py tests/test_collectors.py tests/test_health.py -q",
+            "exit": 0,
+            "duration_ms": 7743,
+            "tail": "........................................................................ [ 25%]\n........................................................................ [ 51%]\n........................................................................ [ 77%]\n...............................................................          [100%]\n279 passed in 7.16s",
+            "recorded_at": "2026-10-10T16:57:23Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Mirror collectors/domains.py and the domains/jobs entries in collectors/__init__.py:86-97 and health.py:752-809 (always-available local source)."
     },
