@@ -11,6 +11,8 @@ export type PackageStatus =
   | 'delivered'
   | 'exception'
   | 'returned'
+  | 'stale'
+  | 'unknown'
 
 // api/routers/packages.py PackageOut. Timestamps are ISO-8601 UTC strings.
 export interface PackageOut {
