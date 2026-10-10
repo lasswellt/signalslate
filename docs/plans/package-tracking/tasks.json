@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T16:41:34Z",
+  "updated": "2026-10-10T16:42:36Z",
   "tasks": [
     {
       "id": "T-001",
@@ -403,11 +403,39 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T16:42:36Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def tracking_url' pipeline/packages/links.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:42:35Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/links.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:42:35Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_links.py -q",
+            "exit": 0,
+            "duration_ms": 1016,
+            "tail": ".................                                                        [100%]\n17 passed in 0.55s",
+            "recorded_at": "2026-10-10T16:42:36Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Deep link per carrier for the page; walmart -> walmart.com order page, unknown -> merchant link if captured."
     },
