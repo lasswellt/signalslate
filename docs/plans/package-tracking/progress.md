@@ -25,3 +25,5 @@ Ruling: spec-defect fixed inline — health._raw_env dropped DOMAINS_/JOBS_ (pre
 ## 2026-10-10T16:51:40Z verify T-011 ok=true
 ## 2026-10-10T16:51:40Z build T-012 start (attempt 1)
 ## 2026-10-10T16:53:02Z verify T-012 ok=true
+## 2026-10-10T16:53:02Z build T-013 start (attempt 1)
+## 2026-10-10T16:54:18Z verify T-013 ok=true
