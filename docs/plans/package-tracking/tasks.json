@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T16:57:23Z",
+  "updated": "2026-10-10T16:59:23Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1205,11 +1205,53 @@
           "timeout": 240
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T16:59:23Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '@router\\.get\\(\"/packages\"' api/routers/packages.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:59:18Z"
+          },
+          {
+            "cmd": "grep -qE '@router\\.get\\(\"/packages/summary\"' api/routers/packages.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:59:18Z"
+          },
+          {
+            "cmd": "grep -qE 'packages\\.router' api/main.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:59:18Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/packages.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:59:18Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_packages.py tests/test_api_security.py -q",
+            "exit": 0,
+            "duration_ms": 5201,
+            "tail": "...................................................................      [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.13/site-packages/starlette/testclient.py:40\n  /home/user/signalslate/venv/lib/python3.13/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n67 passed, 1 warning in 3.88s",
+            "recorded_at": "2026-10-10T16:59:23Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Pattern of api/routers/domains.py (_coded errors, Out models); register in api/main.py:110-126 with static paths before /{id}. /packages/summary for Home Assistant: out_for_delivery_today, arriving_today, delivered_today, in_transit."
     },
