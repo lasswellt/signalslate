@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T16:23:36Z",
+  "updated": "2026-10-10T16:36:04Z",
   "tasks": [
     {
       "id": "T-001",
@@ -30,11 +30,46 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T16:36:04Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "test -f pipeline/packages/data/LICENSE",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:36:03Z"
+          },
+          {
+            "cmd": "test -f pipeline/packages/data/couriers/ups.json && test -f pipeline/packages/data/couriers/usps.json && test -f pipeline/packages/data/couriers/fedex.json",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:36:03Z"
+          },
+          {
+            "cmd": "grep -q 'MIT' pipeline/packages/data/LICENSE",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:36:03Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_data.py -q",
+            "exit": 0,
+            "duration_ms": 1006,
+            "tail": "...................                                                      [100%]\n19 passed in 0.50s",
+            "recorded_at": "2026-10-10T16:36:04Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research §Q2: vendor the JSON, not the stale 2022 PyPI port. Keep upstream LICENSE and a SOURCE.md with commit sha."
     },
@@ -110,7 +145,7 @@
       "attempts": 0,
       "last_verify": null,
       "origin": "plan",
-      "notes": "Mirror domains/__init__.py domain_settings(). PACKAGES_REFRESH_CRON default '23 */2 * * *', PACKAGES_SCAN_DAYS 60, PACKAGES_STALE_DAYS 30, UPS_CLIENT_ID/SECRET, USPS_CLIENT_ID/SECRET via health.env(); malformed values fall back with a warning."
+      "notes": "scope+tests/conftest.py (add PACKAGES_, UPS_, USPS_ to CONFIG_PREFIXES). Mirror domains/__init__.py domain_settings(). PACKAGES_REFRESH_CRON default '23 */2 * * *', PACKAGES_SCAN_DAYS 60, PACKAGES_STALE_DAYS 30, UPS_CLIENT_ID/SECRET, USPS_CLIENT_ID/SECRET via health.env(); malformed values fall back with a warning."
     },
     {
       "id": "T-004",
