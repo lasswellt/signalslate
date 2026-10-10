@@ -133,12 +133,12 @@ def test_slack_workspaces_keeps_empty_token_as_none(env):
 
 def test_known_sources_lists_every_declared_source(env):
     env("M365_ORG1_ALIAS=work\nM365_ORG1_TENANT_ID=tid\nZOOM_CLIENT_ID=zid\nSLACK_ACME_TOKEN=xoxp-1\n")
-    assert health.known_sources() == ["m365_work", "zoom", "slack_acme", "domains", "jobs"]
+    assert health.known_sources() == ["m365_work", "zoom", "slack_acme", "domains", "jobs", "packages"]
 
 
 def test_known_sources_omits_zoom_without_a_zoom_account(env):
     env("SLACK_ACME_TOKEN=xoxp-1\n")
-    assert health.known_sources() == ["slack_acme", "domains", "jobs"]
+    assert health.known_sources() == ["slack_acme", "domains", "jobs", "packages"]
 
 
 # --- Slack scope verification -----------------------------------------------------
@@ -546,7 +546,7 @@ def test_gmail_accounts_ignores_shared_client_credentials(env):
 
 def test_known_sources_lists_gmail_after_slack(env):
     env("SLACK_ACME_TOKEN=xoxp-1\nGMAIL_PERSONAL_REFRESH_TOKEN=rt\n")
-    assert health.known_sources() == ["slack_acme", "gmail_personal", "domains", "jobs"]
+    assert health.known_sources() == ["slack_acme", "gmail_personal", "domains", "jobs", "packages"]
 
 
 def test_gmail_token_response_posts_refresh_grant_and_returns_raw_json(env, monkeypatch):
