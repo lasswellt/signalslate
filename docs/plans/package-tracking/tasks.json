@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T16:40:12Z",
+  "updated": "2026-10-10T16:41:34Z",
   "tasks": [
     {
       "id": "T-001",
@@ -328,11 +328,53 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T16:41:34Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def harvest' pipeline/packages/html.py",
+            "exit": 0,
+            "duration_ms": 12,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:41:33Z"
+          },
+          {
+            "cmd": "grep -qE 'awstrack' pipeline/packages/html.py",
+            "exit": 0,
+            "duration_ms": 12,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:41:33Z"
+          },
+          {
+            "cmd": "! grep -nE 'requests\\.(get|head)|urlopen' pipeline/packages/html.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:41:33Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/html.py",
+            "exit": 0,
+            "duration_ms": 12,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:41:33Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_html.py -q",
+            "exit": 0,
+            "duration_ms": 940,
+            "tail": ".............                                                            [100%]\n13 passed in 0.48s",
+            "recorded_at": "2026-10-10T16:41:34Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Validation finding 4 + merchant survey: keep a[href] (gmail._TextExtractor drops it), percent-decode awstrack.me/L0 targets, base64 Mandrill p=, extract carrier URL params (tracknum, trknbr, tLabels, tracking_numbers, trackNums, nums) and swiship id=. Never follow redirects. Text output must keep word separators to avoid glued tokens."
     },
