@@ -25,6 +25,10 @@ from pipeline.jobs import DEFAULT_REFRESH_CRON as JOBS_DEFAULT_REFRESH_CRON
 from pipeline.jobs import jobs_settings
 from pipeline.jobs.inventory import poll_all, resolve_pending
 from pipeline.jobs.scoring import score_new
+from pipeline.packages import DEFAULT_REFRESH_CRON as PACKAGES_DEFAULT_REFRESH_CRON
+from pipeline.packages import packages_settings
+from pipeline.packages.poll import refresh_due
+from pipeline.packages.scan import scan_all
 from pipeline.runner import RunAlreadyInProgress, execute_run
 
 _log = logging.getLogger(__name__)
@@ -58,6 +62,7 @@ _scheduler = BackgroundScheduler(timezone=schedule_timezone() or UTC)
 JOB_ID = "daily_digest_run"
 DOMAINS_JOB_ID = "domains_refresh"
 JOBS_JOB_ID = "jobs_refresh"
+PACKAGES_JOB_ID = "packages_refresh"
 
 
 def _run_scheduled() -> None:
@@ -104,6 +109,22 @@ def _run_jobs_scheduled() -> None:
                 _log.info("jobs scheduled refresh: no JobsProfile configured yet, skipping scoring")
     except Exception as exc:
         _log.warning("jobs scheduled refresh failed: %s", type(exc).__name__)
+
+
+def _run_packages_scheduled() -> None:
+    """
+    Mailbox scan followed by a carrier poll, each in its own try block so a scan failure still lets
+    the poll run (tracked packages keep refreshing even when Gmail is down). Failures are logged by
+    exception CLASS only, per pipeline/redact.py: a Gmail/carrier error can echo tokens or detail.
+    """
+    try:
+        scan_all()
+    except Exception as exc:
+        _log.warning("packages scheduled scan failed: %s", type(exc).__name__)
+    try:
+        refresh_due()
+    except Exception as exc:
+        _log.warning("packages scheduled poll failed: %s", type(exc).__name__)
 
 
 def reschedule() -> None:
@@ -157,12 +178,32 @@ def reschedule_jobs() -> None:
         _scheduler.add_job(_run_jobs_scheduled, trigger=trigger, id=JOBS_JOB_ID, replace_existing=True)
 
 
+def _packages_trigger() -> CronTrigger:
+    """CronTrigger from packages_settings().refresh_cron; a value that fails cron parsing falls back
+    to pipeline.packages's DEFAULT_REFRESH_CRON with a warning rather than taking the scheduler down."""
+    cron = packages_settings().refresh_cron
+    try:
+        return CronTrigger.from_crontab(cron, timezone=schedule_timezone() or UTC)
+    except ValueError:
+        _log.warning("invalid PACKAGES_REFRESH_CRON %r, using default %r", cron, PACKAGES_DEFAULT_REFRESH_CRON)
+        return CronTrigger.from_crontab(PACKAGES_DEFAULT_REFRESH_CRON, timezone=schedule_timezone() or UTC)
+
+
+def reschedule_packages() -> None:
+    trigger = _packages_trigger()
+    if _scheduler.get_job(PACKAGES_JOB_ID):
+        _scheduler.reschedule_job(PACKAGES_JOB_ID, trigger=trigger)
+    else:
+        _scheduler.add_job(_run_packages_scheduled, trigger=trigger, id=PACKAGES_JOB_ID, replace_existing=True)
+
+
 def start_scheduler() -> None:
     if not _scheduler.running:
         _scheduler.start()
     reschedule()
     reschedule_domains()
     reschedule_jobs()
+    reschedule_packages()
 
 
 def next_run_time():
@@ -177,4 +218,9 @@ def next_domains_run_time():
 
 def next_jobs_run_time():
     job = _scheduler.get_job(JOBS_JOB_ID)
+    return job.next_run_time if job else None
+
+
+def next_packages_run_time():
+    job = _scheduler.get_job(PACKAGES_JOB_ID)
     return job.next_run_time if job else None
