@@ -198,6 +198,39 @@ Totals: ~40 packages. About 36 (90%) reached a terminal status through email alo
 9. **Status vocabulary observed:** Walmart `Shipped:` / `Out for delivery:` / `Arrived:` / `Delivered:` / `Your package is in transit` / `Your order is delayed ⚠️` / `Canceled: delivery of`. FedEx `on the way` / `scheduled for delivery tomorrow` / `out for delivery today` / `was delivered`. DHL `On Its Way` / `Delivery Is Today` / `ARRIVING SOON` / `Delivered!`. Home Depot `Shipped` / `Out for Delivery Today` / `Delivered`. Noise from the same senders that must be ignored: substitutions, reminders, refunds, review/survey requests, import-duty and payment notices.
 10. **The Gmail connector returns `htmlBody` and link targets**, so this validation was not limited by text-only access. The app itself will use the Gmail API (`format=full`), which also returns raw HTML.
 
+### Merchant survey (365 days, follow-up)
+
+Second pass over non-Walmart merchants: shipping-subject search over 365 days, plus 15 bodies extracted read-only. Numbers validated with the same jkeen matcher.
+
+| Merchant / sender | Email template | Number in mail | Carrier | Merchant sends OFD + delivered? |
+|---|---|---|---|---|
+| Home Depot (`HomeDepotPro@`, `HomeDepot@order.homedepot.com`) | Own; `Order # WH…/WK…/WN…` in subject | Sometimes (`Delivery by: UPS Tracking #:`, non-`1Z` id) | UPS, FedEx | Yes, ~10 orders in 60 days, all complete; "Part of your order" split shipments |
+| Shopify stores (`*@t.shopifyemail.com`, and custom domains: Roborock, Insteon, TRC Electronics, GOVO, others) | Shopify stock: subject `A shipment from order X is on the way / is out for delivery / has been delivered`; body `<Carrier> tracking number: N` | Yes, labeled | FedEx, UPS, USPS | Yes, all three stages |
+| B&H Photo | Own: `Tracking #1:` + `Shipping Method: Fdx Home Delivery` | Yes | FedEx | Delivered yes; FedEx mail covers the rest |
+| Whisker / Litter-Robot | Own: `Carrier: FedEx® / Tracking number:` | Yes | FedEx | Yes |
+| Grunt Style | Own (Shopify + Wonderment): `Shipped By USPS / Tracking #` | Yes | USPS | Yes |
+| W4S | Own (Shopify + Klaviyo): `Shipped by UPS / Tracking number` | Yes | UPS | Yes |
+| WhiteWall | Own: `Your shipping service: UPS / Your parcel number:`; direct `ups.com/track?tracknum=` | Yes | UPS | Shipped only (so far) |
+| Tesla Shop | Own: number **only in the href** (`ups.com/track?tracknum=`) | URL only | UPS | Shipped + delivered |
+| Redo (returns/tracking platform) | `Delivered 1Z…` | Yes | UPS | Delivered |
+| Shippo (DrZzs) | `TRACKING NUMBER` label; links wrapped by Mandrill | Yes | USPS | Delivered; the merchant's own "shipped" mail had no number |
+| Anker + Swiship (Amazon MCF) | `Tracking number: TBA… Carrier: Amazon Shipping + Amazon MCF`; Swiship mail has it only inside an `awstrack.me`-wrapped, percent-encoded URL | Yes | Amazon Logistics | Yes (Anker sends OFD + delivered) |
+| eBay | `Shipped with USPS / SpeedPAK`; **no number** in mail | No | USPS, SpeedPAK | Yes (OUT FOR DELIVERY, ORDER DELIVERED) |
+| Simplehuman, American Floor Mats, DrZzs (own mail) | Link to merchant status page only | No | n/a | Simplehuman delivered yes; AFM no |
+| HeyDude (Narvar) | `Tracking Number:` + unwrapped `tracking.narvar.com?tracking_numbers=` | Yes | UPS | No (stalled) |
+| YunExpress store | `Tracking Number: … Carrier: YunExpress` | Yes | YunExpress | No |
+
+New validation results: 12 more real numbers, 11 pass their checksum (UPS `1Z` ×5, USPS IMpb ×5 incl. one with a `420`+ZIP routing prefix, FedEx 12 ×1); Amazon `TBA` has no checksum by design. Running totals: 28 of 28 checksum-bearing real numbers pass.
+
+New traps:
+
+- **Checksumless patterns fire on order numbers.** WhiteWall's 14-digit order number matches jkeen's DHL E-Commerce (14) pattern, which carries no checksum. Rule: a checksumless pattern only counts when a carrier label sits next to it, and any string labeled "Order number/Order #/Customer no." is excluded.
+- **Template beats sender.** The Shopify stock template arrives from many store domains. Detect it by subject shape plus the `<Carrier> tracking number:` label, not by sender.
+- **Link wrappers vary and some are decodable.** `awstrack.me/L0/<percent-encoded URL>` (Amazon SES) and Mandrill `p=<base64 JSON>` hide carrier URLs that can be decoded locally without following the redirect. Walmart `w-mt.co` and Klaviyo/Sendinblue tokens cannot.
+- **Some merchants never include a number** (eBay, Simplehuman, AFM, MantelMount until shipment). These become order-level packages fed by the merchant's own status mail.
+
+Revised carrier mix over the year: FedEx (most, fully covered by FedEx Delivery Manager mail), UPS (8 numbers, no UPS notification mail), USPS (6 numbers, no Informed Delivery mail), DHL Express (2), Amazon MCF (1), YunExpress (1), Walmart last-mile (Walmart only). UPS and USPS are the carriers where an API adds coverage.
+
 ### Revised carrier priority for this user
 
 | Priority | Path | Covers (sample) |
@@ -205,9 +238,9 @@ Totals: ~40 packages. About 36 (90%) reached a terminal status through email alo
 | 1 | Walmart mail parser (order-number keyed) | ~22 of 40 |
 | 2 | Carrier notification mail parsers: FedEx Delivery Manager, DHL On Demand | 16 of 40 |
 | 3 | Generic merchant parser (labeled fields + jkeen + href) for "shipped" mail | creates the package for the rest |
-| 4 | UPS Track API (opt-in key) | the only gap with a free API (1 of 40) |
+| 4 | UPS Track and USPS Tracking v3 APIs (opt-in keys) | merchants that stop after "shipped" (HeyDude, WhiteWall); 8 UPS + 6 USPS numbers in 365 days |
 | 5 | Deep link + `stale` after N days | YunExpress, link-only merchants |
-| Dropped | USPS v3, FedEx API, DHL API adapters | 0 USPS packages; FedEx and DHL fully covered by their own mail |
+| Dropped | FedEx API, DHL API adapters | FedEx and DHL fully covered by their own notification mail |
 
 ## Dissent / Contradictory Evidence
 
@@ -225,12 +258,13 @@ Revised 2026-10-10 after the Gmail validation above. Ship a `packages` feature w
 - **Phase 1 (no new credentials):** Gmail scanner over three parser families:
   - Walmart (`help@walmart.com`): store delivery and `555…` last-mile, keyed by order number.
   - Carrier notification mail: FedEx Delivery Manager (`TrackingUpdates@fedex.com`) and DHL On Demand (`NoReply.ODD@dhl.com`).
-  - Generic merchant "shipped" mail: labeled fields first, then vendored jkeen regex with check digits, then unwrapped carrier URLs.
+  - Shopify stock template (detected by subject shape, any sender) and Home Depot.
+  - Generic merchant mail: labeled fields first, then vendored jkeen regex with check digits (checksumless patterns only beside a carrier label), then carrier URLs including locally decoded `awstrack.me` and Mandrill wrappers. Merchants with no number become order-level packages fed by their own status mail.
 
   Plus a monotonic status state machine, sender-over-checksum carrier rules, order-number correlation (never `threadId`), and a `/packages` page with deep links, manual add and archive.
-- **Phase 2 (opt-in key):** UPS Track API adapter only, behind the `CarrierAdapter` protocol so USPS, FedEx or DHL adapters can be added later if the mail paths stop covering them.
+- **Phase 2 (opt-in keys):** UPS Track and USPS Tracking v3 adapters behind the `CarrierAdapter` protocol (revised after the 365-day merchant survey: UPS ×8 and USPS ×6 numbers, neither with carrier notification mail). FedEx and DHL adapters stay out while their notification mail covers them.
 
-Explicitly out: scraping, Google search, paid or freemium aggregators, Karrio, JSON-LD parsing, LLM extraction by default, and USPS/FedEx/DHL API adapters for now.
+Explicitly out: scraping, Google search, paid or freemium aggregators, Karrio, JSON-LD parsing, LLM extraction by default, and FedEx/DHL API adapters for now.
 
 ### Rationale
 
