@@ -3,6 +3,7 @@ topic: package-tracking
 type: Feature Investigation
 date: 2026-10-10
 status: final
+validated: 2026-10-10 against user Gmail (read-only, ~40 packages)
 critic: PASS (2026-10-10; 17 LIVE, 1 UNKNOWN UPS PDF; corrections applied)
 agents: [codebase-analyst, library-docs, web-researcher]
 agents_succeeded: 3/3  # library-docs + web-researcher returned PARTIAL (gaps listed in §Open Questions)
@@ -81,7 +82,7 @@ citations:
 
 ## Summary
 
-Build a `pipeline/packages/` feature that searches each connected Gmail account for shipping mail, extracts tracking numbers deterministically, and tracks status from three free sources in priority order: **(1) the shipping emails themselves**, **(2) official carrier APIs where the user has supplied a free developer key** (USPS, UPS, FedEx, DHL), and **(3) a carrier deep link** for anything else. No scraping and no paid aggregator. Phase 1 needs zero new credentials. Scope: the user does not shop Amazon; the primary merchant is **Walmart (Walmart+)**, which splits into carrier-shipped orders (tracking number in mail) and store-delivered orders (no tracking number, email-only status).
+Build a `pipeline/packages/` feature that searches each connected Gmail account for shipping mail, extracts tracking numbers deterministically, and tracks status from three free sources in priority order: **(1) the shipping emails themselves**, **(2) official carrier APIs where the user has supplied a free developer key** (USPS, UPS, FedEx, DHL), and **(3) a carrier deep link** for anything else. No scraping and no paid aggregator. Validated against the user's Gmail on 2026-10-10: about 90% of packages reach delivered from Walmart, FedEx and DHL mail alone, so the carrier API set shrinks to an optional UPS adapter (see Validation and the revised Decision). Phase 1 needs zero new credentials. Scope: the user does not shop Amazon; the primary merchant is **Walmart (Walmart+)**, which splits into carrier-shipped orders (tracking number in mail) and store-delivered orders (no tracking number, email-only status).
 
 ## Research Questions
 
@@ -164,6 +165,50 @@ Pattern from `domains` and `jobs`, verified:
 
 Rejected. Google's tracking box is fed by carriers' own APIs that Google calls live; the partner program no longer accepts new carriers (https://developers.google.com/search/docs/appearance/package-tracking, updated 2026-07-14). Automated `google.com/search` fetches are disallowed by `robots.txt` (`Disallow: /search`). The Custom Search JSON API is closed to new customers and discontinued 2027-01-01. Gmail's own inbox package tracking has no API. Same carrier data, worse access path.
 
+## Validation (Gmail sample, 2026-10-10)
+
+Method: read-only Gmail connector against the user's mailbox, `newer_than:180d`. Searched `from:walmart.com`, the shipping-subject query, and carrier senders; read 16 message bodies in full (plain text + 3 raw HTML), and the rest by subject and snippet. Check digits were tested with a scratch matcher over the vendored `jkeen/tracking_number_data` rules. No mail content is committed; `tests/fixtures/packages/extraction_cases.json` holds synthetic look-alikes.
+
+### What the mailbox actually contains (last ~60 days, by package)
+
+| Source | Packages seen | Tracking number in mail? | Status mail through delivery? | Free status path |
+|---|---|---|---|---|
+| Walmart store / InHome delivery (Spark drivers) | ~12 orders | No | Yes: confirmation, out for delivery, Delivered, for every order sampled | Walmart mail, keyed by order number |
+| Walmart "Fulfilled by Walmart" ship-to-home | 9 | Yes: 20-digit `555…` "Track your package:" | Yes: Shipped, Out for delivery, Arrived, for all 9 | Walmart mail. The `555…` number is Walmart's own last-mile; the out-for-delivery mail says "Delivery from store" and names the driver. No carrier API knows it. |
+| Walmart via FedEx | 1 | Yes (FedEx 12) | Yes, via FedEx mail | FedEx Delivery Manager mail |
+| Other merchants via FedEx (B&H, Whisker, Home Depot, Lamps Plus, others) | 13 | Yes | Yes: FedEx sends on the way, delivery tomorrow, out for delivery, delivered, every time | FedEx Delivery Manager mail (subject carries the number; body has ETA window, shipper, merchant order no. as "Reference") |
+| DHL Express | 2 | Yes (waybill) | Yes: DHL On Demand Delivery mail | DHL mail |
+| UPS (HeyDude, via Narvar link) | 1 | Yes (`1Z`, in text and in an unwrapped Narvar URL) | **No**: no follow-up 5 days after "shipped"; no UPS My Choice mail in the mailbox | UPS Track API (Phase 2) or deep link |
+| UPS (Home Depot "Delivery by: UPS") | 1 | Yes, but a non-`1Z` 28-char id | Yes, Home Depot sends out for delivery + delivered | Home Depot mail |
+| YunExpress (Shopify store) | 1 | Yes (`YT…`) | No follow-up yet | Deep link only |
+| Merchant link only (American Floor Mats) | 1 order, 3 shipments | **No** number anywhere; link to merchant status page only | No | Deep link only |
+
+Totals: ~40 packages. About 36 (90%) reached a terminal status through email alone. The 4 that did not are UPS ×1, YunExpress ×1, link-only ×1 order, and nothing USPS (zero USPS packages in the sample).
+
+### Findings that change the design
+
+1. **Carrier notification mail is the best free status source, and the user already gets it.** FedEx Delivery Manager mail covered 14 of 14 FedEx packages end to end, with ETA windows. DHL On Demand covered DHL. Parsing `TrackingUpdates@fedex.com` and `NoReply.ODD@dhl.com` replaces the FedEx and DHL API adapters for this user.
+2. **Walmart is two different flows, and neither involves a public carrier.** Store delivery has no number at all. Ship-to-home has a `555…` 20-digit number that is Walmart-internal. Both are fully covered by Walmart's own mail. Correlation key is the order number (`Order number: 2000NNN-NNNNNNNN` or `Order #2000NNN-NNNNNNNN`), present in text on every event mail. One order can produce several shipped mails (seen: two packages, one order).
+3. **Gmail `threadId` is unusable as a correlation key.** Gmail merges unrelated Walmart mails with identical subjects into one thread: three different packages' "Your package should arrive by 6:11pm📦" landed in one thread. Correlate by tracking number, else order number, else nothing.
+4. **Link harvesting does not work for Walmart and most merchants.** All 23 Walmart links are encrypted `w-mt.co` click-trackers. Whisker, HeyDude and Home Depot wrap most links too. Unwrapped carrier URLs appeared only from FedEx (`trknbr=`) and Narvar (`tracking_numbers=`). Keep the href tier, but it is a minor source.
+5. **JSON-LD / microdata: 0 of 3** raw HTML bodies checked (Walmart, HeyDude, FedEx). Drop it from Phase 1; keep a cheap check only if it costs nothing.
+6. **Check digits work as the main defence.** 17 of 17 real carrier numbers passed (FedEx Express 12 ×14, UPS `1Z` ×1, DHL Express ×2). 0 of 9 order and phone numbers passed; 4 of them matched a carrier regex (DHL Express 10-digit ×3, FedEx Ground/DPD ×1) and only the checksum rejected them.
+7. **But sender rules must override checksums.** 1 of 3 Walmart `555…` numbers passes the USPS 20 mod10 check by chance, so a checksum-first classifier would call it USPS and poll it forever. Rule: a `help@walmart.com` "Track your package:" number is `carrier=walmart`, full stop.
+8. **A labeled-field extractor is needed.** Home Depot's UPS id (`1R00…`, 28 chars) matches no jkeen pattern; it is only findable via the `Delivery by:` / `Tracking #:` labels. Whisker (`Carrier: FedEx® / Tracking number:`) and the Shopify store (`shipped via YunExpress … tracking number … is`) follow the same labeled shape.
+9. **Status vocabulary observed:** Walmart `Shipped:` / `Out for delivery:` / `Arrived:` / `Delivered:` / `Your package is in transit` / `Your order is delayed ⚠️` / `Canceled: delivery of`. FedEx `on the way` / `scheduled for delivery tomorrow` / `out for delivery today` / `was delivered`. DHL `On Its Way` / `Delivery Is Today` / `ARRIVING SOON` / `Delivered!`. Home Depot `Shipped` / `Out for Delivery Today` / `Delivered`. Noise from the same senders that must be ignored: substitutions, reminders, refunds, review/survey requests, import-duty and payment notices.
+10. **The Gmail connector returns `htmlBody` and link targets**, so this validation was not limited by text-only access. The app itself will use the Gmail API (`format=full`), which also returns raw HTML.
+
+### Revised carrier priority for this user
+
+| Priority | Path | Covers (sample) |
+|---|---|---|
+| 1 | Walmart mail parser (order-number keyed) | ~22 of 40 |
+| 2 | Carrier notification mail parsers: FedEx Delivery Manager, DHL On Demand | 16 of 40 |
+| 3 | Generic merchant parser (labeled fields + jkeen + href) for "shipped" mail | creates the package for the rest |
+| 4 | UPS Track API (opt-in key) | the only gap with a free API (1 of 40) |
+| 5 | Deep link + `stale` after N days | YunExpress, link-only merchants |
+| Dropped | USPS v3, FedEx API, DHL API adapters | 0 USPS packages; FedEx and DHL fully covered by their own mail |
+
 ## Dissent / Contradictory Evidence
 
 - **Email-only vs API polling.** The contrarian pass argues email-derived status is uneven (late or missing "delivered" mail from small merchants). That is why carrier APIs stay in scope for the four big carriers. Conversely, carrier APIs add per-carrier signup friction (FedEx account link, USPS BCG, UPS company fields) for a personal tool. Resolution: make APIs opt-in per carrier, ship email-derived first, measure how often packages stall in `in_transit`.
@@ -175,18 +220,23 @@ Rejected. Google's tracking box is fed by carriers' own APIs that Google calls l
 
 ### Decision
 
-Ship a `packages` feature in two phases:
+Revised 2026-10-10 after the Gmail validation above. Ship a `packages` feature whose status comes from email first, with one optional API:
 
-- **Phase 1 (no new credentials):** Gmail purchase scanner + deterministic extractor (JSON-LD, href URLs, vendored jkeen regex with check digits) + email-derived status state machine + `/packages` page with carrier deep links and manual add/archive.
-- **Phase 2 (opt-in keys):** carrier status adapters for USPS v3, UPS Track, FedEx Track, DHL Unified behind a common `CarrierAdapter` protocol, polled by an APScheduler job with per-carrier rate limits. Adapters stay dormant when their env keys are absent.
+- **Phase 1 (no new credentials):** Gmail scanner over three parser families:
+  - Walmart (`help@walmart.com`): store delivery and `555…` last-mile, keyed by order number.
+  - Carrier notification mail: FedEx Delivery Manager (`TrackingUpdates@fedex.com`) and DHL On Demand (`NoReply.ODD@dhl.com`).
+  - Generic merchant "shipped" mail: labeled fields first, then vendored jkeen regex with check digits, then unwrapped carrier URLs.
 
-Explicitly out: scraping, paid or freemium aggregators, Karrio, LLM extraction by default.
+  Plus a monotonic status state machine, sender-over-checksum carrier rules, order-number correlation (never `threadId`), and a `/packages` page with deep links, manual add and archive.
+- **Phase 2 (opt-in key):** UPS Track API adapter only, behind the `CarrierAdapter` protocol so USPS, FedEx or DHL adapters can be added later if the mail paths stop covering them.
+
+Explicitly out: scraping, Google search, paid or freemium aggregators, Karrio, JSON-LD parsing, LLM extraction by default, and USPS/FedEx/DHL API adapters for now.
 
 ### Rationale
 
-- Walmart store-delivered orders and OnTrac shipments are only trackable through email, so email-derived status is mandatory regardless; building it first delivers value with zero signup.
+- Measured on the user's mailbox: about 90% of packages reach delivered through Walmart, FedEx and DHL mail alone. Email-first covers the dominant merchant (Walmart, whose numbers no carrier API knows) and needs zero signup.
 - Official APIs are free, stable, and documented; scraping is neither stable nor polite; aggregators are neither free at volume nor durable.
-- Check-digit validation plus `href` harvesting addresses the main extraction risk (numeric false positives) without an LLM.
+- Check digits rejected 9 of 9 order/phone look-alikes and accepted 17 of 17 real numbers; sender rules fix the one observed checksum collision (Walmart `555…` vs USPS 20).
 - Every piece maps onto an existing pattern (`domains`/`jobs`, Gmail helpers, scheduler, Vault), so new surface area is small.
 
 ### Implementation Sketch
@@ -235,7 +285,7 @@ PackageEvent(id, package_id FK, occurred_at, status, description, location, sour
 PackageEmail(id, package_id FK, account_label, message_id, thread_id, subject, sender, received_at)
 ```
 
-Walmart handling: a dedicated parser for `walmart.com` senders. Ship-to-home mail: pull carrier + tracking number (text and links), one order can yield several packages. Store delivery mail: no tracking number, so key on `order_id` + `threadId` (carrier `walmart`, synthetic number `order:<id>`), status from Walmart's own mail only. Walmart Marketplace third-party sellers ship with their own carriers and go through the generic path.
+Walmart handling (superseded in part by Validation finding 2, which shows Walmart's ship-to-home numbers are its own last-mile, not a carrier's): a dedicated parser for `walmart.com` senders. Ship-to-home mail: pull carrier + tracking number (text and links), one order can yield several packages. Store delivery mail: no tracking number, so key on `order_id` + `threadId` (carrier `walmart`, synthetic number `order:<id>`), status from Walmart's own mail only. Walmart Marketplace third-party sellers ship with their own carriers and go through the generic path.
 
 Status chip mapping (DESIGN.md: icon + label): pending `schedule`, in_transit `local_shipping`, out_for_delivery `near_me`, delivered `check_circle`, exception `error`, returned `undo`, stale `help`.
 
@@ -258,7 +308,8 @@ Optional follow-up: `GET /api/packages/summary` for a Home Assistant REST sensor
 1. USPS April 2026 "API Access Control": does an individual BCG account still get Tracking v3? Verify at signup.
 2. UPS: does Track require an account number on the app? Docs page returned 503 during research.
 3. FedEx: confirm a free personal fedex.com account satisfies the project's account-link requirement.
-4. Real precision of the extractor on this user's mail: measure from a redacted 200-message sample before tuning.
+4. Extractor precision: measured on a small sample (see Validation, findings 6 to 8). Re-measure on a full 180-day pass once the scanner exists.
+6. Does the user have UPS My Choice? Enrolling (free) would give UPS the same email coverage FedEx has and remove the need for the Phase 2 UPS key.
 5. Should packages appear in the daily reMarkable digest? Product call, not a research gap.
 
 ## Sources

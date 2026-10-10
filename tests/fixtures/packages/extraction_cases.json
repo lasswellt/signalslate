@@ -1,0 +1,129 @@
+{
+  "_about": "Synthetic extraction cases modelled on real mail layouts observed 2026-10-10 (docs/_research/2026-10-10_package-tracking.md, Validation). Every name, address, order id and tracking number is fake; tracking numbers are generated to pass (or deliberately fail) the jkeen/tracking_number_data check digits.",
+  "cases": [
+    {
+      "name": "walmart_fulfilled_by_walmart_shipped",
+      "sender": "help@walmart.com",
+      "subject": "Shipped: Example Vitamin Chews...",
+      "plain": "Order date: Mon, Sep 14, 2026\nOrder number: 2000111-11111111\n# Your package shipped, Alex!\nTrack package\nArrives Wed, Sep 16\nSold by Example Pro Seller | Fulfilled by Walmart\nTrack your package: 55511014564076268801",
+      "links": ["https://w-mt.co/g/rptrcks/comm-smart-app/services/tracking/clickTracker?redirectTo=OPAQUE&meta=OPAQUE&iv=OPAQUE"],
+      "expect": {
+        "carrier": "walmart",
+        "tracking_number": "55511014564076268801",
+        "order_id": "2000111-11111111",
+        "status": "in_transit",
+        "eta": "2026-09-16"
+      },
+      "note": "Walmart last-mile number: 20 digits, '555' prefix, no public carrier. All links are encrypted w-mt.co redirects."
+    },
+    {
+      "name": "walmart_555_number_that_collides_with_usps20_checksum",
+      "sender": "help@walmart.com",
+      "subject": "Shipped: Example Washer Mat...",
+      "plain": "Order number: 2000222-22222222\nSold by Example Seller | Fulfilled by Walmart\nTrack your package: 55511014564076268800",
+      "links": [],
+      "expect": {
+        "carrier": "walmart",
+        "tracking_number": "55511014564076268800",
+        "order_id": "2000222-22222222",
+        "status": "in_transit"
+      },
+      "note": "Passes the USPS 20 mod10 check by chance (1 in 10 do). Sender rule must win over the checksum classifier, or this is polled against USPS and never resolves."
+    },
+    {
+      "name": "walmart_last_mile_out_for_delivery",
+      "sender": "help@walmart.com",
+      "subject": "Your package should arrive by 3:01pm📦",
+      "plain": "Order date: Mon, Sep 14, 2026 Order number: 2000111-11111111\n# Your delivery is on the way, Alex!\nThe delivery driver, Sam, is making other stops nearby and should arrive by 3:01pm.\n### Delivery from store",
+      "links": [],
+      "expect": {"carrier": "walmart", "order_id": "2000111-11111111", "status": "out_for_delivery", "tracking_number": null},
+      "note": "No tracking number: correlate to the shipped package by order number. Same-subject OFD mails from different orders get merged into one Gmail thread, so threadId is not a key."
+    },
+    {
+      "name": "walmart_last_mile_arrived",
+      "sender": "help@walmart.com",
+      "subject": "Arrived: Your Example Vitamin Chews...",
+      "plain": "Order date: Mon, Sep 14, 2026 Order #2000111-11111111\n# Your package arrived, Alex!\nYour delivery was completed at 3:20pm on Wed, Sep 16.",
+      "links": [],
+      "expect": {"carrier": "walmart", "order_id": "2000111-11111111", "status": "delivered", "tracking_number": null},
+      "note": "Order number appears as 'Order #' here and 'Order number:' elsewhere."
+    },
+    {
+      "name": "walmart_store_delivery_delivered",
+      "sender": "help@walmart.com",
+      "subject": "Delivered: Example Ice Cream... +8 items",
+      "plain": "Order number: 2000333-33333333\nPlease bring any fresh and frozen items inside soon",
+      "links": [],
+      "expect": {"carrier": "walmart", "order_id": "2000333-33333333", "status": "delivered", "tracking_number": null}
+    },
+    {
+      "name": "walmart_non_shipping_noise",
+      "sender": "help@walmart.com",
+      "subject": "Take action: Review your order updates",
+      "plain": "Your order has 2 substitutions\nOrder number: 2000333-33333333",
+      "links": [],
+      "expect": {"status": null},
+      "note": "Substitution, reminder, refund and survey mail from the same sender must not create or advance packages."
+    },
+    {
+      "name": "fedex_delivery_manager_on_the_way",
+      "sender": "TrackingUpdates@fedex.com",
+      "subject": "Your shipment is on the way 753045655424",
+      "plain": "Your shipment from Example Pet Co is on the way. Scheduled delivery date Sat 9/19/2026 Estimated between 10:20am and 2:20pm Tracking ID 753045655424 Service FedEx Home Delivery Reference 1009999999",
+      "links": ["https://www.fedex.com/apps/fedextrack?trknbr=753045655424&intcmp=notifType:1019"],
+      "expect": {"carrier": "fedex", "tracking_number": "753045655424", "status": "in_transit", "eta": "2026-09-19", "merchant": "Example Pet Co", "reference": "1009999999"},
+      "note": "Carrier notification: number in subject and trknbr param, merchant order id in Reference."
+    },
+    {
+      "name": "merchant_labeled_fedex_number_and_order_id_lookalike",
+      "sender": "noreply@example-pets.test",
+      "subject": "Your order has shipped!",
+      "plain": "Order Number: 1009999999\nIn transit\nCarrier: FedEx®\nTracking number: 753045655424",
+      "links": ["https://url0000.example-esp.test/ls/click?upn=OPAQUE"],
+      "expect": {"carrier": "fedex", "tracking_number": "753045655424", "order_id": "1009999999", "status": "in_transit"},
+      "note": "The 10-digit order number matches the DHL Express regex but fails its mod7 check and has no DHL context: must not become a package."
+    },
+    {
+      "name": "narvar_link_ups",
+      "sender": "donotreply@example-shoes.test",
+      "subject": "Comfort is on the way — your order has shipped!",
+      "plain": "Your order 11111111HUS has shipped!\nTracking Number: | 1Z9X9X9X0326709847\nShipping Method: | UPSN",
+      "links": ["https://tracking.narvar.com/example/tracking/UPSN?tracking_numbers=1Z9X9X9X0326709847&service=E1&dzip=00000&order_number=11111111HUS"],
+      "expect": {"carrier": "ups", "tracking_number": "1Z9X9X9X0326709847", "order_id": "11111111HUS", "status": "in_transit"}
+    },
+    {
+      "name": "home_depot_labeled_nonstandard_ups",
+      "sender": "HomeDepotPro@order.homedepot.com",
+      "subject": "Order # WK00000000 Shipped: Your order is on its way, Alex!",
+      "plain": "## Order # WK00000000 Estimated Delivery Thu, Oct 8 Delivery by: UPS Tracking #: 1R00AAAAAAAAAAAAAAAAAAAAAAAA Customer Phone Number: 555-010-0000",
+      "links": ["https://link.order.homedepot.com/OPAQUE"],
+      "expect": {"carrier": "ups", "tracking_number": "1R00AAAAAAAAAAAAAAAAAAAAAAAA", "order_id": "WK00000000", "status": "in_transit", "confidence": "labeled"},
+      "note": "Not a 1Z number and matches no jkeen pattern. Only a 'Delivery by:'/'Tracking #:' label pair finds it. Phone number must not match."
+    },
+    {
+      "name": "shopify_yunexpress",
+      "sender": "store+00000000000@t.shopifyemail.com",
+      "subject": "A shipment from order #100000 is on the way",
+      "plain": "They are being shipped via YunExpress to the following address:\nThe tracking number for these items is\nYT0000000000000001. Use the link below to see the status of your shipment",
+      "links": ["https://example-store.test/apps/trackingmore?nums=YT0000000000000001"],
+      "expect": {"carrier": "yunexpress", "tracking_number": "YT0000000000000001", "order_id": "100000", "status": "in_transit"}
+    },
+    {
+      "name": "dhl_on_demand",
+      "sender": "NoReply.ODD@dhl.com",
+      "subject": "DHL On Demand Delivery",
+      "plain": "Delivered! Hello ALEX, Your DHL Express shipment with waybill number 9579235444 from EXAMPLE SHOP has been delivered on Tue Sep 08 at 17:44.",
+      "links": [],
+      "expect": {"carrier": "dhl", "tracking_number": "9579235444", "status": "delivered", "merchant": "EXAMPLE SHOP"}
+    },
+    {
+      "name": "merchant_link_only_no_number",
+      "sender": "support@example-mats.test",
+      "subject": "Your Order #2222222 Has Shipped",
+      "plain": "We shipped your order, but more packages may be on the way.\nTrack My Order\nOrder #2222222, placed on 09/10/2026",
+      "links": ["https://www.example-mats.test/order_status/?k=OPAQUE&tracking"],
+      "expect": {"carrier": "unknown", "tracking_number": null, "order_id": "2222222", "status": "in_transit"},
+      "note": "No number anywhere: create an order-level package with a deep link to the merchant status page; it can only go stale, never delivered, unless the user resolves it."
+    }
+  ]
+}
