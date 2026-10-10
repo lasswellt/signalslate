@@ -776,6 +776,25 @@ def check_jobs() -> HealthResult:
     return HealthResult("jobs", "ok", f"{count} companies tracked")
 
 
+def check_packages() -> HealthResult:
+    """
+    "packages" is always healthy: it reads only the local Package table (no network, no
+    credentials — see pipeline.collectors.packages). Only a broken DB session counts as unhealthy.
+    Imported locally for the same reason as check_domains().
+    """
+    from sqlmodel import select
+
+    from pipeline import db
+    from pipeline.db import Package
+
+    try:
+        with db.get_session() as session:
+            count = len(session.exec(select(Package)).all())
+    except Exception as exc:  # noqa: BLE001 — a health check must report, never crash the run
+        return HealthResult("packages", "error", type(exc).__name__)
+    return HealthResult("packages", "ok", f"{count} packages tracked")
+
+
 def zoom_declared() -> bool:
     """True when a Zoom account exists: a stored "zoom" connection or any ZOOM_ credential in the env."""
     if connections.get("zoom") is not None:
@@ -786,7 +805,7 @@ def zoom_declared() -> bool:
 
 def known_sources() -> list[str]:
     """Every source id the current .env declares: m365_<alias>, zoom, slack_<label>, gmail_<label>,
-    plus zoom when a Zoom account exists, and the always-available "domains" and "jobs" sources (local DB, no .env entry needed)."""
+    plus zoom when a Zoom account exists, and the always-available "domains", "jobs" and "packages" sources (local DB, no .env entry needed)."""
     return (
         [f"m365_{a}" for a in m365_aliases()]
         + (["zoom"] if zoom_declared() else [])
@@ -794,6 +813,7 @@ def known_sources() -> list[str]:
         + [f"gmail_{l}" for l in gmail_accounts()]
         + ["domains"]
         + ["jobs"]
+        + ["packages"]
     )
 
 
@@ -813,6 +833,9 @@ def check_all_configured(active_sources: dict[str, bool]) -> list[HealthResult]:
 
     if active_sources.get("jobs", False):
         results.append(check_jobs())
+
+    if active_sources.get("packages", False):
+        results.append(check_packages())
 
     for label, token in slack_workspaces().items():
         if active_sources.get(f"slack_{label}", False):
