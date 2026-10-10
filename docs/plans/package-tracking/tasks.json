@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T16:48:14Z",
+  "updated": "2026-10-10T16:50:08Z",
   "tasks": [
     {
       "id": "T-001",
@@ -688,11 +688,46 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T16:50:08Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def scan_all' pipeline/packages/scan.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:50:06Z"
+          },
+          {
+            "cmd": "grep -qE 'category:purchases' pipeline/packages/scan.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:50:06Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/scan.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:50:06Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_scan.py -q",
+            "exit": 0,
+            "duration_ms": 1670,
+            "tail": ".......                                                                  [100%]\n7 passed in 1.11s",
+            "recorded_at": "2026-10-10T16:50:08Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Reuse collectors.gmail _call/list ids/fetch_messages and health.gmail_accounts/gmail_token_response; query = shipping subjects OR category:purchases OR carrier senders, after:<epoch cursor>; keep raw HTML for html.harvest; store only extracted fields, never bodies. Stub requests at import site as tests/test_collectors.py does."
     },
