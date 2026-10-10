@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from sqlalchemy import UniqueConstraint, event
+from sqlalchemy import Index, UniqueConstraint, event, text
 from sqlmodel import Field, Session, SQLModel, col, create_engine, func, select
 
 from pipeline.clock import utcnow
@@ -319,6 +319,79 @@ class JobApplication(SQLModel, table=True):
     assist_log: Optional[str] = None  # JSON blob: per-step fields filled/values/sources/overrides
     created_at: datetime = Field(default_factory=utcnow)
     submitted_at: Optional[datetime] = None
+
+
+class Package(SQLModel, table=True):
+    """
+    One tracked shipment — state, not an event, like Domain/JobPosting. Identity is partial-unique:
+    one row per (carrier, tracking_number) when a tracking number is known, and one row per
+    (merchant_domain, order_id, carrier) for order-level packages (tracking_number NULL) created
+    from a confirmation email before a shipment number exists. Partial unique indexes are used
+    because SQLite treats NULLs as distinct in a plain UNIQUE constraint.
+    """
+    __table_args__ = (
+        Index(
+            "uq_package_carrier_tracking", "carrier", "tracking_number", unique=True,
+            sqlite_where=text("tracking_number IS NOT NULL"),
+        ),
+        Index(
+            "uq_package_order_level", "merchant_domain", "order_id", "carrier", unique=True,
+            sqlite_where=text("tracking_number IS NULL AND merchant_domain IS NOT NULL AND order_id IS NOT NULL"),
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    carrier: str = Field(index=True)  # ups | usps | fedex | dhl | amazon | ... | unknown
+    tracking_number: Optional[str] = Field(default=None, index=True)  # None for order-level packages
+    merchant: Optional[str] = None
+    merchant_domain: Optional[str] = None
+    order_id: Optional[str] = None
+    # pending | in_transit | out_for_delivery | delivered | exception | returned | stale | unknown
+    status: str = "pending"
+    status_source: str = "email"  # email | carrier | manual
+    eta: Optional[datetime] = None
+    delivered_at: Optional[datetime] = None
+    last_event_at: Optional[datetime] = None
+    last_checked_at: Optional[datetime] = None
+    next_check_at: Optional[datetime] = Field(default=None, index=True)
+    last_error: Optional[str] = None  # exception class name / short code, never a response body
+    archived: bool = False
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class PackageEvent(SQLModel, table=True):
+    """
+    One status observation for a package (from an email or a carrier poll). `dedupe_hash` is UNIQUE
+    so re-scanning the same email or re-polling the same scan event inserts nothing new.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    package_id: int = Field(foreign_key="package.id", index=True)
+    occurred_at: datetime
+    status: str
+    description: Optional[str] = None
+    location: Optional[str] = None
+    source: str = "email"  # email | carrier | manual
+    dedupe_hash: str = Field(unique=True)
+
+
+class PackageEmail(SQLModel, table=True):
+    """
+    Link from a package to a Gmail message that mentioned it. Metadata only — subject (truncated
+    to 300 chars by the writer), sender and timestamps; email bodies are never stored.
+    `thread_id` is informational. One message may reference several packages, hence the
+    package_id in the unique key.
+    """
+    __table_args__ = (UniqueConstraint("account_label", "message_id", "package_id"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    package_id: int = Field(foreign_key="package.id", index=True)
+    account_label: str
+    message_id: str
+    thread_id: Optional[str] = None
+    subject: Optional[str] = Field(default=None, max_length=300)
+    sender: Optional[str] = None
+    received_at: Optional[datetime] = None
 
 
 def _add_missing_columns() -> None:
