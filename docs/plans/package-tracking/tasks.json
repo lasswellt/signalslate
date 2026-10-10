@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T16:59:23Z",
+  "updated": "2026-10-10T17:00:42Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1284,11 +1284,46 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T17:00:42Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'export function usePackagesApi' web/composables/usePackagesApi.ts",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-10T17:00:33Z"
+          },
+          {
+            "cmd": "grep -qE '/api/packages/summary' web/composables/usePackagesApi.ts",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-10T17:00:33Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/composables/usePackagesApi.ts",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-10T17:00:33Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/usePackagesApi.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 8760,
+            "tail": "\n RUN  v5.0.1 /home/user/signalslate/web\n\nstdout | tests/usePackagesApi.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n···············\n\n Test Files  1 passed (1)\n      Tests  15 passed (15)\n   Start at  17:00:36\n   Duration  6.01s (tests 85%, environment 9%, transform 4%, setup 2%, import 1%)",
+            "recorded_at": "2026-10-10T17:00:42Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Copy request()/CSRF helper shape from useDomainsApi.ts; interfaces mirror router Out models with a comment pointing at api/routers/packages.py."
     },
