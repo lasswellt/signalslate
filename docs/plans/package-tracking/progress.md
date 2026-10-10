@@ -42,3 +42,5 @@ Ruling: scope — added 'package' StatusKind to web/utils/status.ts (+status.tes
 ## 2026-10-10T17:04:30Z verify T-019 ok=true
 ## 2026-10-10T17:04:34Z build T-020 start (attempt 1)
 ## 2026-10-10T17:05:58Z verify T-020 ok=true
+## 2026-10-10T17:05:58Z build T-021 start (attempt 1)
+## 2026-10-10T17:08:09Z verify T-021 ok=true

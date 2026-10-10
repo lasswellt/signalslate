@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T17:05:58Z",
+  "updated": "2026-10-10T17:08:09Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1480,13 +1480,48 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T17:08:09Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE \"to: '/packages'\" web/layouts/default.vue",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-10T17:07:58Z"
+          },
+          {
+            "cmd": "grep -qE 'PackageDetailDialog' web/pages/packages.vue",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-10T17:07:58Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/pages/packages.vue",
+            "exit": 0,
+            "duration_ms": 12,
+            "tail": "",
+            "recorded_at": "2026-10-10T17:07:58Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/packages.test.ts tests/smoke.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 10508,
+            "tail": "\n RUN  v5.0.1 /home/user/signalslate/web\n\nstdout | tests/smoke.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/packages.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·········\n\n Test Files  2 passed (2)\n      Tests  9 passed (9)\n   Start at  17:08:01\n   Duration  7.30s (transform 55%, tests 28%, environment 9%, import 6%, setup 2%)\n\n  Transform  transforming modules took 7.69s · 55% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-10-10T17:08:09Z"
+          }
+        ]
+      },
       "origin": "plan",
-      "notes": "PageHeader, dense 25-row q-table, skeleton/empty/error states (DESIGN.md); nav item { label:'Packages', to:'/packages', icon:'local_shipping', slug:'packages' } beside Domains/Jobs (default.vue:38-39); add nav-packages to web/tests/smoke.test.ts."
+      "notes": "scope+web/tests/smoke.test.ts (nav-packages entry)"
     },
     {
       "id": "T-022",
