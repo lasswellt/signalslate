@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T16:37:11Z",
+  "updated": "2026-10-10T16:38:32Z",
   "tasks": [
     {
       "id": "T-001",
@@ -181,11 +181,46 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T16:38:32Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def packages_settings' pipeline/packages/__init__.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:38:31Z"
+          },
+          {
+            "cmd": "grep -qE 'PACKAGES_SCAN_DAYS' pipeline/packages/__init__.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:38:31Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/__init__.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:38:31Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_settings.py -q",
+            "exit": 0,
+            "duration_ms": 979,
+            "tail": "........                                                                 [100%]\n8 passed in 0.50s",
+            "recorded_at": "2026-10-10T16:38:32Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "scope+tests/conftest.py (add PACKAGES_, UPS_, USPS_ to CONFIG_PREFIXES). Mirror domains/__init__.py domain_settings(). PACKAGES_REFRESH_CRON default '23 */2 * * *', PACKAGES_SCAN_DAYS 60, PACKAGES_STALE_DAYS 30, UPS_CLIENT_ID/SECRET, USPS_CLIENT_ID/SECRET via health.env(); malformed values fall back with a warning."
     },

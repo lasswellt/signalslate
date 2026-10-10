@@ -4,3 +4,6 @@ Ruling: class=architectural tasks=23 — new pipeline subsystem + DB + scheduler
 ## 2026-10-10T16:36:04Z verify T-001 ok=true
 ## 2026-10-10T16:36:15Z build T-002 start (attempt 1)
 ## 2026-10-10T16:37:11Z verify T-002 ok=true
+## 2026-10-10T16:37:11Z build T-003 start (attempt 1)
+## 2026-10-10T16:38:32Z verify T-003 ok=true
+Ruling: spec-defect fixed inline — health._raw_env dropped DOMAINS_/JOBS_ (pre-existing) and new PACKAGES_/UPS_/USPS_ process-env vars in the container (T-003, round 1)
