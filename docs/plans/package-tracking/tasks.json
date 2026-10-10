@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T17:35:04Z",
+  "updated": "2026-10-10T17:35:51Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1599,11 +1599,39 @@
           "timeout": 10
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T17:35:51Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^## Packages' README.md",
+            "exit": 0,
+            "duration_ms": 12,
+            "tail": "",
+            "recorded_at": "2026-10-10T17:35:51Z"
+          },
+          {
+            "cmd": "grep -qE '^PACKAGES_REFRESH_CRON=' .env.example",
+            "exit": 0,
+            "duration_ms": 18,
+            "tail": "",
+            "recorded_at": "2026-10-10T17:35:51Z"
+          },
+          {
+            "cmd": "grep -qE '^USPS_CLIENT_ID=' .env.example",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-10T17:35:51Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "How status is sourced (email first), UPS/USPS developer-key signup (UPS My Choice tip), env keys, privacy (bodies never stored), unsupported cases (Walmart 555, Amazon TBA, eBay)."
     }
