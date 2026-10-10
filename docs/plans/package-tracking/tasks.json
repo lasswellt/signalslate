@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T16:54:18Z",
+  "updated": "2026-10-10T16:55:23Z",
   "tasks": [
     {
       "id": "T-001",
@@ -975,11 +975,39 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T16:55:23Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def refresh_due' pipeline/packages/poll.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:55:20Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/poll.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:55:20Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_poll.py -q",
+            "exit": 0,
+            "duration_ms": 2082,
+            "tail": ".........                                                                [100%]\n9 passed in 1.46s",
+            "recorded_at": "2026-10-10T16:55:23Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Due = carrier in configured adapters, not archived, next_check_at <= now; cadence 2h; stop 48h after delivered; walmart/amazon/order-level never polled; errors recorded per carrier, never raised to the scheduler."
     },
