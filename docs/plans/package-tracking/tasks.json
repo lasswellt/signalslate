@@ -1,0 +1,855 @@
+{
+  "$schema": "blitz-tasks/1.0",
+  "plan": "package-tracking",
+  "updated": "2026-10-10T16:23:36Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Vendor jkeen tracking_number_data (MIT) courier JSON + LICENSE under pipeline/packages/data",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/data",
+        "tests/test_packages_data.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "test -f pipeline/packages/data/LICENSE",
+          "timeout": 10
+        },
+        {
+          "cmd": "test -f pipeline/packages/data/couriers/ups.json && test -f pipeline/packages/data/couriers/usps.json && test -f pipeline/packages/data/couriers/fedex.json",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q 'MIT' pipeline/packages/data/LICENSE",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_data.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research §Q2: vendor the JSON, not the stale 2022 PyPI port. Keep upstream LICENSE and a SOURCE.md with commit sha."
+    },
+    {
+      "id": "T-002",
+      "title": "pipeline/db.py: Package, PackageEvent, PackageEmail tables",
+      "role": "backend",
+      "files": [
+        "pipeline/db.py",
+        "tests/test_package_tables.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qE '^class Package\\(SQLModel, table=True\\)' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^class PackageEvent\\(SQLModel, table=True\\)' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^class PackageEmail\\(SQLModel, table=True\\)' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_package_tables.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research Implementation Sketch data model. UNIQUE(carrier,tracking_number) nullable number for order-level packages; PackageEvent dedupe_hash UNIQUE; PackageEmail keyed by account_label+message_id. Never store email bodies."
+    },
+    {
+      "id": "T-003",
+      "title": "pipeline/packages/__init__.py: settings, status enum, env keys",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/__init__.py",
+        "tests/test_packages_settings.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def packages_settings' pipeline/packages/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'PACKAGES_SCAN_DAYS' pipeline/packages/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_settings.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Mirror domains/__init__.py domain_settings(). PACKAGES_REFRESH_CRON default '23 */2 * * *', PACKAGES_SCAN_DAYS 60, PACKAGES_STALE_DAYS 30, UPS_CLIENT_ID/SECRET, USPS_CLIENT_ID/SECRET via health.env(); malformed values fall back with a warning."
+    },
+    {
+      "id": "T-004",
+      "title": "pipeline/packages/numbers.py: jkeen matcher with all checksum validators and weak-validator context rule",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/numbers.py",
+        "tests/test_packages_numbers.py"
+      ],
+      "depends_on": [
+        "T-001",
+        "T-003"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def classify' pipeline/packages/numbers.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'sum_product_with_weightings_and_modulo' pipeline/packages/numbers.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/numbers.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_numbers.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Port of docs/_research/assets/2026-10-10_tracking_scan.py classify(): mod10, mod7, s10, luhn, weighted modulo; named-group conversion; DHL Express mod7 and Purolator need carrier context; checksumless need a label. Test vs every courier's test_numbers in the vendored JSON."
+    },
+    {
+      "id": "T-005",
+      "title": "pipeline/packages/html.py: link and text harvester with awstrack/Mandrill decoding",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/html.py",
+        "tests/test_packages_html.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def harvest' pipeline/packages/html.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'awstrack' pipeline/packages/html.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'requests\\.(get|head)|urlopen' pipeline/packages/html.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/html.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_html.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Research Validation finding 4 + merchant survey: keep a[href] (gmail._TextExtractor drops it), percent-decode awstrack.me/L0 targets, base64 Mandrill p=, extract carrier URL params (tracknum, trknbr, tLabels, tracking_numbers, trackNums, nums) and swiship id=. Never follow redirects. Text output must keep word separators to avoid glued tokens."
+    },
+    {
+      "id": "T-006",
+      "title": "pipeline/packages/links.py: carrier deep-link builder from vendored tracking_url templates",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/links.py",
+        "tests/test_packages_links.py"
+      ],
+      "depends_on": [
+        "T-001"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def tracking_url' pipeline/packages/links.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/links.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_links.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Deep link per carrier for the page; walmart -> walmart.com order page, unknown -> merchant link if captured."
+    },
+    {
+      "id": "T-007",
+      "title": "pipeline/packages/extract.py: tiered extraction passing the 20 fixture cases",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/extract.py",
+        "tests/test_packages_extract.py"
+      ],
+      "depends_on": [
+        "T-004",
+        "T-005"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def extract' pipeline/packages/extract.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q 'extraction_cases.json' tests/test_packages_extract.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/extract.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_extract.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Order: sender rules (walmart 555, SEFL Pro#, Home Depot labels) > labeled fields > jkeen > URL params. Exclude order/item/phone/shipment/reference-labeled values. Shopify template by subject shape. Order id capture. tests/fixtures/packages/extraction_cases.json is the acceptance set (carrier, tracking_number, order_id)."
+    },
+    {
+      "id": "T-008",
+      "title": "pipeline/packages/email_status.py: per-sender status classifier, ETA parse, noise rejection",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/email_status.py",
+        "tests/test_packages_email_status.py"
+      ],
+      "depends_on": [
+        "T-003"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def classify_status' pipeline/packages/email_status.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/email_status.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_email_status.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Vocabulary from research Validation finding 9 (Walmart Shipped/Out for delivery/Arrived/Delivered/delayed/Canceled; FedEx; DHL ODD; Home Depot; Shopify; SEFL Dispatched/OFD/Delivered; eBay). Substitution/reminder/refund/review/promo mails -> None. Fixture 'status' and 'eta' fields are acceptance."
+    },
+    {
+      "id": "T-009",
+      "title": "pipeline/packages/inventory.py: upsert, correlation, monotonic status, events, stale/archive",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/inventory.py",
+        "tests/test_packages_inventory.py"
+      ],
+      "depends_on": [
+        "T-002",
+        "T-003",
+        "T-008"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def apply_email' pipeline/packages/inventory.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def apply_carrier_result' pipeline/packages/inventory.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'thread_id ==|threadId ==' pipeline/packages/inventory.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/inventory.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_inventory.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Correlate by (carrier, tracking_number), else (merchant domain, order_id); never threadId (Validation finding 3). Status only moves forward except exception; dedupe events by hash; stale after PACKAGES_STALE_DAYS without event."
+    },
+    {
+      "id": "T-010",
+      "title": "pipeline/packages/scan.py: per-account Gmail scan with cursor and 60-day first run",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/scan.py",
+        "tests/test_packages_scan.py"
+      ],
+      "depends_on": [
+        "T-007",
+        "T-009"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def scan_all' pipeline/packages/scan.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'category:purchases' pipeline/packages/scan.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/scan.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_scan.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Reuse collectors.gmail _call/list ids/fetch_messages and health.gmail_accounts/gmail_token_response; query = shipping subjects OR category:purchases OR carrier senders, after:<epoch cursor>; keep raw HTML for html.harvest; store only extracted fields, never bodies. Stub requests at import site as tests/test_collectors.py does."
+    },
+    {
+      "id": "T-011",
+      "title": "pipeline/packages/carriers/base.py: CarrierAdapter protocol, TrackResult, OAuth token cache, rate limiter",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/carriers/__init__.py",
+        "pipeline/packages/carriers/base.py",
+        "tests/test_packages_carrier_base.py"
+      ],
+      "depends_on": [
+        "T-003"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'class CarrierAdapter' pipeline/packages/carriers/base.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'class TrackResult' pipeline/packages/carriers/base.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/carriers/base.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_carrier_base.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Client-credentials token cached until expiry minus 60s; per-carrier min interval and hourly budget (USPS default 60/h); 429 backoff mirroring collectors/gmail.py:80-142; status normalisation to the package enum."
+    },
+    {
+      "id": "T-012",
+      "title": "pipeline/packages/carriers/ups.py: UPS Track API adapter",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/carriers/ups.py",
+        "tests/test_packages_carrier_ups.py"
+      ],
+      "depends_on": [
+        "T-011"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'class UpsAdapter' pipeline/packages/carriers/ups.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'onlinetools\\.ups\\.com' pipeline/packages/carriers/ups.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/carriers/ups.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_carrier_ups.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "OAuth client credentials at onlinetools.ups.com; dormant when UPS_CLIENT_ID/SECRET absent; activity -> events; response shape from UPS docs, kept behind one parse function with typed errors for 401/403/404/429."
+    },
+    {
+      "id": "T-013",
+      "title": "pipeline/packages/carriers/usps.py: USPS Tracking v3 adapter",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/carriers/usps.py",
+        "tests/test_packages_carrier_usps.py"
+      ],
+      "depends_on": [
+        "T-011"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'class UspsAdapter' pipeline/packages/carriers/usps.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'apis\\.usps\\.com' pipeline/packages/carriers/usps.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/carriers/usps.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_carrier_usps.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "apis.usps.com OAuth client credentials; 60/h default budget (research Q3, third-party figure); strip IMpb 420+ZIP prefix to the trailing 22 digits before lookup; dormant without USPS_CLIENT_ID/SECRET."
+    },
+    {
+      "id": "T-014",
+      "title": "pipeline/packages/poll.py: refresh_due() polling UPS/USPS packages on cadence",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/poll.py",
+        "tests/test_packages_poll.py"
+      ],
+      "depends_on": [
+        "T-009",
+        "T-012",
+        "T-013"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def refresh_due' pipeline/packages/poll.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/poll.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_poll.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Due = carrier in configured adapters, not archived, next_check_at <= now; cadence 2h; stop 48h after delivered; walmart/amazon/order-level never polled; errors recorded per carrier, never raised to the scheduler."
+    },
+    {
+      "id": "T-015",
+      "title": "api/scheduler.py: packages_refresh job (scan then poll)",
+      "role": "backend",
+      "files": [
+        "api/scheduler.py",
+        "tests/test_scheduler_packages.py"
+      ],
+      "depends_on": [
+        "T-010",
+        "T-014"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'PACKAGES_JOB_ID = \"packages_refresh\"' api/scheduler.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def reschedule_packages' api/scheduler.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/scheduler.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_scheduler_packages.py tests/test_scheduler_domains.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Mirror DOMAINS_JOB_ID / reschedule_domains / next_domains_run_time (api/scheduler.py:59-178); log exception class only."
+    },
+    {
+      "id": "T-016",
+      "title": "Digest: 'packages' source (delivered/out-for-delivery/arriving in window)",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/packages.py",
+        "pipeline/collectors/__init__.py",
+        "pipeline/health.py",
+        "tests/test_collector_packages.py"
+      ],
+      "depends_on": [
+        "T-009"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def collect_packages' pipeline/collectors/packages.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'source == \"packages\"' pipeline/collectors/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '\"packages\"' pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/packages.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collector_packages.py tests/test_collectors.py tests/test_health.py -q",
+          "timeout": 240
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Mirror collectors/domains.py and the domains/jobs entries in collectors/__init__.py:86-97 and health.py:752-809 (always-available local source)."
+    },
+    {
+      "id": "T-017",
+      "title": "api/routers/packages.py: list, detail, add, patch/archive, delete, scan, refresh, summary",
+      "role": "backend",
+      "files": [
+        "api/routers/packages.py",
+        "api/main.py",
+        "tests/test_api_packages.py"
+      ],
+      "depends_on": [
+        "T-006",
+        "T-010",
+        "T-014"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '@router\\.get\\(\"/packages\"' api/routers/packages.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '@router\\.get\\(\"/packages/summary\"' api/routers/packages.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'packages\\.router' api/main.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/packages.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_api_packages.py tests/test_api_security.py -q",
+          "timeout": 240
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Pattern of api/routers/domains.py (_coded errors, Out models); register in api/main.py:110-126 with static paths before /{id}. /packages/summary for Home Assistant: out_for_delivery_today, arriving_today, delivered_today, in_transit."
+    },
+    {
+      "id": "T-018",
+      "title": "web/composables/usePackagesApi.ts: typed fetchers for packages routes",
+      "role": "frontend",
+      "files": [
+        "web/composables/usePackagesApi.ts",
+        "web/tests/usePackagesApi.test.ts"
+      ],
+      "depends_on": [
+        "T-017"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'export function usePackagesApi' web/composables/usePackagesApi.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '/api/packages/summary' web/composables/usePackagesApi.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/composables/usePackagesApi.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/usePackagesApi.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Copy request()/CSRF helper shape from useDomainsApi.ts; interfaces mirror router Out models with a comment pointing at api/routers/packages.py."
+    },
+    {
+      "id": "T-019",
+      "title": "web/components/PackageDetailDialog.vue: event timeline, source emails, deep link, archive",
+      "role": "frontend",
+      "files": [
+        "web/components/PackageDetailDialog.vue",
+        "web/tests/PackageDetailDialog.test.ts"
+      ],
+      "depends_on": [
+        "T-018"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'DialogShell' web/components/PackageDetailDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/PackageDetailDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/PackageDetailDialog.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "DialogShell, StatusChip icon+label per DESIGN.md; never accent teal on status."
+    },
+    {
+      "id": "T-020",
+      "title": "web/components/PackageAddDialog.vue: manual add with live carrier detection",
+      "role": "frontend",
+      "files": [
+        "web/components/PackageAddDialog.vue",
+        "web/tests/PackageAddDialog.test.ts"
+      ],
+      "depends_on": [
+        "T-018"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'DialogShell' web/components/PackageAddDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/PackageAddDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/PackageAddDialog.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "POST /api/packages; server returns detected carrier or 422; show it before save."
+    },
+    {
+      "id": "T-021",
+      "title": "web/pages/packages.vue + Tools nav entry: package table with status chips, scan/refresh actions",
+      "role": "frontend",
+      "files": [
+        "web/pages/packages.vue",
+        "web/layouts/default.vue",
+        "web/tests/packages.test.ts"
+      ],
+      "depends_on": [
+        "T-019",
+        "T-020"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE \"to: '/packages'\" web/layouts/default.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'PackageDetailDialog' web/pages/packages.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/pages/packages.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/packages.test.ts tests/smoke.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "PageHeader, dense 25-row q-table, skeleton/empty/error states (DESIGN.md); nav item { label:'Packages', to:'/packages', icon:'local_shipping', slug:'packages' } beside Domains/Jobs (default.vue:38-39); add nav-packages to web/tests/smoke.test.ts."
+    },
+    {
+      "id": "T-022",
+      "title": "End-to-end backend test: fixture mails to packages, poll, digest item, summary, no body persisted",
+      "role": "test",
+      "files": [
+        "tests/test_packages_e2e.py"
+      ],
+      "depends_on": [
+        "T-015",
+        "T-016",
+        "T-017"
+      ],
+      "verify": [
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_e2e.py -q",
+          "timeout": 300
+        },
+        {
+          "cmd": "venv/bin/python -m pytest -q",
+          "timeout": 900
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "Stub Gmail + UPS/USPS HTTP at module import sites; assert no email body text lands in any table; full suite green."
+    },
+    {
+      "id": "T-023",
+      "title": "Docs: README Packages section and .env.example keys",
+      "role": "infra",
+      "files": [
+        "README.md",
+        ".env.example"
+      ],
+      "depends_on": [
+        "T-022"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^## Packages' README.md",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^PACKAGES_REFRESH_CRON=' .env.example",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^USPS_CLIENT_ID=' .env.example",
+          "timeout": 10
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "plan",
+      "notes": "How status is sourced (email first), UPS/USPS developer-key signup (UPS My Choice tip), env keys, privacy (bodies never stored), unsupported cases (Walmart 555, Amazon TBA, eBay)."
+    }
+  ]
+}
