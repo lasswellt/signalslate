@@ -81,7 +81,7 @@ citations:
 
 ## Summary
 
-Build a `pipeline/packages/` feature that searches each connected Gmail account for shipping mail, extracts tracking numbers deterministically, and tracks status from three free sources in priority order: **(1) the shipping emails themselves**, **(2) official carrier APIs where the user has supplied a free developer key** (USPS, UPS, FedEx, DHL), and **(3) a carrier deep link** for anything else. No scraping and no paid aggregator. Phase 1 needs zero new credentials and already covers Amazon, the carrier that no API can track.
+Build a `pipeline/packages/` feature that searches each connected Gmail account for shipping mail, extracts tracking numbers deterministically, and tracks status from three free sources in priority order: **(1) the shipping emails themselves**, **(2) official carrier APIs where the user has supplied a free developer key** (USPS, UPS, FedEx, DHL), and **(3) a carrier deep link** for anything else. No scraping and no paid aggregator. Phase 1 needs zero new credentials. Scope: the user does not shop Amazon; the primary merchant is **Walmart (Walmart+)**, which splits into carrier-shipped orders (tracking number in mail) and store-delivered orders (no tracking number, email-only status).
 
 ## Research Questions
 
@@ -89,7 +89,7 @@ Build a `pipeline/packages/` feature that searches each connected Gmail account 
 |---|---|---|
 | Q1 | Can the existing Gmail integration search older purchase mail? | Scope yes, collector no. `gmail.readonly` covers any `q`; the collector hard-codes an epoch window capped at 7 days. Needs a dedicated scanner. |
 | Q2 | How to detect tracking numbers reliably? | Tiered: JSON-LD/microdata, then carrier URLs in `href`s, then regex + check digit + keyword proximity. LLM optional, enrichment only. |
-| Q3 | What free status sources exist per carrier? | USPS v3, UPS Track, FedEx Track, DHL Unified are free with a developer key. Amazon TBA, LaserShip, OnTrac have no usable public API: email-derived status only. |
+| Q3 | What free status sources exist per carrier? | USPS v3, UPS Track, FedEx Track, DHL Unified are free with a developer key. OnTrac (merged with LaserShip; a Walmart carrier) and Walmart store delivery have no usable public API: email-derived status only. Amazon out of scope. |
 | Q4 | Is scraping carrier sites viable? | No. Akamai bot protection and page migrations (USPS, July 2026) make it a maintenance sink. |
 | Q5 | Are free aggregators (17TRACK, AfterShip, Ship24) an option? | Not as a dependency. Free tiers are 10-100 parcels/month and changing; AfterShip API needs a paid plan. |
 | Q6 | How does it fit the codebase? | Mirrors `domains`/`jobs`: models in `pipeline/db.py`, router, scheduler job, composable, page under Tools nav. |
@@ -112,7 +112,7 @@ Precision ordering, highest first:
 | Tier | Source | Precision | Notes |
 |---|---|---|---|
 | 1 | schema.org `ParcelDelivery` / `Order.orderDelivery` (JSON-LD or microdata) | Exact | Gives carrier, number, ETA, merchant. Prevalence unmeasured; Gmail requires sender registration, so treat as a bonus. |
-| 2 | Carrier tracking URLs in `href` (`ups.com/track?tracknum=`, `tools.usps.com/go/TrackConfirmAction?tLabels=`, `fedex.com/fedextrack/?trknbr=`, `dhl.com/...?tracking-id=`, Amazon `progress-tracker` with `orderId`/`shipmentId`) | High | Carrier comes from the host. Click-wrapper redirects (`click.*`, `links.*`) hide these; resolving them leaks a "viewed" signal to the merchant. Default: do not follow redirects; decode URL-encoded targets when present in query params. |
+| 2 | Carrier tracking URLs in `href` (`ups.com/track?tracknum=`, `tools.usps.com/go/TrackConfirmAction?tLabels=`, `fedex.com/fedextrack/?trknbr=`, `dhl.com/...?tracking-id=`, Walmart `walmart.com/orders/<id>` links for order id) | High | Carrier comes from the host. Click-wrapper redirects (`click.*`, `links.*`) hide these; resolving them leaks a "viewed" signal to the merchant. Default: do not follow redirects; decode URL-encoded targets when present in query params. |
 | 3 | Regex + check digit from `jkeen/tracking_number_data` | Medium | MIT, 18 couriers, regex with named `SerialNumber`/`CheckDigit` groups and mod10/mod7/S10/luhn validators, ships `test_numbers`. Only `1Z…` (UPS) and S10 (`AA123456789US`) are distinctive; pure-digit FedEx/USPS formats collide with order and phone numbers. Require check-digit pass **and** a carrier/"tracking" keyword within ~80 chars. |
 | 4 | LLM (Haiku via existing `anthropic` dep, `pipeline/health.py:211`) | Variable | Merchant name, order id, item summary, ETA. Off by default for this feature: it sends email bodies to a third party, which conflicts with the "open and free" brief. Pattern exists in `pipeline/jobs/inbox_seed.py:83-154`. |
 
@@ -127,11 +127,11 @@ Precision ordering, highest first:
 | UPS | Track API (developer.ups.com) | OAuth2 client credentials | Not published | Access agreement covers individuals; asks company name + phone; account-number need for Track unverified | Use |
 | FedEx | Track API v1 | OAuth2 client credentials | Not published; 30 numbers/request | Project creation reportedly requires linking a 9-digit FedEx account; Track by number needs no account number; SPOD signature does | Use if user has/creates a free fedex.com shipping account |
 | DHL | Shipment Tracking - Unified | API key header | 250 calls/day, max 1 call per 5s; starter tier labelled for development, upgrades restricted to DHL customers | Yes | Use (250/day suffices for one user) |
-| Amazon Logistics (TBA…) | None. Not trackable by third parties; requires Amazon login | n/a | n/a | n/a | Email-derived only |
+| Walmart store delivery (Walmart+ same-day/express via Spark drivers) | None. No carrier tracking number; status lives in the Walmart app and Walmart mail | n/a | n/a | n/a | Email-derived only, keyed by order id |
 | LaserShip/OnTrac, GOFO, regional | None free | n/a | n/a | n/a | Email-derived + deep link |
 | International (S10 postal) | Origin post's site; 17TRACK free tier | varies | 17TRACK ~50-100/month | n/a | Deep link; aggregator not adopted |
 
-**Email-derived status** is the universal fallback and the only Amazon path. Merchants and Amazon send "shipped", "out for delivery", "delivered" mail that carries the same tracking number, order id, or Gmail `threadId`. Each scan re-reads new matching mail and advances package state monotonically. HA Mail and Packages proves the approach works (subject-line matching), and also shows its limit: wording drifts and small merchants send nothing after "shipped".
+**Email-derived status** is the universal fallback and the only path for Walmart store delivery and OnTrac. Merchants send "shipped", "out for delivery", "delivered" mail that carries the same tracking number, order id, or Gmail `threadId`. Each scan re-reads new matching mail and advances package state monotonically. HA Mail and Packages proves the approach works (subject-line matching), and also shows its limit: wording drifts and small merchants send nothing after "shipped".
 
 **Polling budget** (single user, ~10-30 active packages): poll each active package every 2h, at most 12/day. USPS 60/hr and DHL 250/day (1 call per 5s) both hold; batch DHL numbers per call where the API allows. Stop polling 48h after `delivered`; mark `stale` after 30 days without an event.
 
@@ -160,6 +160,10 @@ Pattern from `domains` and `jobs`, verified:
 - Secrets: carrier keys via env through `health.env()` (like `ANTHROPIC_API_KEY`) for Phase 2; promote to an encrypted `Connection` kind (`pipeline/connections.py` `KINDS`) only if UI entry is wanted.
 - HTTP: `httpx==0.28.1` and `requests==2.34.2` both present; no shared retry util, copy the `gmail.py:80-142` backoff.
 
+### Q4b. Google search tracking box (follow-up, 2026-10-10)
+
+Rejected. Google's tracking box is fed by carriers' own APIs that Google calls live; the partner program no longer accepts new carriers (https://developers.google.com/search/docs/appearance/package-tracking, updated 2026-07-14). Automated `google.com/search` fetches are disallowed by `robots.txt` (`Disallow: /search`). The Custom Search JSON API is closed to new customers and discontinued 2027-01-01. Gmail's own inbox package tracking has no API. Same carrier data, worse access path.
+
 ## Dissent / Contradictory Evidence
 
 - **Email-only vs API polling.** The contrarian pass argues email-derived status is uneven (late or missing "delivered" mail from small merchants). That is why carrier APIs stay in scope for the four big carriers. Conversely, carrier APIs add per-carrier signup friction (FedEx account link, USPS BCG, UPS company fields) for a personal tool. Resolution: make APIs opt-in per carrier, ship email-derived first, measure how often packages stall in `in_transit`.
@@ -180,7 +184,7 @@ Explicitly out: scraping, paid or freemium aggregators, Karrio, LLM extraction b
 
 ### Rationale
 
-- Amazon is likely the largest share of a personal package volume and is only trackable through email, so email-derived status is mandatory regardless; building it first delivers value with zero signup.
+- Walmart store-delivered orders and OnTrac shipments are only trackable through email, so email-derived status is mandatory regardless; building it first delivers value with zero signup.
 - Official APIs are free, stable, and documented; scraping is neither stable nor polite; aggregators are neither free at volume nor durable.
 - Check-digit validation plus `href` harvesting addresses the main extraction risk (numeric false positives) without an LLM.
 - Every piece maps onto an existing pattern (`domains`/`jobs`, Gmail helpers, scheduler, Vault), so new surface area is small.
@@ -231,7 +235,7 @@ PackageEvent(id, package_id FK, occurred_at, status, description, location, sour
 PackageEmail(id, package_id FK, account_label, message_id, thread_id, subject, sender, received_at)
 ```
 
-Amazon handling: key on `order_id` + `threadId` when no carrier number exists (carrier `amazon`, synthetic number `order:<id>`), status from Amazon's own mail only.
+Walmart handling: a dedicated parser for `walmart.com` senders. Ship-to-home mail: pull carrier + tracking number (text and links), one order can yield several packages. Store delivery mail: no tracking number, so key on `order_id` + `threadId` (carrier `walmart`, synthetic number `order:<id>`), status from Walmart's own mail only. Walmart Marketplace third-party sellers ship with their own carriers and go through the generic path.
 
 Status chip mapping (DESIGN.md: icon + label): pending `schedule`, in_transit `local_shipping`, out_for_delivery `near_me`, delivered `check_circle`, exception `error`, returned `undo`, stale `help`.
 
@@ -242,7 +246,8 @@ Optional follow-up: `GET /api/packages/summary` for a Home Assistant REST sensor
 | Risk | Likelihood | Mitigation |
 |---|---|---|
 | Numeric false positives (order/phone numbers) | High without checks | Check digit + keyword proximity + per-sender suppress list; fixture corpus with precision assertions |
-| Amazon status lag or missing "delivered" mail | Medium | Show `last_event_at` age; mark `stale`; deep link to Amazon order page |
+| Walmart store-delivery status lag or missing "delivered" mail | Medium | Show `last_event_at` age; mark `stale`; deep link to the Walmart order page |
+| Walmart mail format unverified (tracking number in text vs only behind a walmart.com order link) | Medium | Build the Walmart parser from a redacted sample of the user's own Walmart mail before writing rules |
 | Carrier signup friction (FedEx account link, USPS BCG) | Medium | Adapters opt-in; Phase 1 useful without them |
 | USPS/UPS terms or quota change | Medium | Adapter isolation, 429 backoff, `last_error` surfaced per carrier on the page |
 | Click-wrapped tracking links | Medium | Decode embedded targets; never auto-follow; fall back to regex |
