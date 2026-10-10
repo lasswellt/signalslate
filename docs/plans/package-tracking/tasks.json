@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T16:36:04Z",
+  "updated": "2026-10-10T16:37:11Z",
   "tasks": [
     {
       "id": "T-001",
@@ -104,11 +104,53 @@
           "timeout": 180
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-10T16:37:11Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^class Package\\(SQLModel, table=True\\)' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 14,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:37:09Z"
+          },
+          {
+            "cmd": "grep -qE '^class PackageEvent\\(SQLModel, table=True\\)' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:37:09Z"
+          },
+          {
+            "cmd": "grep -qE '^class PackageEmail\\(SQLModel, table=True\\)' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 8,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:37:09Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-10T16:37:09Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_package_tables.py -q",
+            "exit": 0,
+            "duration_ms": 1549,
+            "tail": "......                                                                   [100%]\n6 passed in 1.03s",
+            "recorded_at": "2026-10-10T16:37:11Z"
+          }
+        ]
+      },
       "origin": "plan",
       "notes": "Research Implementation Sketch data model. UNIQUE(carrier,tracking_number) nullable number for order-level packages; PackageEvent dedupe_hash UNIQUE; PackageEmail keyed by account_label+message_id. Never store email bodies."
     },
