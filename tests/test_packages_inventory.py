@@ -108,7 +108,7 @@ def test_exception_rule(session):
 
 
 def test_stale_marking(session):
-    old, fresh, done = (inventory.add_manual(session, n, "ups") for n in ("A", "B", "C"))
+    old, fresh, done = (inventory.add_manual(session, n, "ups")[0] for n in ("A", "B", "C"))
     old.created_at = fresh.created_at = done.created_at = T0
     fresh.last_event_at = T0 + timedelta(days=40)
     done.status = "delivered"
@@ -131,12 +131,14 @@ def test_carrier_result(session):
 
 
 def test_manual_add(session):
-    p = inventory.add_manual(session, " 1z999aa10123456784 ", None)
+    p, created = inventory.add_manual(session, " 1z999aa10123456784 ", None)
+    assert created is True
     assert (p.carrier, p.tracking_number, p.status_source) == ("ups", UPS, "manual")
-    assert inventory.add_manual(session, UPS, None).id == p.id
+    again, created = inventory.add_manual(session, UPS, None)
+    assert created is False and again.id == p.id
     with pytest.raises(ValueError):
         inventory.add_manual(session, "hello", None)
-    assert inventory.add_manual(session, "hello", "Other").carrier == "other"
+    assert inventory.add_manual(session, "hello", "Other")[0].carrier == "other"
 
 
 def test_no_thread_correlation(session):

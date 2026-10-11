@@ -243,7 +243,7 @@ def apply_carrier_result(session: Session, package: Package, result: CarrierResu
     return changed
 
 
-def add_manual(session: Session, tracking_number: str, carrier: Optional[str]) -> Package:
+def add_manual(session: Session, tracking_number: str, carrier: Optional[str]) -> tuple[Package, bool]:
     """
     Add a package the user typed in.
 
@@ -253,10 +253,13 @@ def add_manual(session: Session, tracking_number: str, carrier: Optional[str]) -
         carrier: Carrier code, or None to detect it from the number's format.
 
     Returns:
-        The new package, or the existing one for the same (carrier, number).
+        (package, created): the new package with True, or the existing one for the same
+        (carrier, number) with False.
 
     Raises:
         ValueError: when no carrier is given and no known format matches the number.
+        sqlalchemy.exc.IntegrityError: when a concurrent writer inserted the same identity
+            between the lookup and the flush (the caller rolls back).
     """
     number = "".join(tracking_number.split()).upper()
     if not number:
@@ -269,11 +272,11 @@ def add_manual(session: Session, tracking_number: str, carrier: Optional[str]) -
         code = match.carrier
     existing = _find_numbered(session, code, number)
     if existing is not None:
-        return existing
+        return existing, False
     package = Package(carrier=code, tracking_number=number, status="pending", status_source="manual")
     session.add(package)
     session.flush()
-    return package
+    return package, True
 
 
 def mark_stale(session: Session, now: datetime, stale_days: int) -> int:

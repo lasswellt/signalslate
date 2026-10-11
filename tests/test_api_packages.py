@@ -4,7 +4,7 @@ scan_all/refresh_due are monkeypatched at the router's own import site.
 """
 import json
 import sys
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -19,6 +19,7 @@ from api.security import install_security  # noqa: E402
 from pipeline import db  # noqa: E402
 from pipeline.clock import utcnow  # noqa: E402
 from pipeline.db import Package, PackageEmail, PackageEvent  # noqa: E402
+from pipeline.packages import inventory  # noqa: E402
 from pipeline.packages.poll import PollResult  # noqa: E402
 from pipeline.packages.scan import ScanResult  # noqa: E402
 
@@ -179,3 +180,58 @@ def test_write_guard(client):
     assert plain.post("/api/packages", json={"tracking_number": UPS}).status_code in (400, 403)
     assert plain.post("/api/packages/scan").status_code in (400, 403)
     assert plain.delete("/api/packages/1").status_code in (400, 403)
+
+
+def test_summary_arriving_today_date_only_eta_west_of_utc(client, monkeypatch):
+    from zoneinfo import ZoneInfo
+    monkeypatch.setattr(packages_router, "schedule_timezone", lambda: ZoneInfo("America/New_York"))
+    # local and UTC dates match (15:00 UTC = 11:00 EDT on Jun 10) / differ (02:00 UTC Jun 11 = Jun 10 EDT)
+    for now in (datetime(2026, 6, 10, 15, 0), datetime(2026, 6, 11, 2, 0)):
+        monkeypatch.setattr(packages_router, "utcnow", lambda now=now: now)
+        with db.get_session() as session:
+            for row in session.exec(select(Package)).all():
+                session.delete(row)
+            session.commit()
+        _add(tracking_number="TODAY", status="in_transit", eta=datetime(2026, 6, 10))
+        _add(tracking_number="TOMORROW", status="in_transit", eta=datetime(2026, 6, 11))
+        assert client.get("/api/packages/summary").json()["arriving_today"] == 1
+
+
+def test_add_archived_duplicate_message(client):
+    pid = _add(tracking_number=UPS, status="in_transit", archived=True)
+    dup = client.post("/api/packages", json={"tracking_number": UPS, "carrier": "ups"})
+    assert dup.status_code == 409 and dup.json()["detail"]["code"] == "package_exists"
+    assert dup.json()["detail"]["message"] == "Package already tracked (archived)"
+    assert client.get(f"/api/packages/{pid}").json()["archived"] is True
+
+
+def test_add_insert_race_is_409(client, monkeypatch):
+    _add(tracking_number=UPS, status="pending")
+    monkeypatch.setattr(inventory, "_find_numbered", lambda *_a, **_k: None)  # lookup misses; unique index fires
+    resp = client.post("/api/packages", json={"tracking_number": UPS, "carrier": "ups"})
+    assert resp.status_code == 409 and resp.json()["detail"]["code"] == "package_exists"
+    assert len(client.get("/api/packages").json()) == 1
+
+
+def test_add_input_bounds(client):
+    for body in ({"tracking_number": "abc"}, {"tracking_number": "A" * 65},
+                 {"tracking_number": "1Z99;DROP"}, {"tracking_number": UPS, "carrier": "c" * 33}):
+        assert client.post("/api/packages", json=body).status_code == 422
+    assert client.get("/api/packages", params={"q": "x" * 101}).status_code == 422
+    assert client.get("/api/packages", params={"q": "x" * 100}).status_code == 200
+
+
+def test_list_last_event_latest_per_package(client):
+    now = utcnow()
+    a = _add(tracking_number="A", status="in_transit")
+    b = _add(tracking_number="B", status="in_transit")
+    with db.get_session() as session:
+        session.add(PackageEvent(package_id=a, occurred_at=now - timedelta(hours=1), status="pending",
+                                 description="old", source="email", dedupe_hash="a1"))
+        session.add(PackageEvent(package_id=a, occurred_at=now, status="in_transit",
+                                 description="new", source="carrier", dedupe_hash="a2"))
+        session.add(PackageEvent(package_id=b, occurred_at=now, status="in_transit",
+                                 description="b-only", source="carrier", dedupe_hash="b1"))
+        session.commit()
+    rows = {r["tracking_number"]: r["last_event"] for r in client.get("/api/packages").json()}
+    assert rows == {"A": "new", "B": "b-only"}

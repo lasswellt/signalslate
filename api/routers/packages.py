@@ -9,7 +9,12 @@ Design decisions:
 - Static paths (/packages/summary, /packages/carriers, /packages/scan, /packages/refresh) are
   declared before /packages/{package_id}; the id is an int, so a stray word is a 422, not a lookup.
 - "Today" is the local calendar day in api.scheduler.schedule_timezone() (UTC when TZ is unset),
-  the same zone the cron schedules use. Stored datetimes are naive UTC and are converted per row.
+  the same zone the cron schedules use. Timestamps (delivered_at) are naive UTC and converted per
+  row; eta is a calendar date stored as naive midnight, so its .date() is compared directly
+  (converting it would shift it a day west of UTC, and the digest collector also uses eta.date()).
+- add_package relies on inventory.add_manual's (package, created) result and the unique index:
+  a concurrent insert surfaces as IntegrityError and becomes the same 409 package_exists.
+- list_packages loads the latest event of all listed packages in one grouped query (no N+1).
 - Detail emails expose metadata only (account, subject, sender, time); bodies are never stored, so
   they cannot be returned.
 - scan/refresh are blocking network calls, so every handler is plain `def` (threadpool). An
@@ -23,8 +28,10 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Response
-from pydantic import BaseModel, ConfigDict
+from fastapi import APIRouter, HTTPException, Query, Response
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy import and_, func
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import col, delete, select
 
 from api.scheduler import schedule_timezone
@@ -85,8 +92,15 @@ class PackageDetailOut(PackageOut):
 class AddBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    tracking_number: str
-    carrier: Optional[str] = None
+    tracking_number: str = Field(min_length=4, max_length=64)
+    carrier: Optional[str] = Field(default=None, max_length=32)
+
+    @field_validator("tracking_number")
+    @classmethod
+    def _charset(cls, value: str) -> str:
+        if not all(c.isascii() and (c.isalnum() or c in " -") for c in value):
+            raise ValueError("tracking number may contain only letters, digits, spaces and hyphens")
+        return value
 
 
 class PatchBody(BaseModel):
@@ -131,6 +145,23 @@ def _last_event(session, package_id: int) -> Optional[PackageEvent]:
                         .order_by(col(PackageEvent.occurred_at).desc(), col(PackageEvent.id).desc())).first()
 
 
+def _last_events(session, package_ids: list[int]) -> dict[int, PackageEvent]:
+    """Latest event (occurred_at, then id) per package id in one grouped query."""
+    if not package_ids:
+        return {}
+    newest = (select(PackageEvent.package_id, func.max(PackageEvent.occurred_at).label("newest"))
+              .where(col(PackageEvent.package_id).in_(package_ids))
+              .group_by(PackageEvent.package_id).subquery())
+    stmt = select(PackageEvent).join(newest, and_(PackageEvent.package_id == newest.c.package_id,
+                                                  PackageEvent.occurred_at == newest.c.newest))
+    latest: dict[int, PackageEvent] = {}
+    for event in session.exec(stmt):
+        current = latest.get(event.package_id)
+        if current is None or event.id > current.id:
+            latest[event.package_id] = event
+    return latest
+
+
 def _to_out(package: Package, last: Optional[PackageEvent]) -> PackageOut:
     return PackageOut(
         id=package.id, carrier=package.carrier, tracking_number=package.tracking_number,
@@ -161,7 +192,8 @@ def _sort_key(package: Package) -> tuple:
 
 @router.get("/packages", response_model=list[PackageOut])
 def list_packages(status: Optional[str] = None, carrier: Optional[str] = None,
-                  include_archived: bool = False, q: Optional[str] = None) -> list[PackageOut]:
+                  include_archived: bool = False,
+                  q: Optional[str] = Query(default=None, max_length=100)) -> list[PackageOut]:
     """List packages, active first then delivered newest first.
 
     Args:
@@ -187,7 +219,8 @@ def list_packages(status: Optional[str] = None, carrier: Optional[str] = None,
             rows = [p for p in rows if any(needle in (v or "").lower()
                                            for v in (p.tracking_number, p.merchant, p.order_id))]
         rows.sort(key=_sort_key)
-        return [_to_out(p, _last_event(session, p.id)) for p in rows]
+        latest = _last_events(session, [p.id for p in rows])
+        return [_to_out(p, latest.get(p.id)) for p in rows]
 
 
 def _local_date(dt: Optional[datetime], zone):
@@ -212,7 +245,7 @@ def packages_summary() -> SummaryOut:
     return SummaryOut(
         out_for_delivery_today=sum(1 for p in rows if p.status == "out_for_delivery"),
         arriving_today=sum(1 for p in rows if p.status not in ("delivered", "returned")
-                           and _local_date(p.eta, zone) == today),
+                           and p.eta is not None and p.eta.date() == today),
         delivered_today=sum(1 for p in rows if p.status == "delivered"
                             and _local_date(p.delivered_at, zone) == today),
         in_transit=sum(1 for p in rows if p.status == "in_transit"),
@@ -281,20 +314,33 @@ def add_package(body: AddBody) -> PackageOut:
         The created package.
 
     Raises:
-        HTTPException: 422 unrecognized_tracking_number, 409 package_exists.
+        HTTPException: 422 unrecognized_tracking_number, 409 package_exists (also when archived).
     """
+    exists = _coded(409, "package_exists", "Package already tracked")
     with db.get_session() as session:
         try:
-            before = len(list(session.exec(select(Package.id))))
-            package = inventory.add_manual(session, body.tracking_number, body.carrier)
+            package, created = inventory.add_manual(session, body.tracking_number, body.carrier)
+            if created:
+                session.commit()
         except ValueError:
             raise _coded(422, "unrecognized_tracking_number",
                          "Tracking number not recognised; specify the carrier")
-        if len(list(session.exec(select(Package.id)))) == before:
-            raise _coded(409, "package_exists", "Package already tracked")
-        session.commit()
+        except IntegrityError:
+            session.rollback()
+            _log.info("package add lost an insert race")
+            package, created = _existing(session, body), False
+        if not created:
+            if package is not None and package.archived:
+                raise _coded(409, "package_exists", "Package already tracked (archived)")
+            raise exists
         session.refresh(package)
         return _to_out(package, None)
+
+
+def _existing(session, body: AddBody) -> Optional[Package]:
+    """The row a lost insert race collided with, for the archived-aware 409 message."""
+    number = "".join(body.tracking_number.split()).upper()
+    return session.exec(select(Package).where(Package.tracking_number == number)).first()
 
 
 @router.get("/packages/{package_id}", response_model=PackageDetailOut)
