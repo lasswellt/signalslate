@@ -1,8 +1,8 @@
 {
   "$schema": "blitz-check-report/1.0",
-  "result": "FAIL",
-  "ts": "2026-10-11T00:02:48Z",
-  "ref": "ec5ab1c50f7308d4e80e7d86f8c6632c9c7781cd",
+  "result": "CONDITIONAL",
+  "ts": "2026-10-11T01:48:02Z",
+  "ref": "dc26e87d2d21f36ff6c0fedf4816fa2c8b2e938e",
   "scope": "plan",
   "plan": "package-tracking",
   "stacks": [
@@ -27,49 +27,43 @@
   },
   "findings": [
     {
+      "id": "posture",
+      "severity": "P3",
+      "where": ".cc-sessions/test-journal.meta.json",
+      "what": "startup-validate schema finding in plugin state file; no injection"
+    },
+    {
       "id": "critic",
-      "severity": "P0",
-      "where": "pipeline/packages/poll.py:83",
-      "what": "2h poll cadence degrades to 4h: next_check_at=now+2h vs 2h cron; settings ignored"
-    },
-    {
-      "id": "survey-backend",
-      "severity": "P2",
-      "where": "api/routers/packages.py:214",
-      "what": "arriving_today off by one day for date-only ETA in US zones"
-    },
-    {
-      "id": "survey-backend",
-      "severity": "P2",
-      "where": "pipeline/packages/carriers/ups.py:66",
-      "what": "UPS local times stored as naive UTC"
-    },
-    {
-      "id": "survey-backend",
-      "severity": "P2",
-      "where": "api/routers/packages.py:286",
-      "what": "add_package O(n) racy dup detection; IntegrityError -> 500"
-    },
-    {
-      "id": "survey-frontend",
       "severity": "P3",
-      "where": "web/pages/packages.vue:278",
-      "what": "stale-response race on filter change"
+      "where": "pipeline/packages/poll.py:81",
+      "what": "cycle skip possible once after a scan >10 min longer than the next"
     },
     {
-      "id": "survey-frontend",
+      "id": "critic",
       "severity": "P3",
-      "where": "web/components/PackageDetailDialog.vue:170",
-      "what": "getPackage race on packageId change"
+      "where": "api/routers/packages.py:136",
+      "what": "_existing looks up by number only after race (message only)"
+    },
+    {
+      "id": "critic",
+      "severity": "P3",
+      "where": "web/components/PackageDetailDialog.vue:190",
+      "what": "same-id reopen loading flag; actionError unguarded"
+    },
+    {
+      "id": "survey-backend",
+      "severity": "P3",
+      "where": "pipeline/packages/inventory.py:279",
+      "what": "mark_stale flip-flop with poll"
     }
   ],
   "cannot_verify": [],
   "critic": {
     "mode": "reject",
-    "verdict": "REJECT"
+    "verdict": "LGTM"
   },
   "tasks": {
-    "verified": 23,
+    "verified": 28,
     "failed": 0
   }
 }

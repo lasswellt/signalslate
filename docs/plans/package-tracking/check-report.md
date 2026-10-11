@@ -1,69 +1,69 @@
 ---
-result: FAIL
-ts: 2026-10-11T00:02:48Z
-ref: ec5ab1c50f7308d4e80e7d86f8c6632c9c7781cd
+result: CONDITIONAL
+ts: 2026-10-11T01:48:02Z
+ref: dc26e87d2d21f36ff6c0fedf4816fa2c8b2e938e
 scope: plan
 plan: package-tracking
 ---
 
-# Check: package-tracking
+# Check: package-tracking (after --fix)
 
-**Verdict: FAIL.** Gates, ratchet and all 23 task verifies are green. The critic REJECTs on one spec violation: packages are polled every 4 hours in practice, not every 2.
+**Verdict: CONDITIONAL.** The critic returned LGTM and 28/28 held-out checks pass. All gates are green, all 28 tasks verify, and the ratchet has no regression. The verdict is capped by one posture finding in the blitz plugin's own state file, not in project code. Only P3 advisories remain.
+
+## Fix round
+
+The previous run failed on a critic REJECT (P0 poll cadence) plus three P2s and two survey majors. Five tasks from that check fixed them:
+
+| Task | Fix |
+|---|---|
+| T-024 | Packages count as due 10 minutes early, so a run that starts a few seconds early no longer skips them. The poll interval and stop-after-delivered values come from the settings object. Adapters are cached and rebuilt when credentials change. A carrier stops after 3 consecutive failures, and auth or rate-limit errors are recorded in last_error. |
+| T-025 | arriving_today compares eta.date() with the local today. add_package looks for an existing row instead of counting all rows; a duplicate, an archived duplicate or an IntegrityError race returns 409. Inputs have bounds (422). The latest event per package is loaded in one query instead of one per row. |
+| T-026 | UPS activity times use the gmt fields or gmtOffset and are stored as UTC. delivered_at matches the activity's local date. |
+| T-027 | Sequence guards on the page list load and the detail dialog load. The dialog resets on close. Enter on the track link no longer opens the row. |
+| T-028 | S10 country codes are validated against the vendored data. The invalid-number test is stricter. The S10 and noise skips became real assertions. Two strict, commented xfails cover DPD's mod-37/36 checksum, which the matcher does not implement. |
 
 ## Gates
 
 | Gate | Result |
 |---|---|
-| pytest (full) | 3450 passed, 3 skipped |
-| vitest (full) | 525/525 |
+| pytest (full) | 3469 passed, 2 xfailed |
+| vitest (full) | 528/528 |
 | nuxt typecheck | 0 errors |
 | nuxt build | ok |
-| ruff F/E9 (new code) | clean |
-| mypy (advisory, no repo gate) | SQLModel/narrowing false positives only |
-| tasks.sh verify | 23/23 PASS |
-| critic held-out | 22/23 ok (T-014 fails) |
+| tasks.sh verify | 28/28 |
+| critic held-out | 28/28 ok |
 
 ## Ratchet
 
 | Metric | Before | After |
 |---|---|---|
-| test_count (web) | 414 | 438 |
+| test_count (web) | 438 | 441 |
 | type_errors | 0 | 0 |
-| as_any_count | 0 | 0 |
-| mocks_in_src | 0 | 0 |
-| todo_count | 0 | 0 |
-| stale_worktree_branch_count | 3 | 0 |
+| as_any / mocks_in_src / todo | 0 | 0 |
 
-## Findings
+## Remaining findings (P3, advisory)
 
-| Sev | Where | Problem | Fix |
-|---|---|---|---|
-| P0 (critic) | pipeline/packages/poll.py:83-108 | `next_check_at = now + 2h` with a 2-hourly cron. A run that starts seconds early skips the package, so the effective cadence is 4h (spec Outcome 3). The `poll_interval_hours` and `stop_after_delivered_hours` settings are ignored. | Treat a package as due within a tolerance (for example `next_check_at <= now + 10 min`), and read the settings. |
-| P2 | api/routers/packages.py:214 | A date-only ETA stored as midnight UTC is shifted into the local zone, so it lands a day early in US zones. The summary then disagrees with the digest. | Compare `eta.date()` directly for date-only ETAs, or store ETA as a date. |
-| P2 | pipeline/packages/carriers/ups.py:66 | UPS activity times are local scan-site times stored as naive UTC. | Use the UPS GMT fields when present; otherwise mark the time approximate. |
-| P2 | api/routers/packages.py:286-297 | `add_package` detects duplicates by counting all ids before and after (O(n), racy). An IntegrityError returns 500. | Look up (carrier, number) before inserting; catch IntegrityError and return 409. |
-| Major (survey) | web/pages/packages.vue:278 | A rapid filter change can let an older response overwrite newer rows. | Add a request sequence guard. |
-| Major (survey) | web/components/PackageDetailDialog.vue:170 | A getPackage response can arrive after packageId changes and show the wrong package. | Check the captured id after await. |
-| Minor | carriers/base.py:341 | The rate limiter and OAuth token are rebuilt on every run. | Cache the adapters at module level. |
-| Minor | poll.py:111-124 | Generic errors keep polling a failing carrier; rate-limit and auth errors are not recorded on the package. | Stop the carrier after N consecutive errors and set last_error. |
-| Minor | inventory.py:279 | mark_stale flip-flops with polling. | Base stale on last_checked_at or carrier activity. |
-| Minor | api/routers/packages.py:85 | No max length or charset check on tracking_number or q. | Add a Field(max_length) and a charset check. |
-| Minor | tests | The s10 blanket skip; the invalid-number test cannot fail for checksumless formats; the reference and poll fixture keys are not asserted. | Tighten the assertions. |
-| Info | det-13 | 2 pytest.skip: the noise case is justified (filtered at inventory.apply_email:204); the s10 rationale is partial. | none |
+| Where | Problem |
+|---|---|
+| pipeline/packages/__init__.py:103 | poll_interval_hours and stop_after_delivered_hours have no env key. The spec fixes 2h and 48h, so the defaults are correct. |
+| pipeline/packages/poll.py:81 | A scan that runs more than 10 minutes longer than the next one (the first 60-day backfill) can skip one cycle, then recovers. |
+| api/routers/packages.py:136 | After a lost insert race, _existing() looks up by number only, which can pick the wrong row for the 409 message. The status code is still correct. |
+| web/components/PackageDetailDialog.vue:190 | Closing and reopening on the same id can drop loading early. actionError is not sequence-guarded. |
+| pipeline/packages/carriers/base.py:176 | The adapter cache key holds credentials only. |
+| pipeline/packages/inventory.py:279 | mark_stale can flip back to in_transit while the carrier reports no new events. |
 
 ## Security posture
 
-- Security lens: secrets, XSS, CSRF and email privacy are clean. The UPS/USPS URL path is not URL-encoded, but a full-match format check blocks injection.
-- Posture gate: 2 plugin-side hits, neither caused by this plan:
-  - critic-external.sh `eval` of constant var names (not project content).
-  - .cc-sessions/test-journal.meta.json schema (counters only).
+- Security lens: secrets, XSS, CSRF and email privacy are clean.
+- startup-validate exits 2 on a schema check of .cc-sessions/test-journal.meta.json, the plugin's own counters file. No injection content. This caps the verdict at CONDITIONAL.
+- The critic-external.sh `eval` takes constant var names only and is plugin-side.
 
 ## Not auto-verified
 
-- Architecture fit, UX sense and business intent.
-- Real Gmail and carrier API behaviour (stubbed in tests).
+- Architecture fit and UX.
+- Live Gmail and carrier API behaviour (stubbed in tests).
 - e2e_coverage: skipped (no running app probe).
 
 ## Recommendation
 
-needs-human-review. Fix the P0 and the P2s, then re-run check.
+needs-human-review. The code is ready to merge. The remaining items are P3 or plugin-side.
