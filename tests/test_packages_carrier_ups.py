@@ -151,3 +151,25 @@ def test_events_sorted_ascending_and_location(adapter, monkeypatch):
     assert r.events[0].location == "US"
     assert r.events[1].location == "Reno, NV, US"
     assert r.events[2].location == "Dallas, TX, US"
+
+
+def test_activity_times_are_utc(adapter, monkeypatch):
+    with_gmt = act("I", "Gmt", "20261001", "090000")
+    with_gmt.update({"gmtDate": "20261001", "gmtTime": "140000", "gmtOffset": "-05:00"})
+    offset_only = act("I", "Offset", "20261002", "090000")
+    offset_only["gmtOffset"] = "-05:00"
+    east = act("I", "East", "20261003", "090000")
+    east["gmtOffset"] = "+02:00"
+    neither = act("I", "Neither", "20261004", "090000")
+    use(monkeypatch, FakeRequests(track=Resp(200, body([neither, east, offset_only, with_gmt]))))
+    times = [e.occurred_at for e in adapter.track(NUMBER).events]
+    assert times == [datetime(2026, 10, 1, 14), datetime(2026, 10, 2, 14),
+                     datetime(2026, 10, 3, 7), datetime(2026, 10, 4, 9)]
+
+
+def test_delivered_at_uses_utc_activity_time(adapter, monkeypatch):
+    d = act("D", "Delivered", "20261003", "141500")
+    d.update({"gmtDate": "20261003", "gmtTime": "191500"})
+    b = body([d], current_type="D", delivery=[{"type": "DEL", "date": "20261003"}])
+    use(monkeypatch, FakeRequests(track=Resp(200, b)))
+    assert adapter.track(NUMBER).delivered_at == datetime(2026, 10, 3, 19, 15)

@@ -18,11 +18,14 @@ Design decisions:
   CarrierNotFound inside parse_response.
 - The RateLimiter budget (1s spacing, 250/hour) is a conservative local guess, not a published
   UPS quota; HTTP 429 from UPS is still honoured by base.request_json.
+- Activity times are stored as naive UTC: prefer gmtDate+gmtTime (already UTC); else the local
+  date/time minus gmtOffset; else the local value unchanged (best effort, may be off by the
+  scan location's UTC offset). Date-only fields (deliveryDate / ETA) stay calendar dates at midnight.
 - Only extracted fields are kept; raw responses are never logged or stored.
 """
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from pipeline.packages import numbers, packages_settings
@@ -46,6 +49,7 @@ F_ACTIVITY, F_STATUS, F_TYPE, F_DESC = "activity", "status", "type", "descriptio
 F_LOCATION, F_ADDRESS = "location", "address"
 F_CITY, F_STATE, F_COUNTRY = "city", "stateProvince", "country"
 F_DATE, F_TIME = "date", "time"
+F_GMT_DATE, F_GMT_TIME, F_GMT_OFFSET = "gmtDate", "gmtTime", "gmtOffset"
 F_CURRENT, F_DELIVERY_DATE = "currentStatus", "deliveryDate"
 NOT_FOUND_TEXT = "not found"
 NOT_FOUND_CODES = frozenset({"TW0001"})
@@ -69,6 +73,26 @@ def _parse_when(date: Any, time_: Any = None) -> Optional[datetime]:
         return datetime.strptime(f"{date}{time_ or '000000'}", "%Y%m%d%H%M%S")
     except (ValueError, TypeError):
         return None
+
+
+_OFFSET_RE = re.compile(r"^([+-])(\d{1,2}):?(\d{2})$")
+
+
+def _activity_when(act: dict) -> Optional[datetime]:
+    """
+    Returns an activity's time as naive UTC; None when no usable date.
+
+    Prefers gmtDate+gmtTime, then local date/time minus gmtOffset, then the local value as-is.
+    """
+    gmt = _parse_when(act.get(F_GMT_DATE), act.get(F_GMT_TIME)) if act.get(F_GMT_DATE) else None
+    if gmt is not None:
+        return gmt
+    local = _parse_when(act.get(F_DATE), act.get(F_TIME))
+    match = _OFFSET_RE.match(str(act.get(F_GMT_OFFSET) or "").strip())
+    if local is None or match is None:
+        return local
+    delta = timedelta(hours=int(match.group(2)), minutes=int(match.group(3)))
+    return local - delta if match.group(1) == "+" else local + delta
 
 
 def _format_location(loc: Any) -> Optional[str]:
@@ -120,7 +144,7 @@ def parse_response(tracking_number: str, body: Any) -> TrackResult:
     for act in package.get(F_ACTIVITY) or []:
         if not isinstance(act, dict):
             continue
-        when = _parse_when(act.get(F_DATE), act.get(F_TIME))
+        when = _activity_when(act)
         status = act.get(F_STATUS) if isinstance(act.get(F_STATUS), dict) else {}
         if when is None:
             continue
