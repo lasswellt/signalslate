@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-10T17:35:51Z",
+  "updated": "2026-10-11T00:00:11Z",
   "tasks": [
     {
       "id": "T-001",
@@ -35,7 +35,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T16:36:04Z",
+        "ts": "2026-10-10T23:56:29Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -43,30 +43,30 @@
           {
             "cmd": "test -f pipeline/packages/data/LICENSE",
             "exit": 0,
-            "duration_ms": 9,
+            "duration_ms": 19,
             "tail": "",
-            "recorded_at": "2026-10-10T16:36:03Z"
+            "recorded_at": "2026-10-10T23:56:28Z"
           },
           {
             "cmd": "test -f pipeline/packages/data/couriers/ups.json && test -f pipeline/packages/data/couriers/usps.json && test -f pipeline/packages/data/couriers/fedex.json",
             "exit": 0,
-            "duration_ms": 9,
+            "duration_ms": 12,
             "tail": "",
-            "recorded_at": "2026-10-10T16:36:03Z"
+            "recorded_at": "2026-10-10T23:56:28Z"
           },
           {
             "cmd": "grep -q 'MIT' pipeline/packages/data/LICENSE",
             "exit": 0,
-            "duration_ms": 10,
+            "duration_ms": 11,
             "tail": "",
-            "recorded_at": "2026-10-10T16:36:03Z"
+            "recorded_at": "2026-10-10T23:56:28Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_packages_data.py -q",
             "exit": 0,
-            "duration_ms": 1006,
-            "tail": "...................                                                      [100%]\n19 passed in 0.50s",
-            "recorded_at": "2026-10-10T16:36:04Z"
+            "duration_ms": 910,
+            "tail": "...................                                                      [100%]\n19 passed in 0.49s",
+            "recorded_at": "2026-10-10T23:56:29Z"
           }
         ]
       },
@@ -109,7 +109,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T16:37:11Z",
+        "ts": "2026-10-10T23:56:31Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -117,37 +117,37 @@
           {
             "cmd": "grep -qE '^class Package\\(SQLModel, table=True\\)' pipeline/db.py",
             "exit": 0,
-            "duration_ms": 14,
+            "duration_ms": 11,
             "tail": "",
-            "recorded_at": "2026-10-10T16:37:09Z"
+            "recorded_at": "2026-10-10T23:56:30Z"
           },
           {
             "cmd": "grep -qE '^class PackageEvent\\(SQLModel, table=True\\)' pipeline/db.py",
             "exit": 0,
             "duration_ms": 10,
             "tail": "",
-            "recorded_at": "2026-10-10T16:37:09Z"
+            "recorded_at": "2026-10-10T23:56:30Z"
           },
           {
             "cmd": "grep -qE '^class PackageEmail\\(SQLModel, table=True\\)' pipeline/db.py",
             "exit": 0,
-            "duration_ms": 8,
+            "duration_ms": 11,
             "tail": "",
-            "recorded_at": "2026-10-10T16:37:09Z"
+            "recorded_at": "2026-10-10T23:56:30Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/db.py",
             "exit": 0,
             "duration_ms": 10,
             "tail": "",
-            "recorded_at": "2026-10-10T16:37:09Z"
+            "recorded_at": "2026-10-10T23:56:30Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_package_tables.py -q",
             "exit": 0,
-            "duration_ms": 1549,
-            "tail": "......                                                                   [100%]\n6 passed in 1.03s",
-            "recorded_at": "2026-10-10T16:37:11Z"
+            "duration_ms": 1388,
+            "tail": "......                                                                   [100%]\n6 passed in 0.91s",
+            "recorded_at": "2026-10-10T23:56:31Z"
           }
         ]
       },
@@ -186,7 +186,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T16:38:32Z",
+        "ts": "2026-10-10T23:56:32Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -194,30 +194,30 @@
           {
             "cmd": "grep -qE 'def packages_settings' pipeline/packages/__init__.py",
             "exit": 0,
-            "duration_ms": 10,
+            "duration_ms": 8,
             "tail": "",
-            "recorded_at": "2026-10-10T16:38:31Z"
+            "recorded_at": "2026-10-10T23:56:31Z"
           },
           {
             "cmd": "grep -qE 'PACKAGES_SCAN_DAYS' pipeline/packages/__init__.py",
             "exit": 0,
-            "duration_ms": 11,
+            "duration_ms": 8,
             "tail": "",
-            "recorded_at": "2026-10-10T16:38:31Z"
+            "recorded_at": "2026-10-10T23:56:31Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/__init__.py",
             "exit": 0,
-            "duration_ms": 10,
+            "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T16:38:31Z"
+            "recorded_at": "2026-10-10T23:56:31Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_packages_settings.py -q",
             "exit": 0,
-            "duration_ms": 979,
-            "tail": "........                                                                 [100%]\n8 passed in 0.50s",
-            "recorded_at": "2026-10-10T16:38:32Z"
+            "duration_ms": 822,
+            "tail": "........                                                                 [100%]\n8 passed in 0.45s",
+            "recorded_at": "2026-10-10T23:56:32Z"
           }
         ]
       },
@@ -259,7 +259,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T16:40:12Z",
+        "ts": "2026-10-10T23:56:34Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -267,30 +267,30 @@
           {
             "cmd": "grep -qE 'def classify' pipeline/packages/numbers.py",
             "exit": 0,
-            "duration_ms": 10,
+            "duration_ms": 11,
             "tail": "",
-            "recorded_at": "2026-10-10T16:40:10Z"
+            "recorded_at": "2026-10-10T23:56:32Z"
           },
           {
             "cmd": "grep -qE 'sum_product_with_weightings_and_modulo' pipeline/packages/numbers.py",
             "exit": 0,
             "duration_ms": 11,
             "tail": "",
-            "recorded_at": "2026-10-10T16:40:10Z"
+            "recorded_at": "2026-10-10T23:56:32Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/numbers.py",
             "exit": 0,
-            "duration_ms": 11,
+            "duration_ms": 10,
             "tail": "",
-            "recorded_at": "2026-10-10T16:40:10Z"
+            "recorded_at": "2026-10-10T23:56:32Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_packages_numbers.py -q",
             "exit": 0,
-            "duration_ms": 1522,
-            "tail": "........................................................................ [ 25%]\n........................................................................ [ 50%]\n........................................................................ [ 75%]\n......................................ss..............................   [100%]\n284 passed, 2 skipped in 0.97s",
-            "recorded_at": "2026-10-10T16:40:12Z"
+            "duration_ms": 1532,
+            "tail": "........................................................................ [ 25%]\n........................................................................ [ 50%]\n........................................................................ [ 75%]\n......................................ss..............................   [100%]\n284 passed, 2 skipped in 0.98s",
+            "recorded_at": "2026-10-10T23:56:34Z"
           }
         ]
       },
@@ -333,7 +333,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T16:41:34Z",
+        "ts": "2026-10-10T23:56:35Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -341,37 +341,37 @@
           {
             "cmd": "grep -qE 'def harvest' pipeline/packages/html.py",
             "exit": 0,
-            "duration_ms": 12,
+            "duration_ms": 8,
             "tail": "",
-            "recorded_at": "2026-10-10T16:41:33Z"
+            "recorded_at": "2026-10-10T23:56:34Z"
           },
           {
             "cmd": "grep -qE 'awstrack' pipeline/packages/html.py",
             "exit": 0,
-            "duration_ms": 12,
+            "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T16:41:33Z"
+            "recorded_at": "2026-10-10T23:56:34Z"
           },
           {
             "cmd": "! grep -nE 'requests\\.(get|head)|urlopen' pipeline/packages/html.py",
             "exit": 0,
-            "duration_ms": 11,
+            "duration_ms": 8,
             "tail": "",
-            "recorded_at": "2026-10-10T16:41:33Z"
+            "recorded_at": "2026-10-10T23:56:34Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/html.py",
             "exit": 0,
-            "duration_ms": 12,
+            "duration_ms": 10,
             "tail": "",
-            "recorded_at": "2026-10-10T16:41:33Z"
+            "recorded_at": "2026-10-10T23:56:34Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_packages_html.py -q",
             "exit": 0,
-            "duration_ms": 940,
-            "tail": ".............                                                            [100%]\n13 passed in 0.48s",
-            "recorded_at": "2026-10-10T16:41:34Z"
+            "duration_ms": 976,
+            "tail": ".............                                                            [100%]\n13 passed in 0.51s",
+            "recorded_at": "2026-10-10T23:56:35Z"
           }
         ]
       },
@@ -408,7 +408,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T16:42:36Z",
+        "ts": "2026-10-10T23:56:36Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -416,23 +416,23 @@
           {
             "cmd": "grep -qE 'def tracking_url' pipeline/packages/links.py",
             "exit": 0,
-            "duration_ms": 11,
+            "duration_ms": 8,
             "tail": "",
-            "recorded_at": "2026-10-10T16:42:35Z"
+            "recorded_at": "2026-10-10T23:56:35Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/links.py",
             "exit": 0,
-            "duration_ms": 11,
+            "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T16:42:35Z"
+            "recorded_at": "2026-10-10T23:56:35Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_packages_links.py -q",
             "exit": 0,
-            "duration_ms": 1016,
-            "tail": ".................                                                        [100%]\n17 passed in 0.55s",
-            "recorded_at": "2026-10-10T16:42:36Z"
+            "duration_ms": 1072,
+            "tail": ".................                                                        [100%]\n17 passed in 0.53s",
+            "recorded_at": "2026-10-10T23:56:36Z"
           }
         ]
       },
@@ -474,7 +474,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T16:44:58Z",
+        "ts": "2026-10-10T23:56:37Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -482,30 +482,30 @@
           {
             "cmd": "grep -qE 'def extract' pipeline/packages/extract.py",
             "exit": 0,
-            "duration_ms": 9,
+            "duration_ms": 10,
             "tail": "",
-            "recorded_at": "2026-10-10T16:44:56Z"
+            "recorded_at": "2026-10-10T23:56:36Z"
           },
           {
             "cmd": "grep -q 'extraction_cases.json' tests/test_packages_extract.py",
             "exit": 0,
-            "duration_ms": 12,
+            "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T16:44:57Z"
+            "recorded_at": "2026-10-10T23:56:36Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/extract.py",
             "exit": 0,
-            "duration_ms": 12,
+            "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T16:44:57Z"
+            "recorded_at": "2026-10-10T23:56:36Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_packages_extract.py -q",
             "exit": 0,
-            "duration_ms": 1357,
-            "tail": ".....s..................                                                 [100%]\n23 passed, 1 skipped in 0.83s",
-            "recorded_at": "2026-10-10T16:44:58Z"
+            "duration_ms": 883,
+            "tail": ".....s..................                                                 [100%]\n23 passed, 1 skipped in 0.49s",
+            "recorded_at": "2026-10-10T23:56:37Z"
           }
         ]
       },
@@ -542,7 +542,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T16:46:49Z",
+        "ts": "2026-10-10T23:56:39Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -550,23 +550,23 @@
           {
             "cmd": "grep -qE 'def classify_status' pipeline/packages/email_status.py",
             "exit": 0,
-            "duration_ms": 13,
+            "duration_ms": 14,
             "tail": "",
-            "recorded_at": "2026-10-10T16:46:47Z"
+            "recorded_at": "2026-10-10T23:56:37Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/email_status.py",
             "exit": 0,
             "duration_ms": 11,
             "tail": "",
-            "recorded_at": "2026-10-10T16:46:47Z"
+            "recorded_at": "2026-10-10T23:56:37Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_packages_email_status.py -q",
             "exit": 0,
-            "duration_ms": 1243,
-            "tail": "........................................................................ [ 91%]\n.......                                                                  [100%]\n79 passed in 0.65s",
-            "recorded_at": "2026-10-10T16:46:49Z"
+            "duration_ms": 1064,
+            "tail": "........................................................................ [ 91%]\n.......                                                                  [100%]\n79 passed in 0.56s",
+            "recorded_at": "2026-10-10T23:56:39Z"
           }
         ]
       },
@@ -613,7 +613,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T16:48:14Z",
+        "ts": "2026-10-10T23:56:45Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -621,37 +621,37 @@
           {
             "cmd": "grep -qE 'def apply_email' pipeline/packages/inventory.py",
             "exit": 0,
-            "duration_ms": 11,
+            "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T16:48:11Z"
+            "recorded_at": "2026-10-10T23:56:39Z"
           },
           {
             "cmd": "grep -qE 'def apply_carrier_result' pipeline/packages/inventory.py",
             "exit": 0,
-            "duration_ms": 10,
+            "duration_ms": 8,
             "tail": "",
-            "recorded_at": "2026-10-10T16:48:12Z"
+            "recorded_at": "2026-10-10T23:56:39Z"
           },
           {
             "cmd": "! grep -nE 'thread_id ==|threadId ==' pipeline/packages/inventory.py",
             "exit": 0,
-            "duration_ms": 11,
+            "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T16:48:12Z"
+            "recorded_at": "2026-10-10T23:56:39Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/inventory.py",
             "exit": 0,
-            "duration_ms": 12,
+            "duration_ms": 10,
             "tail": "",
-            "recorded_at": "2026-10-10T16:48:12Z"
+            "recorded_at": "2026-10-10T23:56:39Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_packages_inventory.py -q",
             "exit": 0,
-            "duration_ms": 2543,
-            "tail": ".............                                                            [100%]\n13 passed in 1.88s",
-            "recorded_at": "2026-10-10T16:48:14Z"
+            "duration_ms": 5739,
+            "tail": ".............                                                            [100%]\n13 passed in 1.63s",
+            "recorded_at": "2026-10-10T23:56:45Z"
           }
         ]
       },
@@ -693,7 +693,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T16:50:08Z",
+        "ts": "2026-10-10T23:56:49Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -703,28 +703,28 @@
             "exit": 0,
             "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T16:50:06Z"
+            "recorded_at": "2026-10-10T23:56:45Z"
           },
           {
             "cmd": "grep -qE 'category:purchases' pipeline/packages/scan.py",
             "exit": 0,
-            "duration_ms": 11,
+            "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T16:50:06Z"
+            "recorded_at": "2026-10-10T23:56:45Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/scan.py",
             "exit": 0,
-            "duration_ms": 10,
+            "duration_ms": 13,
             "tail": "",
-            "recorded_at": "2026-10-10T16:50:06Z"
+            "recorded_at": "2026-10-10T23:56:45Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_packages_scan.py -q",
             "exit": 0,
-            "duration_ms": 1670,
+            "duration_ms": 4327,
             "tail": ".......                                                                  [100%]\n7 passed in 1.11s",
-            "recorded_at": "2026-10-10T16:50:08Z"
+            "recorded_at": "2026-10-10T23:56:49Z"
           }
         ]
       },
@@ -766,7 +766,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T16:51:40Z",
+        "ts": "2026-10-10T23:56:50Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -774,30 +774,30 @@
           {
             "cmd": "grep -qE 'class CarrierAdapter' pipeline/packages/carriers/base.py",
             "exit": 0,
-            "duration_ms": 9,
+            "duration_ms": 10,
             "tail": "",
-            "recorded_at": "2026-10-10T16:51:39Z"
+            "recorded_at": "2026-10-10T23:56:49Z"
           },
           {
             "cmd": "grep -qE 'class TrackResult' pipeline/packages/carriers/base.py",
             "exit": 0,
-            "duration_ms": 8,
+            "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T16:51:39Z"
+            "recorded_at": "2026-10-10T23:56:49Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/carriers/base.py",
             "exit": 0,
-            "duration_ms": 9,
+            "duration_ms": 11,
             "tail": "",
-            "recorded_at": "2026-10-10T16:51:39Z"
+            "recorded_at": "2026-10-10T23:56:49Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_packages_carrier_base.py -q",
             "exit": 0,
-            "duration_ms": 1019,
-            "tail": "..............                                                           [100%]\n14 passed in 0.50s",
-            "recorded_at": "2026-10-10T16:51:40Z"
+            "duration_ms": 985,
+            "tail": "..............                                                           [100%]\n14 passed in 0.51s",
+            "recorded_at": "2026-10-10T23:56:50Z"
           }
         ]
       },
@@ -838,7 +838,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T16:53:02Z",
+        "ts": "2026-10-10T23:56:52Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -846,30 +846,30 @@
           {
             "cmd": "grep -qE 'class UpsAdapter' pipeline/packages/carriers/ups.py",
             "exit": 0,
-            "duration_ms": 8,
+            "duration_ms": 11,
             "tail": "",
-            "recorded_at": "2026-10-10T16:53:01Z"
+            "recorded_at": "2026-10-10T23:56:50Z"
           },
           {
             "cmd": "grep -qE 'onlinetools\\.ups\\.com' pipeline/packages/carriers/ups.py",
             "exit": 0,
-            "duration_ms": 10,
+            "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T16:53:01Z"
+            "recorded_at": "2026-10-10T23:56:50Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/carriers/ups.py",
             "exit": 0,
-            "duration_ms": 10,
+            "duration_ms": 11,
             "tail": "",
-            "recorded_at": "2026-10-10T16:53:01Z"
+            "recorded_at": "2026-10-10T23:56:50Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_packages_carrier_ups.py -q",
             "exit": 0,
-            "duration_ms": 985,
-            "tail": "..........                                                               [100%]\n10 passed in 0.51s",
-            "recorded_at": "2026-10-10T16:53:02Z"
+            "duration_ms": 1018,
+            "tail": "..........                                                               [100%]\n10 passed in 0.53s",
+            "recorded_at": "2026-10-10T23:56:52Z"
           }
         ]
       },
@@ -910,7 +910,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T16:54:18Z",
+        "ts": "2026-10-10T23:56:53Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -918,30 +918,30 @@
           {
             "cmd": "grep -qE 'class UspsAdapter' pipeline/packages/carriers/usps.py",
             "exit": 0,
-            "duration_ms": 8,
+            "duration_ms": 11,
             "tail": "",
-            "recorded_at": "2026-10-10T16:54:17Z"
+            "recorded_at": "2026-10-10T23:56:52Z"
           },
           {
             "cmd": "grep -qE 'apis\\.usps\\.com' pipeline/packages/carriers/usps.py",
             "exit": 0,
             "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T16:54:17Z"
+            "recorded_at": "2026-10-10T23:56:52Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/carriers/usps.py",
             "exit": 0,
             "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T16:54:17Z"
+            "recorded_at": "2026-10-10T23:56:52Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_packages_carrier_usps.py -q",
             "exit": 0,
-            "duration_ms": 1092,
-            "tail": "..............                                                           [100%]\n14 passed in 0.57s",
-            "recorded_at": "2026-10-10T16:54:18Z"
+            "duration_ms": 1037,
+            "tail": "..............                                                           [100%]\n14 passed in 0.53s",
+            "recorded_at": "2026-10-10T23:56:53Z"
           }
         ]
       },
@@ -980,7 +980,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T16:55:23Z",
+        "ts": "2026-10-10T23:56:55Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -988,23 +988,23 @@
           {
             "cmd": "grep -qE 'def refresh_due' pipeline/packages/poll.py",
             "exit": 0,
-            "duration_ms": 11,
+            "duration_ms": 10,
             "tail": "",
-            "recorded_at": "2026-10-10T16:55:20Z"
+            "recorded_at": "2026-10-10T23:56:53Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/poll.py",
             "exit": 0,
             "duration_ms": 10,
             "tail": "",
-            "recorded_at": "2026-10-10T16:55:20Z"
+            "recorded_at": "2026-10-10T23:56:53Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_packages_poll.py -q",
             "exit": 0,
-            "duration_ms": 2082,
-            "tail": ".........                                                                [100%]\n9 passed in 1.46s",
-            "recorded_at": "2026-10-10T16:55:23Z"
+            "duration_ms": 1864,
+            "tail": ".........                                                                [100%]\n9 passed in 1.34s",
+            "recorded_at": "2026-10-10T23:56:55Z"
           }
         ]
       },
@@ -1046,7 +1046,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T16:56:10Z",
+        "ts": "2026-10-10T23:56:57Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -1056,28 +1056,28 @@
             "exit": 0,
             "duration_ms": 12,
             "tail": "",
-            "recorded_at": "2026-10-10T16:56:08Z"
+            "recorded_at": "2026-10-10T23:56:55Z"
           },
           {
             "cmd": "grep -qE 'def reschedule_packages' api/scheduler.py",
             "exit": 0,
-            "duration_ms": 12,
+            "duration_ms": 11,
             "tail": "",
-            "recorded_at": "2026-10-10T16:56:08Z"
+            "recorded_at": "2026-10-10T23:56:55Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/scheduler.py",
             "exit": 0,
-            "duration_ms": 11,
+            "duration_ms": 10,
             "tail": "",
-            "recorded_at": "2026-10-10T16:56:08Z"
+            "recorded_at": "2026-10-10T23:56:55Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_scheduler_packages.py tests/test_scheduler_domains.py -q",
             "exit": 0,
-            "duration_ms": 2198,
+            "duration_ms": 2138,
             "tail": "................                                                         [100%]\n16 passed in 1.46s",
-            "recorded_at": "2026-10-10T16:56:10Z"
+            "recorded_at": "2026-10-10T23:56:57Z"
           }
         ]
       },
@@ -1124,7 +1124,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T16:57:23Z",
+        "ts": "2026-10-10T23:57:05Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -1132,37 +1132,37 @@
           {
             "cmd": "grep -qE 'def collect_packages' pipeline/collectors/packages.py",
             "exit": 0,
-            "duration_ms": 9,
+            "duration_ms": 11,
             "tail": "",
-            "recorded_at": "2026-10-10T16:57:15Z"
+            "recorded_at": "2026-10-10T23:56:57Z"
           },
           {
             "cmd": "grep -qE 'source == \"packages\"' pipeline/collectors/__init__.py",
             "exit": 0,
             "duration_ms": 10,
             "tail": "",
-            "recorded_at": "2026-10-10T16:57:15Z"
+            "recorded_at": "2026-10-10T23:56:57Z"
           },
           {
             "cmd": "grep -qE '\"packages\"' pipeline/health.py",
             "exit": 0,
-            "duration_ms": 11,
+            "duration_ms": 10,
             "tail": "",
-            "recorded_at": "2026-10-10T16:57:15Z"
+            "recorded_at": "2026-10-10T23:56:57Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/packages.py",
             "exit": 0,
-            "duration_ms": 10,
+            "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T16:57:16Z"
+            "recorded_at": "2026-10-10T23:56:57Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_collector_packages.py tests/test_collectors.py tests/test_health.py -q",
             "exit": 0,
-            "duration_ms": 7743,
-            "tail": "........................................................................ [ 25%]\n........................................................................ [ 51%]\n........................................................................ [ 77%]\n...............................................................          [100%]\n279 passed in 7.16s",
-            "recorded_at": "2026-10-10T16:57:23Z"
+            "duration_ms": 7421,
+            "tail": "........................................................................ [ 25%]\n........................................................................ [ 51%]\n........................................................................ [ 77%]\n...............................................................          [100%]\n279 passed in 6.76s",
+            "recorded_at": "2026-10-10T23:57:05Z"
           }
         ]
       },
@@ -1210,7 +1210,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T16:59:23Z",
+        "ts": "2026-10-10T23:57:09Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -1218,37 +1218,37 @@
           {
             "cmd": "grep -qE '@router\\.get\\(\"/packages\"' api/routers/packages.py",
             "exit": 0,
-            "duration_ms": 11,
+            "duration_ms": 8,
             "tail": "",
-            "recorded_at": "2026-10-10T16:59:18Z"
+            "recorded_at": "2026-10-10T23:57:05Z"
           },
           {
             "cmd": "grep -qE '@router\\.get\\(\"/packages/summary\"' api/routers/packages.py",
             "exit": 0,
-            "duration_ms": 10,
+            "duration_ms": 8,
             "tail": "",
-            "recorded_at": "2026-10-10T16:59:18Z"
+            "recorded_at": "2026-10-10T23:57:05Z"
           },
           {
             "cmd": "grep -qE 'packages\\.router' api/main.py",
             "exit": 0,
-            "duration_ms": 10,
+            "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T16:59:18Z"
+            "recorded_at": "2026-10-10T23:57:05Z"
           },
           {
             "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/packages.py",
             "exit": 0,
-            "duration_ms": 11,
+            "duration_ms": 10,
             "tail": "",
-            "recorded_at": "2026-10-10T16:59:18Z"
+            "recorded_at": "2026-10-10T23:57:05Z"
           },
           {
             "cmd": "venv/bin/python -m pytest tests/test_api_packages.py tests/test_api_security.py -q",
             "exit": 0,
-            "duration_ms": 5201,
-            "tail": "...................................................................      [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.13/site-packages/starlette/testclient.py:40\n  /home/user/signalslate/venv/lib/python3.13/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n67 passed, 1 warning in 3.88s",
-            "recorded_at": "2026-10-10T16:59:23Z"
+            "duration_ms": 4378,
+            "tail": "...................................................................      [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.13/site-packages/starlette/testclient.py:40\n  /home/user/signalslate/venv/lib/python3.13/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n67 passed, 1 warning in 3.37s",
+            "recorded_at": "2026-10-10T23:57:09Z"
           }
         ]
       },
@@ -1289,7 +1289,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T17:00:42Z",
+        "ts": "2026-10-10T23:57:18Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -1299,28 +1299,28 @@
             "exit": 0,
             "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T17:00:33Z"
+            "recorded_at": "2026-10-10T23:57:09Z"
           },
           {
             "cmd": "grep -qE '/api/packages/summary' web/composables/usePackagesApi.ts",
             "exit": 0,
-            "duration_ms": 10,
+            "duration_ms": 8,
             "tail": "",
-            "recorded_at": "2026-10-10T17:00:33Z"
+            "recorded_at": "2026-10-10T23:57:10Z"
           },
           {
             "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/composables/usePackagesApi.ts",
             "exit": 0,
-            "duration_ms": 11,
+            "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T17:00:33Z"
+            "recorded_at": "2026-10-10T23:57:10Z"
           },
           {
             "cmd": "cd web && npx vitest run tests/usePackagesApi.test.ts --reporter=dot",
             "exit": 0,
-            "duration_ms": 8760,
-            "tail": "\n RUN  v5.0.1 /home/user/signalslate/web\n\nstdout | tests/usePackagesApi.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n···············\n\n Test Files  1 passed (1)\n      Tests  15 passed (15)\n   Start at  17:00:36\n   Duration  6.01s (tests 85%, environment 9%, transform 4%, setup 2%, import 1%)",
-            "recorded_at": "2026-10-10T17:00:42Z"
+            "duration_ms": 8630,
+            "tail": "\n RUN  v5.0.1 /home/user/signalslate/web\n\nstdout | tests/usePackagesApi.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n···············\n\n Test Files  1 passed (1)\n      Tests  15 passed (15)\n   Start at  23:57:12\n   Duration  5.65s (tests 83%, environment 10%, transform 4%, setup 2%, import 1%)",
+            "recorded_at": "2026-10-10T23:57:18Z"
           }
         ]
       },
@@ -1357,7 +1357,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T17:04:30Z",
+        "ts": "2026-10-10T23:57:27Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -1365,23 +1365,23 @@
           {
             "cmd": "grep -qE 'DialogShell' web/components/PackageDetailDialog.vue",
             "exit": 0,
-            "duration_ms": 11,
+            "duration_ms": 10,
             "tail": "",
-            "recorded_at": "2026-10-10T17:04:19Z"
+            "recorded_at": "2026-10-10T23:57:18Z"
           },
           {
             "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/PackageDetailDialog.vue",
             "exit": 0,
             "duration_ms": 12,
             "tail": "",
-            "recorded_at": "2026-10-10T17:04:19Z"
+            "recorded_at": "2026-10-10T23:57:18Z"
           },
           {
             "cmd": "cd web && npx vitest run tests/PackageDetailDialog.test.ts --reporter=dot",
             "exit": 0,
-            "duration_ms": 10712,
-            "tail": "\n RUN  v5.0.1 /home/user/signalslate/web\n\nstdout | tests/PackageDetailDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······\n\n Test Files  1 passed (1)\n      Tests  6 passed (6)\n   Start at  17:04:22\n   Duration  7.25s (transform 51%, tests 33%, environment 7%, import 7%, setup 2%)\n\n  Transform  transforming modules took 3.65s · 51% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
-            "recorded_at": "2026-10-10T17:04:30Z"
+            "duration_ms": 8958,
+            "tail": "\n RUN  v5.0.1 /home/user/signalslate/web\n\nstdout | tests/PackageDetailDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······\n\n Test Files  1 passed (1)\n      Tests  6 passed (6)\n   Start at  23:57:21\n   Duration  6.16s (transform 52%, tests 31%, environment 8%, import 7%, setup 1%)\n\n  Transform  transforming modules took 3.13s · 52% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-10-10T23:57:27Z"
           }
         ]
       },
@@ -1418,7 +1418,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T17:05:58Z",
+        "ts": "2026-10-10T23:57:37Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -1426,23 +1426,23 @@
           {
             "cmd": "grep -qE 'DialogShell' web/components/PackageAddDialog.vue",
             "exit": 0,
-            "duration_ms": 11,
+            "duration_ms": 8,
             "tail": "",
-            "recorded_at": "2026-10-10T17:05:49Z"
+            "recorded_at": "2026-10-10T23:57:27Z"
           },
           {
             "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/PackageAddDialog.vue",
             "exit": 0,
-            "duration_ms": 10,
+            "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T17:05:49Z"
+            "recorded_at": "2026-10-10T23:57:27Z"
           },
           {
             "cmd": "cd web && npx vitest run tests/PackageAddDialog.test.ts --reporter=dot",
             "exit": 0,
-            "duration_ms": 9459,
-            "tail": "\n RUN  v5.0.1 /home/user/signalslate/web\n\nstdout | tests/PackageAddDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······\n\n Test Files  1 passed (1)\n      Tests  6 passed (6)\n   Start at  17:05:52\n   Duration  6.25s (transform 47%, tests 36%, environment 8%, import 7%, setup 2%)\n\n  Transform  transforming modules took 2.85s · 47% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
-            "recorded_at": "2026-10-10T17:05:58Z"
+            "duration_ms": 9099,
+            "tail": "\n RUN  v5.0.1 /home/user/signalslate/web\n\nstdout | tests/PackageAddDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······\n\n Test Files  1 passed (1)\n      Tests  6 passed (6)\n   Start at  23:57:30\n   Duration  6.27s (transform 46%, tests 37%, environment 9%, import 7%, setup 2%)\n\n  Transform  transforming modules took 2.79s · 46% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-10-10T23:57:37Z"
           }
         ]
       },
@@ -1485,7 +1485,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T17:08:09Z",
+        "ts": "2026-10-10T23:57:46Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -1493,30 +1493,30 @@
           {
             "cmd": "grep -qE \"to: '/packages'\" web/layouts/default.vue",
             "exit": 0,
-            "duration_ms": 10,
+            "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T17:07:58Z"
+            "recorded_at": "2026-10-10T23:57:37Z"
           },
           {
             "cmd": "grep -qE 'PackageDetailDialog' web/pages/packages.vue",
             "exit": 0,
-            "duration_ms": 9,
+            "duration_ms": 13,
             "tail": "",
-            "recorded_at": "2026-10-10T17:07:58Z"
+            "recorded_at": "2026-10-10T23:57:37Z"
           },
           {
             "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/pages/packages.vue",
             "exit": 0,
-            "duration_ms": 12,
+            "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T17:07:58Z"
+            "recorded_at": "2026-10-10T23:57:37Z"
           },
           {
             "cmd": "cd web && npx vitest run tests/packages.test.ts tests/smoke.test.ts --reporter=dot",
             "exit": 0,
-            "duration_ms": 10508,
-            "tail": "\n RUN  v5.0.1 /home/user/signalslate/web\n\nstdout | tests/smoke.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/packages.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·········\n\n Test Files  2 passed (2)\n      Tests  9 passed (9)\n   Start at  17:08:01\n   Duration  7.30s (transform 55%, tests 28%, environment 9%, import 6%, setup 2%)\n\n  Transform  transforming modules took 7.69s · 55% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
-            "recorded_at": "2026-10-10T17:08:09Z"
+            "duration_ms": 9281,
+            "tail": "\n RUN  v5.0.1 /home/user/signalslate/web\n\nstdout | tests/smoke.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/packages.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·········\n\n Test Files  2 passed (2)\n      Tests  9 passed (9)\n   Start at  23:57:40\n   Duration  6.42s (transform 56%, tests 27%, environment 8%, import 7%, setup 1%)\n\n  Transform  transforming modules took 6.85s · 56% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-10-10T23:57:46Z"
           }
         ]
       },
@@ -1550,7 +1550,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T17:35:04Z",
+        "ts": "2026-10-11T00:00:11Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -1558,16 +1558,16 @@
           {
             "cmd": "venv/bin/python -m pytest tests/test_packages_e2e.py -q",
             "exit": 0,
-            "duration_ms": 2962,
-            "tail": ".                                                                        [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.13/site-packages/starlette/testclient.py:40\n  /home/user/signalslate/venv/lib/python3.13/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 1.97s",
-            "recorded_at": "2026-10-10T17:32:29Z"
+            "duration_ms": 3074,
+            "tail": ".                                                                        [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.13/site-packages/starlette/testclient.py:40\n  /home/user/signalslate/venv/lib/python3.13/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 2.09s",
+            "recorded_at": "2026-10-10T23:57:49Z"
           },
           {
             "cmd": "venv/bin/python -m pytest -q",
             "exit": 0,
-            "duration_ms": 154992,
-            "tail": "]\n........................................................................ [ 83%]\n........................................................................ [ 85%]\n........................................................................ [ 87%]\n........................................................................ [ 89%]\n........................................................................ [ 91%]\n........................................................................ [ 93%]\n........................................................................ [ 95%]\n........................................................................ [ 98%]\n.....................................................................    [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.13/site-packages/starlette/testclient.py:40\n  /home/user/signalslate/venv/lib/python3.13/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/user/signalslate/venv/lib/python3.13/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions\n    warnings.warn(  # deprecated in 14.0 - 2024-11-09\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/user/signalslate/venv/lib/python3.13/site-packages/uvicorn/protocols/websockets/websockets_impl.py:16: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated\n    from websockets.server import WebSocketServerProtocol\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n3450 passed, 3 skipped, 3 warnings in 152.65s (0:02:32)",
-            "recorded_at": "2026-10-10T17:35:04Z"
+            "duration_ms": 141857,
+            "tail": "]\n........................................................................ [ 83%]\n........................................................................ [ 85%]\n........................................................................ [ 87%]\n........................................................................ [ 89%]\n........................................................................ [ 91%]\n........................................................................ [ 93%]\n........................................................................ [ 95%]\n........................................................................ [ 98%]\n.....................................................................    [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.13/site-packages/starlette/testclient.py:40\n  /home/user/signalslate/venv/lib/python3.13/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/user/signalslate/venv/lib/python3.13/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions\n    warnings.warn(  # deprecated in 14.0 - 2024-11-09\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/user/signalslate/venv/lib/python3.13/site-packages/uvicorn/protocols/websockets/websockets_impl.py:16: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated\n    from websockets.server import WebSocketServerProtocol\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n3450 passed, 3 skipped, 3 warnings in 139.54s (0:02:19)",
+            "recorded_at": "2026-10-11T00:00:11Z"
           }
         ]
       },
@@ -1604,7 +1604,7 @@
       "blocked_reason": null,
       "attempts": 0,
       "last_verify": {
-        "ts": "2026-10-10T17:35:51Z",
+        "ts": "2026-10-11T00:00:11Z",
         "ok": true,
         "failed": "",
         "tail": "",
@@ -1612,23 +1612,23 @@
           {
             "cmd": "grep -qE '^## Packages' README.md",
             "exit": 0,
-            "duration_ms": 12,
+            "duration_ms": 9,
             "tail": "",
-            "recorded_at": "2026-10-10T17:35:51Z"
+            "recorded_at": "2026-10-11T00:00:11Z"
           },
           {
             "cmd": "grep -qE '^PACKAGES_REFRESH_CRON=' .env.example",
             "exit": 0,
-            "duration_ms": 18,
+            "duration_ms": 11,
             "tail": "",
-            "recorded_at": "2026-10-10T17:35:51Z"
+            "recorded_at": "2026-10-11T00:00:11Z"
           },
           {
             "cmd": "grep -qE '^USPS_CLIENT_ID=' .env.example",
             "exit": 0,
-            "duration_ms": 11,
+            "duration_ms": 10,
             "tail": "",
-            "recorded_at": "2026-10-10T17:35:51Z"
+            "recorded_at": "2026-10-11T00:00:11Z"
           }
         ]
       },
