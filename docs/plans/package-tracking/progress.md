@@ -49,3 +49,4 @@ Ruling: env — baseline full-suite red was environmental (uninitialised data/di
 ## 2026-10-10T17:35:04Z verify T-022 ok=true
 ## 2026-10-10T17:35:04Z build T-023 start (attempt 1)
 ## 2026-10-10T17:35:52Z verify T-023 ok=true
+## 2026-10-11T00:02:48Z check FAIL check-report.md
