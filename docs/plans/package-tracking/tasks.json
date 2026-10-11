@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-11T01:32:47Z",
+  "updated": "2026-10-11T01:34:45Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1662,11 +1662,39 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "open",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-11T01:34:45Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'test_two_hourly_cron_polls_every_run' tests/test_packages_poll.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-11T01:34:42Z"
+          },
+          {
+            "cmd": "! grep -nE 'DEFAULT_POLL_INTERVAL_HOURS|DEFAULT_STOP_AFTER_DELIVERED_HOURS' pipeline/packages/poll.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-11T01:34:42Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_poll.py tests/test_packages_carriers_base.py -q",
+            "exit": 0,
+            "duration_ms": 2736,
+            "tail": "..................                                                       [100%]\n18 passed in 1.96s",
+            "recorded_at": "2026-10-11T01:34:45Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check-report P0 + minors"
     },
