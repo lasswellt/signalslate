@@ -50,3 +50,4 @@ Ruling: env — baseline full-suite red was environmental (uninitialised data/di
 ## 2026-10-10T17:35:04Z build T-023 start (attempt 1)
 ## 2026-10-10T17:35:52Z verify T-023 ok=true
 ## 2026-10-11T00:02:48Z check FAIL check-report.md
+Ruling: check --fix — survey/critic logic findings are not auto-fixable; appended T-024..T-028 (origin check). T-024 verify names tests/test_packages_carriers_base.py (adapter cache tests live there) (check, main thread)

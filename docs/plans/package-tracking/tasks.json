@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-11T00:02:02Z",
+  "updated": "2026-10-11T01:32:47Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1634,6 +1634,170 @@
       },
       "origin": "plan",
       "notes": "How status is sourced (email first), UPS/USPS developer-key signup (UPS My Choice tip), env keys, privacy (bodies never stored), unsupported cases (Walmart 555, Amazon TBA, eBay)."
+    },
+    {
+      "id": "T-024",
+      "title": "check fix: poll cadence tolerance, settings honoured, adapter cache, carrier error handling",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/poll.py",
+        "pipeline/packages/carriers/base.py",
+        "tests/test_packages_poll.py",
+        "tests/test_packages_carriers_base.py"
+      ],
+      "depends_on": [
+        "T-014"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'test_two_hourly_cron_polls_every_run' tests/test_packages_poll.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'DEFAULT_POLL_INTERVAL_HOURS|DEFAULT_STOP_AFTER_DELIVERED_HOURS' pipeline/packages/poll.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_poll.py tests/test_packages_carriers_base.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "check",
+      "notes": "check-report P0 + minors"
+    },
+    {
+      "id": "T-025",
+      "title": "check fix: summary ETA day bucket, add_package dup detection/409, input bounds, list N+1",
+      "role": "backend",
+      "files": [
+        "api/routers/packages.py",
+        "pipeline/packages/inventory.py",
+        "tests/test_api_packages.py",
+        "tests/test_packages_inventory.py"
+      ],
+      "depends_on": [
+        "T-017"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'test_summary_arriving_today_date_only_eta_west_of_utc' tests/test_api_packages.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'before = len\\(list' api/routers/packages.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_api_packages.py tests/test_packages_inventory.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "check",
+      "notes": "check-report P2 x2 + minors"
+    },
+    {
+      "id": "T-026",
+      "title": "check fix: UPS activity times converted to naive UTC",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/carriers/ups.py",
+        "tests/test_packages_carrier_ups.py"
+      ],
+      "depends_on": [
+        "T-012"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'test_activity_times_are_utc' tests/test_packages_carrier_ups.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_carrier_ups.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "check",
+      "notes": "check-report P2"
+    },
+    {
+      "id": "T-027",
+      "title": "check fix: stale-response guards on packages page and detail dialog; Enter on track link",
+      "role": "frontend",
+      "files": [
+        "web/pages/packages.vue",
+        "web/components/PackageDetailDialog.vue",
+        "web/tests/packages.test.ts",
+        "web/tests/PackageDetailDialog.test.ts"
+      ],
+      "depends_on": [
+        "T-021"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'out of order|stale response' web/tests/packages.test.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'out of order|stale response' web/tests/PackageDetailDialog.test.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/packages.test.ts tests/PackageDetailDialog.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "check",
+      "notes": "check-report survey majors"
+    },
+    {
+      "id": "T-028",
+      "title": "check fix: S10 country-code validation; tighten invalid-number and fixture assertions",
+      "role": "test",
+      "files": [
+        "pipeline/packages/numbers.py",
+        "tests/test_packages_numbers.py",
+        "tests/test_packages_extract.py"
+      ],
+      "depends_on": [
+        "T-007"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'country' pipeline/packages/numbers.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_numbers.py tests/test_packages_extract.py tests/test_packages_data.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": false,
+      "status": "open",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": null,
+      "origin": "check",
+      "notes": "check-report survey minors"
     }
   ]
 }
