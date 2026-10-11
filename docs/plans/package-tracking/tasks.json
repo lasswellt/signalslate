@@ -1,7 +1,7 @@
 {
   "$schema": "blitz-tasks/1.0",
   "plan": "package-tracking",
-  "updated": "2026-10-11T01:35:56Z",
+  "updated": "2026-10-11T01:36:56Z",
   "tasks": [
     {
       "id": "T-001",
@@ -1782,11 +1782,32 @@
           "timeout": 300
         }
       ],
-      "passes": false,
-      "status": "in_progress",
+      "passes": true,
+      "status": "done",
       "blocked_reason": null,
       "attempts": 0,
-      "last_verify": null,
+      "last_verify": {
+        "ts": "2026-10-11T01:36:56Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'test_activity_times_are_utc' tests/test_packages_carrier_ups.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-11T01:36:55Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_carrier_ups.py -q",
+            "exit": 0,
+            "duration_ms": 1022,
+            "tail": ".............                                                            [100%]\n13 passed in 0.52s",
+            "recorded_at": "2026-10-11T01:36:56Z"
+          }
+        ]
+      },
       "origin": "check",
       "notes": "check-report P2"
     },
