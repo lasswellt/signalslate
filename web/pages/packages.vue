@@ -158,6 +158,7 @@
                   aria-label="Open carrier tracking page"
                   data-testid="package-track-link"
                   @click.stop
+                  @keyup.enter.stop
                 />
               </q-td>
               <q-td key="merchant" :props="rowProps">{{ rowProps.row.merchant ?? '—' }}</q-td>
@@ -275,7 +276,9 @@ function carrierLabel(code: string): string {
 }
 
 /** Loads the filtered list plus summary and carrier readiness; `silent` keeps the table on screen. */
+let loadSeq = 0
 async function load(silent = false) {
+  const mine = ++loadSeq
   if (!silent) loading.value = true
   loadError.value = null
   try {
@@ -286,18 +289,20 @@ async function load(silent = false) {
       include_archived: showArchived.value ? true : undefined,
       q: q || undefined,
     })
+    if (mine !== loadSeq) return
     packages.value = rows
     const known = new Set(seenCarriers.value)
     for (const row of rows) known.add(row.carrier)
     seenCarriers.value = [...known].sort()
     // Summary and carrier notice are secondary: their failure must not hide the list.
     const [s, c] = await Promise.allSettled([api.summary(), api.carriers()])
+    if (mine !== loadSeq) return
     if (s.status === 'fulfilled') summary.value = s.value
     if (c.status === 'fulfilled') carriers.value = c.value
   } catch (error) {
-    loadError.value = errorText(error)
+    if (mine === loadSeq) loadError.value = errorText(error)
   } finally {
-    loading.value = false
+    if (mine === loadSeq) loading.value = false
   }
 }
 

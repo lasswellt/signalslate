@@ -168,18 +168,21 @@ const events = computed(() =>
 
 /** Loads the package detail (events and source-email metadata) for the current id. */
 async function load() {
-  if (props.packageId === null) return
+  const id = props.packageId
+  if (id === null) return
+  const isCurrent = () => props.packageId === id && props.modelValue
   loading.value = true
   error.value = null
   actionError.value = null
   confirmingDelete.value = false
   pkg.value = null
   try {
-    pkg.value = await api.getPackage(props.packageId)
+    const result = await api.getPackage(id)
+    if (isCurrent()) pkg.value = result
   } catch (err) {
-    error.value = errorText(err)
+    if (isCurrent()) error.value = errorText(err)
   } finally {
-    loading.value = false
+    if (isCurrent()) loading.value = false
   }
 }
 
@@ -221,7 +224,15 @@ function onModelUpdate(value: boolean) {
 watch(
   () => [props.modelValue, props.packageId] as const,
   ([isOpen]) => {
-    if (isOpen) void load()
+    if (isOpen) {
+      void load()
+    } else {
+      loading.value = false
+      error.value = null
+      pkg.value = null
+      actionError.value = null
+      confirmingDelete.value = false
+    }
   },
   { immediate: true },
 )

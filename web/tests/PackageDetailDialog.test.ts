@@ -150,3 +150,27 @@ describe('loading and errors', () => {
     expect($('package-events')).not.toBeNull()
   })
 })
+
+describe('stale responses', () => {
+  it('shows package 2 when the id changes and responses arrive out of order', async () => {
+    const pending = new Map<string, (value: PackageDetailOut) => void>()
+    vi.stubGlobal('$fetch', (url: string) => {
+      const path = new URL(url).pathname
+      return new Promise<PackageDetailOut>((resolve) => pending.set(path, resolve))
+    })
+    const wrapper = await mountSuspended(PackageDetailDialog, { props: { modelValue: true, packageId: 1 } })
+    mounted.push(wrapper as VueWrapper<unknown>)
+    await flushPromises()
+    await wrapper.setProps({ packageId: 2 })
+    await flushPromises()
+
+    pending.get('/api/packages/2')?.(detail({ id: 2, tracking_number: 'SECOND-PKG' }))
+    await flushPromises()
+    pending.get('/api/packages/1')?.(detail({ id: 1, tracking_number: 'FIRST-PKG' }))
+    await flushPromises()
+
+    const text = $('package-detail-dialog')?.textContent ?? ''
+    expect(text).toContain('SECOND-PKG')
+    expect(text).not.toContain('FIRST-PKG')
+  })
+})

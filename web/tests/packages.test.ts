@@ -186,4 +186,42 @@ describe('packages page', () => {
     })
     expect($('packages-carrier-notice')?.textContent).toContain('API not configured; status comes from email only')
   })
+
+  it('ignores a stale response when list requests resolve out of order', async () => {
+    const page = await mountPage({ packages: [] })
+    const pending: Array<(rows: PackageOut[]) => void> = []
+    vi.stubGlobal('$fetch', async (url: string) => {
+      const path = new URL(url).pathname
+      if (path === '/api/packages') return new Promise<PackageOut[]>((resolve) => pending.push(resolve))
+      if (path === '/api/packages/summary') return SUMMARY
+      if (path === '/api/packages/carriers') return [{ code: 'ups', configured: true }]
+      throw new Error(`unexpected ${path}`)
+    })
+    const select = page.findAllComponents(QSelect).find((s) => s.props('label') === 'Status')
+    select?.vm.$emit('update:modelValue', 'delivered')
+    await flushPromises()
+    select?.vm.$emit('update:modelValue', 'pending')
+    await flushPromises()
+    expect(pending).toHaveLength(2)
+
+    pending[1]([pkg({ id: 2, tracking_number: 'SECOND-ROW', carrier: 'usps' })])
+    await flushPromises()
+    pending[0]([pkg({ id: 1, tracking_number: 'FIRST-ROW' })])
+    await flushPromises()
+
+    const text = $('packages-table')?.textContent ?? ''
+    expect(text).toContain('SECOND-ROW')
+    expect(text).not.toContain('FIRST-ROW')
+  })
+
+  it('Enter on the track link does not open the detail dialog', async () => {
+    await mountPage({ packages: [pkg()] })
+    const link = $('package-track-link')
+    expect(link).toBeTruthy()
+    const init = { key: 'Enter', keyCode: 13, bubbles: true, cancelable: true }
+    link?.dispatchEvent(new KeyboardEvent('keydown', init))
+    link?.dispatchEvent(new KeyboardEvent('keyup', init))
+    await flushPromises()
+    expect($('package-detail-dialog')).toBeNull()
+  })
 })
