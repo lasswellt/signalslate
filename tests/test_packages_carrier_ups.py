@@ -173,3 +173,11 @@ def test_delivered_at_uses_utc_activity_time(adapter, monkeypatch):
     b = body([d], current_type="D", delivery=[{"type": "DEL", "date": "20261003"}])
     use(monkeypatch, FakeRequests(track=Resp(200, b)))
     assert adapter.track(NUMBER).delivered_at == datetime(2026, 10, 3, 19, 15)
+
+
+def test_delivered_at_matches_local_date(adapter, monkeypatch):
+    d = act("D", "Delivered", "20261010", "213000")
+    d["gmtOffset"] = "-05:00"
+    b = body([d], current_type="D", delivery=[{"type": "DEL", "date": "20261010"}])
+    use(monkeypatch, FakeRequests(track=Resp(200, b)))
+    assert adapter.track(NUMBER).delivered_at == datetime(2026, 10, 11, 2, 30)

@@ -20,7 +20,8 @@ Design decisions:
   UPS quota; HTTP 429 from UPS is still honoured by base.request_json.
 - Activity times are stored as naive UTC: prefer gmtDate+gmtTime (already UTC); else the local
   date/time minus gmtOffset; else the local value unchanged (best effort, may be off by the
-  scan location's UTC offset). Date-only fields (deliveryDate / ETA) stay calendar dates at midnight.
+  scan location's UTC offset). Date-only fields (deliveryDate / ETA) stay calendar dates at midnight;
+  the DEL date is matched against the delivered scan's LOCAL date, then that scan's UTC time is used.
 - Only extracted fields are kept; raw responses are never logged or stored.
 """
 import re
@@ -141,6 +142,7 @@ def parse_response(tracking_number: str, body: Any) -> TrackResult:
         raise CarrierNotFound("UPS response has no package")
 
     events: list[TrackEvent] = []
+    delivered_scans: list[tuple[str, datetime]] = []  # (local YYYYMMDD, UTC time)
     for act in package.get(F_ACTIVITY) or []:
         if not isinstance(act, dict):
             continue
@@ -148,6 +150,8 @@ def parse_response(tracking_number: str, body: Any) -> TrackResult:
         status = act.get(F_STATUS) if isinstance(act.get(F_STATUS), dict) else {}
         if when is None:
             continue
+        if _status_of(status) == "delivered":
+            delivered_scans.append((str(act.get(F_DATE)), when))
         events.append(TrackEvent(when, _status_of(status), str(status.get(F_DESC) or "").strip(),
                                  _format_location(act.get(F_LOCATION))))
     events.sort(key=lambda e: e.occurred_at)
@@ -168,12 +172,12 @@ def parse_response(tracking_number: str, body: Any) -> TrackResult:
         elif when and kind in DELIVERY_ETA and eta is None:
             eta = when
     if status == "delivered" and delivered_at is None:
-        delivered = [e.occurred_at for e in events if e.status == "delivered"]
+        delivered = sorted(w for _, w in delivered_scans)
         delivered_at = delivered[-1] if delivered else None
-    if status == "delivered" and delivered_at is not None:
-        # DEL carries a date only; prefer the scan's exact time on the same day.
-        same_day = [e.occurred_at for e in events
-                    if e.status == "delivered" and e.occurred_at.date() == delivered_at.date()]
+    elif status == "delivered" and delivered_at is not None:
+        # DEL carries a local calendar date only; match the scan by its LOCAL date and use its UTC time.
+        want = delivered_at.strftime("%Y%m%d")
+        same_day = sorted(w for local, w in delivered_scans if local == want)
         delivered_at = same_day[-1] if same_day else delivered_at
     return TrackResult(tracking_number, status, tuple(events), eta, delivered_at)
 
