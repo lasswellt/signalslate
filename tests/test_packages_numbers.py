@@ -29,13 +29,45 @@ def test_valid_numbers_classify(carrier, fmt, number):
     assert ms[0].checksum in ((True, None) if has_ck else (None,))
 
 
-@pytest.mark.parametrize("carrier,fmt,number", _cases("invalid"))
+def _declares_checksum(fmt: str) -> bool:
+    return "checksum" in next(
+        t for p in _DIR.glob("*.json") for t in json.loads(p.read_text())["tracking_numbers"]
+        if t["name"] == fmt)["validation"]
+
+
+# DPD's mod_37_36 checksum is not implemented (documented design decision: unknown checksum reports
+# None = unverified, never a false pass), so these jkeen "invalid" samples cannot be told apart from
+# valid numbers by this matcher. Strict xfail: if the checksum is ever implemented they must flip.
+_UNDETECTABLE = {
+    ("dpd", "DPD (28)", "008182709980000020033350276A"),
+    ("dpd", "DPD (14)", "09980000020033D"),
+}
+
+
+def _invalid_params():
+    return [pytest.param(*c, marks=pytest.mark.xfail(
+        strict=True, reason="DPD mod_37_36 checksum unsupported; matcher reports unverified (None)"))
+        if c in _UNDETECTABLE else pytest.param(*c) for c in _cases("invalid")]
+
+
+@pytest.mark.parametrize("carrier,fmt,number", _invalid_params())
 def test_invalid_numbers_fail_or_do_not_match(carrier, fmt, number):
-    if carrier == "s10":
-        pytest.skip("S10 invalid case is an unlisted country code (jkeen 'additional' lookup), not a regex/checksum fault")
+    """An invalid sample must not be accepted as valid by the same carrier/format.
+
+    Accepted means checksum True, or checksum None for a format that has no checksum at all (those
+    pass on shape alone). A failed checksum, a checksum-declaring format that cannot verify, or no
+    match at all counts as not accepted.
+    """
+    has_ck = _declares_checksum(fmt)
     for m in numbers.classify(number):
         if m.carrier == carrier and m.format_name == fmt:
-            assert m.checksum is not True, number
+            # no-checksum format: a shape match is acceptance; checksum format: must fail outright
+            assert has_ck and m.checksum is False, (number, m)
+
+
+def test_s10_unlisted_country_code_rejected():
+    assert not [m for m in numbers.classify("RB123456785XX") if m.carrier == "s10"]
+    assert [m for m in numbers.classify("RB123456785GB") if m.carrier == "s10"]
 
 
 def test_dhl_express_weak_requires_context():

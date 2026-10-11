@@ -14,6 +14,9 @@ Design decisions:
 - A checksum a random number passes too often (DHL Express mod7 passes ~1 in 7, Purolator (12)
   Luhn ~1 in 10) is flagged ``weak``; best_match only accepts it with carrier/waybill context.
   Formats with no checksum are accepted only when the caller saw a tracking label next to them.
+- S10 country codes are data-driven: a courier's ``additional`` entry whose lookup rows carry literal
+  ``matches`` values for the ``CountryCode`` group (S10) becomes an allow-list; a token whose
+  group value is not listed is not a match for that format.
 - Pure functions, no I/O beyond the one-time rule load, no logging of scanned text (privacy: mail
   bodies are never persisted or logged).
 """
@@ -54,6 +57,7 @@ class _Rule:
     search: "re.Pattern[str]"
     full: "re.Pattern[str]"
     validation: dict[str, Any]
+    allowed: dict[str, frozenset[str]]  # regex group name -> permitted literal values (e.g. CountryCode)
 
 
 def _convert(regex: str) -> str:
@@ -66,6 +70,16 @@ def _convert(regex: str) -> str:
         return "(?P<%s>" % (name if seen[name] == 1 else "%s__%d" % (name, seen[name]))
 
     return _NAMED_GROUP.sub(rename, regex).replace(r"\s*", "")
+
+
+def _allowed_values(t: dict[str, Any]) -> dict[str, frozenset[str]]:
+    """Collects the literal ``CountryCode`` lookup (``matches`` values) from a format's ``additional``."""
+    out: dict[str, frozenset[str]] = {}
+    for add in t.get("additional") or []:
+        values = frozenset(row["matches"].upper() for row in add.get("lookup", []) if "matches" in row)
+        if values and add.get("regex_group_name") == "CountryCode":
+            out[add["regex_group_name"]] = values
+    return out
 
 
 def _digits(s: str) -> list[int]:
@@ -138,6 +152,7 @@ def load_rules() -> tuple[_Rule, ...]:
                 search=re.compile(r"(?<![A-Za-z0-9])" + body + r"(?![a-z0-9])"),
                 full=re.compile("^" + body + "$"),
                 validation=t.get("validation", {}),
+                allowed=_allowed_values(t),
             ))
     return tuple(rules)
 
@@ -182,7 +197,7 @@ def classify(token: str) -> list[Match]:
     out: list[Match] = []
     for rule in load_rules():
         m = next((x for x in (rule.full.match(f) for f in forms) if x), None)
-        if m:
+        if m and all(m.groupdict().get(g) in vals for g, vals in rule.allowed.items()):
             out.append(Match(rule.carrier, rule.name, _check(rule, m),
                              (rule.carrier, rule.name) in _WEAK_FORMATS))
     return out

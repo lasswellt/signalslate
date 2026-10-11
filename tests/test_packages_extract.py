@@ -22,9 +22,12 @@ def _mail(sender: str, subject: str, plain: str, links: Sequence[str] = ()) -> M
 @pytest.mark.parametrize("case", _CASES, ids=[c["name"] for c in _CASES])
 def test_extraction_case(case: dict) -> None:
     exp = case["expect"]
-    if "carrier" not in exp and "tracking_number" not in exp:
-        pytest.skip("status-only expectation (non-shipping noise); classification is out of scope")
     ships = extract(_mail(case["sender"], case["subject"], case["plain"], case["links"]))
+    if "carrier" not in exp and "tracking_number" not in exp:
+        # status-only expectation (non-shipping noise): order-only shipments, which
+        # inventory.apply_email drops without a status signal.
+        assert all(s.tracking_number is None for s in ships), ships
+        return
     assert len(ships) == 1, ships
     ship = ships[0]
     assert ship.carrier == exp["carrier"]
@@ -35,6 +38,10 @@ def test_extraction_case(case: dict) -> None:
         assert ship.confidence == exp["confidence"]
     if "merchant" in exp:
         assert ship.merchant == exp["merchant"]
+    if "reference" in exp:
+        assert ship.order_id == exp["reference"]  # FedEx "Reference:" lands in order_id
+    if exp.get("poll") is False:
+        assert ship.carrier not in ("ups", "usps")  # no carrier adapter would poll it
 
 
 def test_order_labeled_number_is_never_tracking() -> None:
