@@ -18,6 +18,9 @@ Design decisions:
 - adapters() imports ups/usps lazily so this module has no dependency on them. ups.py registers
   as "ups" and usps.py as "usps" by exposing a module-level `adapter()` factory returning a
   CarrierAdapter; unconfigured adapters are omitted.
+- Adapter instances are cached at module level per carrier, keyed by the configured credentials, so
+  RateLimiter windows and OAuth token caches survive across scheduler runs. A credential change
+  (key rotation) rebuilds the adapter on the next call.
 """
 import importlib
 import logging
@@ -31,7 +34,7 @@ from typing import Any, Callable, Optional, Protocol
 
 import requests
 
-from pipeline.packages import STATUSES
+from pipeline.packages import STATUSES, packages_settings
 
 _log = logging.getLogger(__name__)
 
@@ -325,6 +328,16 @@ def request_json(method: str, url: str, *, headers: Optional[dict] = None,
 
 
 _missing_logged: set[str] = set()
+_adapter_cache: dict[str, tuple[tuple[str, str], CarrierAdapter]] = {}
+_adapter_cache_lock = threading.Lock()
+
+
+def _credential_key(code: str) -> tuple[str, str]:
+    """The configured (client id, client secret) pair for a carrier code; empty strings if unset."""
+    s = packages_settings()
+    if code == "ups":
+        return (s.ups_client_id or "", s.ups_client_secret or "")
+    return (s.usps_client_id or "", s.usps_client_secret or "")
 
 
 def adapters() -> dict[str, CarrierAdapter]:
@@ -332,21 +345,29 @@ def adapters() -> dict[str, CarrierAdapter]:
     Configured carrier adapters keyed by carrier code ("ups", "usps").
 
     Each carrier module exposes a module-level `adapter()` factory. A module that does not exist
-    yet or fails to import is skipped, logged once per process.
+    yet or fails to import is skipped, logged once per process. Instances are cached per carrier
+    and rebuilt only when that carrier's credentials change.
 
     Returns:
         Mapping of carrier code to adapter, containing only adapters whose configured() is True.
     """
     found: dict[str, CarrierAdapter] = {}
     for code in ("ups", "usps"):
-        try:
-            module = importlib.import_module(f"pipeline.packages.carriers.{code}")
-            candidate: CarrierAdapter = module.adapter()
-        except ImportError:
-            if code not in _missing_logged:
-                _missing_logged.add(code)
-                _log.info("carrier adapter %s unavailable (module not importable)", code)
-            continue
+        key = _credential_key(code)
+        with _adapter_cache_lock:
+            cached = _adapter_cache.get(code)
+            if cached is not None and cached[0] == key:
+                candidate = cached[1]
+            else:
+                try:
+                    module = importlib.import_module(f"pipeline.packages.carriers.{code}")
+                    candidate = module.adapter()
+                except ImportError:
+                    if code not in _missing_logged:
+                        _missing_logged.add(code)
+                        _log.info("carrier adapter %s unavailable (module not importable)", code)
+                    continue
+                _adapter_cache[code] = (key, candidate)
         if candidate.configured():
             found[candidate.code] = candidate
     return found

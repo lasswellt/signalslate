@@ -7,13 +7,18 @@ Design decisions:
   sefl, unknown and order-level packages (no tracking number) have no adapter or number and are
   never selected.
 - Due = tracking number present, not archived, not returned, not delivered longer than
-  stop_after_delivered_hours ago, and next_check_at empty or <= now. Oldest next_check_at first
-  so a rate-limited run starves nobody.
-- Cadence: a successful poll sets next_check_at = now + poll_interval_hours. Not-found backs off
-  12h because carriers can take a while to know a fresh number.
+  stop_after_delivered_hours ago, and next_check_at empty or <= now + DUE_TOLERANCE. Oldest
+  next_check_at first so a rate-limited run starves nobody.
+- Cadence: a successful poll sets next_check_at = now + poll_interval_hours, with both hours read
+  from packages_settings(). now is taken after the scan, so a 2-hourly cron fires slightly
+  before next_check_at; DUE_TOLERANCE (10 minutes) keeps that package due on the next fire
+  instead of waiting a whole extra interval. Not-found backs off 12h because carriers can take
+  a while to know a fresh number.
 - Rate limiting and auth failures stop that carrier for the rest of the run (other carriers keep
-  going). Rate limiting leaves next_check_at alone so the next run retries; auth errors touch no
-  package and surface as "not authorized" in the per-carrier errors map.
+  going) and record the exception class name in that package's last_error. Rate limiting leaves
+  next_check_at alone so the next run retries; auth errors surface as "not authorized" in the
+  per-carrier errors map. Generic failures stop the carrier after MAX_CONSECUTIVE_FAILURES in a
+  row so an outage cannot hold the scheduler thread for every remaining package.
 - Nothing is raised to the scheduler. Logs carry exception class names only. One commit per
   package so a later failure never loses earlier progress.
 - adapters_override lets tests inject real adapter objects implementing the CarrierAdapter protocol.
@@ -28,8 +33,7 @@ from sqlmodel import select
 from pipeline import db
 from pipeline.clock import utcnow
 from pipeline.db import Package
-from pipeline.packages import (DEFAULT_POLL_INTERVAL_HOURS, DEFAULT_STOP_AFTER_DELIVERED_HOURS,
-                               inventory)
+from pipeline.packages import inventory, packages_settings
 from pipeline.packages.carriers import base
 from pipeline.packages.carriers.base import (CarrierAdapter, CarrierAuthError, CarrierError,
                                              CarrierNotFound, CarrierRateLimited)
@@ -37,6 +41,8 @@ from pipeline.packages.carriers.base import (CarrierAdapter, CarrierAuthError, C
 _log = logging.getLogger(__name__)
 
 NOT_FOUND_BACKOFF_HOURS = 12
+DUE_TOLERANCE = timedelta(minutes=10)
+MAX_CONSECUTIVE_FAILURES = 3
 
 
 @dataclass
@@ -80,9 +86,11 @@ def refresh_due(now: Optional[datetime] = None, *,
     if not adapters:
         return result
 
-    interval = timedelta(hours=DEFAULT_POLL_INTERVAL_HOURS)
-    stop_after = timedelta(hours=DEFAULT_STOP_AFTER_DELIVERED_HOURS)
+    settings = packages_settings()
+    interval = timedelta(hours=settings.poll_interval_hours)
+    stop_after = timedelta(hours=settings.stop_after_delivered_hours)
     stopped: set[str] = set()
+    failures: dict[str, int] = {}
 
     with db.get_session() as session:
         candidates = session.exec(
@@ -90,7 +98,7 @@ def refresh_due(now: Optional[datetime] = None, *,
             .where(Package.carrier.in_(list(adapters)))
             .where(Package.tracking_number.is_not(None))
             .where(Package.archived == False)  # noqa: E712 - SQL comparison
-            .where((Package.next_check_at.is_(None)) | (Package.next_check_at <= now))
+            .where((Package.next_check_at.is_(None)) | (Package.next_check_at <= now + DUE_TOLERANCE))
             .order_by(Package.next_check_at.asc(), Package.id.asc())
         ).all()
         ids = [p.id for p in candidates if _is_due(p, now, stop_after)]
@@ -108,8 +116,14 @@ def refresh_due(now: Optional[datetime] = None, *,
                 package.next_check_at = now + interval
                 package.last_error = None
                 result.polled += 1
+                failures[carrier] = 0
             except CarrierRateLimited as exc:
                 session.rollback()
+                name = type(exc).__name__
+                package = session.get(Package, package_id)
+                package.last_error = name
+                session.add(package)
+                session.commit()
                 stopped.add(carrier)
                 result.errors[carrier] = "rate limited"
                 _log.warning("packages poll: %s %s, stopping carrier for this run",
@@ -117,6 +131,10 @@ def refresh_due(now: Optional[datetime] = None, *,
                 continue
             except CarrierAuthError as exc:
                 session.rollback()
+                package = session.get(Package, package_id)
+                package.last_error = type(exc).__name__
+                session.add(package)
+                session.commit()
                 stopped.add(carrier)
                 result.errors[carrier] = "not authorized"
                 _log.warning("packages poll: %s %s, stopping carrier for this run",
@@ -129,6 +147,7 @@ def refresh_due(now: Optional[datetime] = None, *,
                 package.last_error = "not found"
                 package.next_check_at = now + timedelta(hours=NOT_FOUND_BACKOFF_HOURS)
                 result.polled += 1
+                failures[carrier] = 0
             except Exception as exc:  # CarrierError and anything unexpected; never reach scheduler
                 session.rollback()
                 name = type(exc).__name__
@@ -140,6 +159,11 @@ def refresh_due(now: Optional[datetime] = None, *,
                 package.next_check_at = now + interval
                 result.errors[carrier] = name
                 result.polled += 1
+                failures[carrier] = failures.get(carrier, 0) + 1
+                if failures[carrier] >= MAX_CONSECUTIVE_FAILURES:
+                    stopped.add(carrier)
+                    _log.warning("packages poll: %s failed %d times in a row, stopping carrier",
+                                 carrier, failures[carrier])
             session.add(package)
             session.commit()
     return result
