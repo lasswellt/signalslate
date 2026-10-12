@@ -1,13 +1,13 @@
 {
   "$schema": "blitz-ratchet/1.0",
-  "ref": "dc26e87d2d21f36ff6c0fedf4816fa2c8b2e938e",
-  "plan": "package-tracking",
-  "updated_at": "2026-10-11T01:48:02Z",
+  "ref": "deca0d4881f293d68be323e408a271a63ae3c9ab",
+  "plan": "gmail-collector",
+  "updated_at": "2026-10-12T05:27:24Z",
   "metrics": {
     "test_count": {
       "baseline": 404,
-      "current": 441,
-      "min_allowed": 441,
+      "current": 445,
+      "min_allowed": 445,
       "direction": "up",
       "note": "web vitest it()/test() in web/tests; python tests tracked by pytest (2903 passing)"
     },
@@ -104,6 +104,20 @@
       "ref": "dc26e87d2d21f36ff6c0fedf4816fa2c8b2e938e",
       "plan": "package-tracking",
       "test_count": 441
+    },
+    {
+      "ref": "deca0d4881f293d68be323e408a271a63ae3c9ab",
+      "plan": "gmail-collector",
+      "ts": "2026-10-12T05:27:24Z",
+      "metrics": {
+        "test_count": 445,
+        "type_errors": 0,
+        "as_any_count": 0,
+        "mocks_in_src": 0,
+        "todo_count": 0,
+        "stale_worktree_branch_count": 0
+      },
+      "note": "check --scope plan gmail-collector: test_count 441->445 (tightened); python suite 3472 passing from a clean checkout"
     }
   ]
 }

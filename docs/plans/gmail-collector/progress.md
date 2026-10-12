@@ -67,3 +67,5 @@ Ruling: defer — T-024 changed one message: a NON-JSON non-200 token response n
 ## 2026-09-21T05:22:25Z verify T-024 ok=true
 ## 2026-09-21T05:22:25Z build T-025 start (attempt 1)
 ## 2026-09-21T05:24:46Z verify T-025 ok=true
+Ruling: cannot-verify — T-007 and T-024 verify[0] grep auth/gmail_bootstrap.py for symbols management-ui T-014 (a6388b4) moved to pipeline/oauth_google.py; behaviour verified by held-out checks and tests/test_gmail_bootstrap.py; both tasks blocked test-assertion-suspect until a human re-points the checks (needs human: one path edit each)
+## 2026-10-12T05:34:21Z check FAIL check-report.md

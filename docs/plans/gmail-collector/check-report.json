@@ -1,31 +1,72 @@
 {
   "$schema": "blitz-check-report/1.0",
   "result": "FAIL",
-  "ts": "2026-09-21T05:08:29Z",
-  "ref": "5f85deb31f1353d8de2e226fa56c4fff914ba458",
+  "ts": "2026-10-12T05:34:21Z",
+  "ref": "deca0d4881f293d68be323e408a271a63ae3c9ab",
   "scope": "plan",
   "plan": "gmail-collector",
-  "stacks": ["python"],
+  "stacks": [
+    "python"
+  ],
   "lanes": {
-    "deterministic": {"selected": 19, "ran": 15, "pass": 14, "finding": 1, "error": 0},
-    "semantic": {"selected": 3, "ran": 3, "pass": 1, "finding": 2, "error": 0}
+    "deterministic": {
+      "selected": 19,
+      "ran": 17,
+      "pass": 14,
+      "finding": 0,
+      "error": 1,
+      "skipped": 2,
+      "note": "det-06, det-10, check:test-tamper hits FP-verified as false positives; det-12 mypy lane unconfigured recorded as error/skipped; det-17, det-18 not applicable"
+    },
+    "semantic": {
+      "selected": 3,
+      "ran": 3,
+      "pass": 1,
+      "finding": 2,
+      "error": 0,
+      "note": "security 1 warning (0.75), backend 1 warning (0.50): both advisory band"
+    }
   },
   "findings": [
-    {"id": "survey:backend", "severity": "P1", "where": "pipeline/collectors/gmail.py:_decode_part -> pipeline/triage.py:triage_items", "what": "sender-chosen charset (unicode_escape, raw_unicode_escape, utf-7) yields a lone surrogate in bodyText; triage_items with the real SDK raises UnicodeEncodeError, breaking its never-raises contract (reproduced end to end)."},
-    {"id": "survey:security", "severity": "P3", "where": "pipeline/collectors/gmail.py:_TextExtractor", "what": "self-closing hidden tags (<div style=display:none/>) leak their text; bypass of the hidden-content guarantee (reproduced). Listed Major."},
-    {"id": "survey:patterns", "severity": "P2", "where": "pipeline/triage.py:265", "what": "mutant removing sanitize_text on the stub sender name survives 212 tests (test gap on a security-relevant path)."},
-    {"id": "survey:security", "severity": "P3", "where": "auth/gmail_bootstrap.py:exchange_code", "what": "non-200 JSON array body raises AttributeError instead of TokenExchangeError (reproduced)."},
-    {"id": "survey:patterns", "severity": "P3", "where": "tests", "what": "surviving mutants: --dry writing a DB row, log_message printing the auth code, head/title masking in _SKIP_TAGS."},
-    {"id": "det-12", "severity": "P0", "where": "repo", "what": "pyright reports 54 errors, identical to the pre-plan main baseline (0 introduced); the absolute type-error floor trips on pre-existing debt only."}
+    {
+      "id": "verify:T-007",
+      "severity": "P1",
+      "where": "docs/plans/gmail-collector/tasks.json T-007 verify[0]",
+      "what": "grep -qE def build_auth_url auth/gmail_bootstrap.py fails; symbol moved to pipeline/oauth_google.py:57 in a6388b4 (management-ui T-014); behaviour intact, held-out ok"
+    },
+    {
+      "id": "verify:T-024",
+      "severity": "P1",
+      "where": "docs/plans/gmail-collector/tasks.json T-024 verify[0]",
+      "what": "grep -qE isinstance(.*dict auth/gmail_bootstrap.py fails; guard moved to pipeline/oauth_google.py:141 in a6388b4; behaviour intact, held-out ok"
+    },
+    {
+      "id": "survey:security",
+      "severity": "P3",
+      "where": "pipeline/triage.py:164",
+      "what": "sanitize_text runs backtracking regexes before truncate(); 80 KB subject 7.1 s, 8 KB 68 ms"
+    },
+    {
+      "id": "survey:backend",
+      "severity": "P3",
+      "where": "pipeline/collectors/gmail.py:487",
+      "what": "access token never refreshed mid-run; backfills over ~6000 paced gets end partial"
+    }
   ],
-  "cannot_verify": [
-    {"what": "after:/before: boundary, RFC 2047 header decoding, max MIME depth, Gmail header-size limits", "needs": "real account dry run"},
-    {"what": "lone surrogate in Gmail JSON headers/snippet without the charset trick", "needs": "live messages.get of a CESU-8 or bad encoded-word subject"},
-    {"what": "digest renderer escaping/markdown/autolink of triage text", "needs": "renderer (Phase 4)"},
-    {"what": "outcome-lock race in wait_for_code", "needs": "stress test"}
-  ],
-  "critic": {"mode": "reject", "verdict": "LGTM"},
-  "tasks": {"verified": 19, "failed": 0},
-  "held_out": {"total": 22, "ok": 21, "not_ok": 1, "note": "the one failing extra check reproduces finding 1; the skill treats a failing held-out check as a REJECT while the critic returned LGTM because it is not a new defect. Result is FAIL either way."},
-  "mutation": {"run": 84, "killed": 76}
+  "cannot_verify": [],
+  "critic": {
+    "mode": "reject",
+    "verdict": "REJECT",
+    "effort": "high",
+    "held_out_ok": 25,
+    "held_out_total": 25
+  },
+  "tasks": {
+    "verified": 23,
+    "failed": 2,
+    "blocked": [
+      "T-007",
+      "T-024"
+    ]
+  }
 }
