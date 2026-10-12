@@ -25,8 +25,9 @@ export interface StatusMeta {
 
 const UNKNOWN: StatusMeta = { color: 'grey', icon: 'help', label: 'Unknown' }
 
-/** Turns `likely_available` / `not_ready` into `Likely available` / `Not ready`; `ok` stays `OK`. */
-function humanize(value: string): string {
+/** Status-specific label: `likely_available` -> `Likely available`, `ok` -> `OK` (unlike utils/format's
+ * humanize(), which has no OK special case and takes a fallback). */
+function statusLabel(value: string): string {
   const spaced = value.replace(/[_-]+/g, ' ').trim()
   if (!spaced) return 'Unknown'
   if (spaced.toLowerCase() === 'ok') return 'OK'
@@ -58,8 +59,8 @@ const RUN_HEALTH_ICON: Record<string, string> = {
 function runHealthMeta(value: string): StatusMeta {
   const key = value.toLowerCase()
   const color = RUN_HEALTH_COLOR[key]
-  if (!color) return { ...UNKNOWN, label: humanize(value) }
-  return { color, icon: RUN_HEALTH_ICON[key], label: humanize(value) }
+  if (!color) return { ...UNKNOWN, label: statusLabel(value) }
+  return { color, icon: RUN_HEALTH_ICON[key], label: statusLabel(value) }
 }
 
 // Domain purchase status. `domains.vue`'s purchaseStatusColor only ever compared against
@@ -68,30 +69,30 @@ function runHealthMeta(value: string): StatusMeta {
 function purchaseMeta(value: string): StatusMeta {
   const key = value.toLowerCase()
   if (key === 'submitted' || key === 'confirmed' || key === 'succeeded') {
-    return { color: 'positive', icon: 'check_circle', label: humanize(value) }
+    return { color: 'positive', icon: 'check_circle', label: statusLabel(value) }
   }
   if (key === 'failed' || key === 'refused') {
-    return { color: 'negative', icon: 'error', label: humanize(value) }
+    return { color: 'negative', icon: 'error', label: statusLabel(value) }
   }
   if (key === 'pending') {
-    return { color: 'warning', icon: 'schedule', label: humanize(value) }
+    return { color: 'warning', icon: 'schedule', label: statusLabel(value) }
   }
   if (key === 'unknown') {
     return { color: 'grey', icon: 'help', label: 'Unknown' }
   }
-  return { color: 'grey', icon: 'help', label: humanize(value) }
+  return { color: 'grey', icon: 'help', label: statusLabel(value) }
 }
 
 // Job application status (web/pages/jobs.vue applicationStatusColor).
 function applicationMeta(value: string): StatusMeta {
   const key = value.toLowerCase()
   if (key === 'submitted' || key === 'interviewing') {
-    return { color: 'positive', icon: 'check_circle', label: humanize(value) }
+    return { color: 'positive', icon: 'check_circle', label: statusLabel(value) }
   }
   if (key === 'rejected' || key === 'withdrawn') {
-    return { color: 'negative', icon: 'error', label: humanize(value) }
+    return { color: 'negative', icon: 'error', label: statusLabel(value) }
   }
-  return { color: 'grey', icon: 'schedule', label: humanize(value) }
+  return { color: 'grey', icon: 'schedule', label: statusLabel(value) }
 }
 
 // Desktop-assist application state (api/routers/job_apply.py _ASSIST_STATES).
@@ -117,8 +118,8 @@ const ASSIST_ICON: Record<string, string> = {
 function assistMeta(value: string): StatusMeta {
   const key = value.toLowerCase()
   const color = ASSIST_COLOR[key]
-  if (!color) return { ...UNKNOWN, label: humanize(value) }
-  return { color, icon: ASSIST_ICON[key], label: humanize(value) }
+  if (!color) return { ...UNKNOWN, label: statusLabel(value) }
+  return { color, icon: ASSIST_ICON[key], label: statusLabel(value) }
 }
 
 // Domain idea availability (web/components/DomainIdeasPanel.vue statusColor/statusLabel).
@@ -142,7 +143,7 @@ const PACKAGE_META: Record<string, StatusMeta> = {
 }
 
 function packageMeta(value: string): StatusMeta {
-  return PACKAGE_META[value.toLowerCase()] ?? { ...UNKNOWN, label: humanize(value) }
+  return PACKAGE_META[value.toLowerCase()] ?? { ...UNKNOWN, label: statusLabel(value) }
 }
 
 /** Clamps a possibly-out-of-range fraction/score into [0, 1] before scaling to a percent label. */

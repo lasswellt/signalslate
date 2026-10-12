@@ -37,19 +37,16 @@ from fastapi import APIRouter, Body, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Discriminator, SecretStr, Tag, model_validator
 from sqlmodel import select
 
-from api.serialize import iso_z
+from api.errors import coded
+from api.serialize import iso_z, scrub
 from pipeline import config_store, connections, db, health
 from pipeline.crypto import SecretDecryptError, SecretKeyMissing
 from pipeline.domains import inventory
 from pipeline.domains.registrars import AuthFailed, IpNotWhitelisted, NotEligible, RateLimited, RegistrarError
-from pipeline.redact import redact
 
 router = APIRouter(tags=["connections"])
 
 _log = logging.getLogger(__name__)
-
-# Same cap the runner applies to text it persists: applied after redaction, never before.
-_MAX_TEXT = 1000
 
 # Mirrors pipeline/domains/inventory.py's own _REGISTRAR_KINDS: the connections.KINDS entries with
 # a Registrar adapter (inventory.registrar_for) instead of a pipeline.health check_* counterpart.
@@ -197,17 +194,6 @@ class CheckResult(BaseModel):
     detail: str
 
 
-def _scrub(text: Optional[str], known: list[str]) -> Optional[str]:
-    """redact() never raises; `known` is passed in so a list reads the store once."""
-    if text is None:
-        return None
-    return redact(text, known, max_len=_MAX_TEXT)
-
-
-def _coded(status_code: int, code: str, message: str) -> HTTPException:
-    return HTTPException(status_code, {"code": code, "message": message})
-
-
 def _translate(exc: Exception) -> HTTPException:
     """
     Maps what pipeline.connections and pipeline.crypto raise to an HTTP error. Only the field name
@@ -216,13 +202,13 @@ def _translate(exc: Exception) -> HTTPException:
     if isinstance(exc, connections.ConnectionNotFound):
         return HTTPException(404, "Connection not found")
     if isinstance(exc, connections.DuplicateConnection):
-        return _coded(409, "duplicate_connection", "A connection with this id already exists")
+        return coded(409, "duplicate_connection", "A connection with this id already exists")
     if isinstance(exc, connections.InvalidConnection):
         return HTTPException(422, [{"type": "value_error", "loc": ["body", exc.field], "msg": exc.message}])
     if isinstance(exc, SecretKeyMissing):
-        return _coded(503, "secret_key_missing", "No encryption key is configured; secrets cannot be stored")
+        return coded(503, "secret_key_missing", "No encryption key is configured; secrets cannot be stored")
     if isinstance(exc, SecretDecryptError):
-        return _coded(503, "secret_decrypt_failed", "Stored secrets cannot be decrypted with the installed key")
+        return coded(503, "secret_decrypt_failed", "Stored secrets cannot be decrypted with the installed key")
     raise exc
 
 
@@ -252,7 +238,7 @@ def _to_out(
         active=connection_active.get(view.id, True) if view.kind in _REGISTRAR_KINDS else active.get(view.id, False),
         health=None
         if row is None
-        else HealthOut(status=row.status, detail=_scrub(row.detail, known), checked_at=iso_z(row.checked_at)),
+        else HealthOut(status=row.status, detail=scrub(row.detail, known), checked_at=iso_z(row.checked_at)),
     )
 
 
@@ -284,7 +270,7 @@ def _roll_back_create(connection_id: str, had_tombstone: bool) -> None:
 
 
 def _store_inactive() -> HTTPException:
-    return _coded(503, "store_inactive", "The connection store is not active, so this connection cannot be enabled")
+    return coded(503, "store_inactive", "The connection store is not active, so this connection cannot be enabled")
 
 
 @router.get("/connections", response_model=list[ConnectionOut])
@@ -416,4 +402,4 @@ def run_connection_test(connection_id: str) -> CheckResult:
         _log.warning("connection test for %s raised %s", view.id, type(exc).__name__)
         return CheckResult(status="error", detail="The check could not be completed")
     status: Literal["ok", "error"] = "ok" if result.status == "ok" else "error"
-    return CheckResult(status=status, detail=_scrub(result.detail, connections.secret_values()) or "")
+    return CheckResult(status=status, detail=scrub(result.detail, connections.secret_values()) or "")

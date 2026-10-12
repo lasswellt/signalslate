@@ -19,6 +19,7 @@ from typing import Callable, Iterator, Mapping, Optional, TypeGuard
 import msal
 import requests
 from dotenv import dotenv_values
+from sqlmodel import select
 
 from pipeline import connections, db, tokencache
 
@@ -729,70 +730,30 @@ def check_slack(label: str, token: Optional[str]) -> HealthResult:
     return HealthResult(source, "ok", f"user={data['user']} team={data['team']}, {len(granted)} scopes")
 
 
-def check_domains() -> HealthResult:
+def _check_local_table(source: str, model: type, noun: str) -> HealthResult:
     """
-    "domains" is always healthy: it reads only the local DomainSnapshot table (no network, no
-    credentials — see pipeline.collectors.domains), so there is nothing to authenticate and an
-    empty portfolio is not a failure. Only a broken DB session counts as unhealthy.
-
-    Imported locally, matching dispatch()'s own local import of pipeline.collectors.domains: this
-    module is imported by nearly everything (see module docstring), so a module-level import of the
-    database layer here should stay avoidable even though pipeline.db itself doesn't import back.
+    A local-DB source ("domains", "jobs", "packages") is always healthy: it reads only its own
+    table (no network, no credentials; see pipeline.collectors.<source>), so there is nothing to
+    authenticate and an empty table is not a failure. Only a broken DB session counts as unhealthy.
     """
-    from sqlmodel import select
-
-    from pipeline import db
-    from pipeline.db import Domain
-
     try:
         with db.get_session() as session:
-            count = len(session.exec(select(Domain)).all())
+            count = len(session.exec(select(model)).all())
     except Exception as exc:  # noqa: BLE001 — a health check must report, never crash the run
-        return HealthResult("domains", "error", type(exc).__name__)
-    return HealthResult("domains", "ok", f"{count} domain(s) tracked")
+        return HealthResult(source, "error", type(exc).__name__)
+    return HealthResult(source, "ok", f"{count} {noun}")
+
+
+def check_domains() -> HealthResult:
+    return _check_local_table("domains", db.Domain, "domain(s) tracked")
 
 
 def check_jobs() -> HealthResult:
-    """
-    "jobs" is always healthy: it reads only the local JobCompany table (no network, no
-    credentials — see pipeline.collectors.jobs), so there is nothing to authenticate and an empty
-    watchlist is not a failure. Only a broken DB session counts as unhealthy.
-
-    Imported locally, matching dispatch()'s own local import of pipeline.collectors.jobs and
-    check_domains()'s local import of pipeline.db: this module is imported by nearly everything
-    (see module docstring), so a module-level import of the database layer here should stay
-    avoidable even though pipeline.db itself doesn't import back.
-    """
-    from sqlmodel import select
-
-    from pipeline import db
-    from pipeline.db import JobCompany
-
-    try:
-        with db.get_session() as session:
-            count = len(session.exec(select(JobCompany)).all())
-    except Exception as exc:  # noqa: BLE001 — a health check must report, never crash the run
-        return HealthResult("jobs", "error", type(exc).__name__)
-    return HealthResult("jobs", "ok", f"{count} companies tracked")
+    return _check_local_table("jobs", db.JobCompany, "companies tracked")
 
 
 def check_packages() -> HealthResult:
-    """
-    "packages" is always healthy: it reads only the local Package table (no network, no
-    credentials — see pipeline.collectors.packages). Only a broken DB session counts as unhealthy.
-    Imported locally for the same reason as check_domains().
-    """
-    from sqlmodel import select
-
-    from pipeline import db
-    from pipeline.db import Package
-
-    try:
-        with db.get_session() as session:
-            count = len(session.exec(select(Package)).all())
-    except Exception as exc:  # noqa: BLE001 — a health check must report, never crash the run
-        return HealthResult("packages", "error", type(exc).__name__)
-    return HealthResult("packages", "ok", f"{count} packages tracked")
+    return _check_local_table("packages", db.Package, "packages tracked")
 
 
 def zoom_declared() -> bool:

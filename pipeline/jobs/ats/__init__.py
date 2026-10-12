@@ -13,20 +13,22 @@ Design decisions:
 - match_any_url() tolerates a not-yet-implemented kind (ModuleNotFoundError) instead of crashing:
   only greenhouse/lever/etc. land per-task, so discover.py (a later step) needs to keep working
   against whichever adapters currently exist rather than erroring until all 11 are in.
-- fetch_json() mirrors pipeline/domains/intel.py's _fetch_json(): module-level _sleep indirection
-  so tests replace it with a list-appending fake instead of waiting, _MAX_ATTEMPTS/
-  _BACKOFF_SECONDS/_RETRYABLE_STATUS constants, and a typed result rather than raising for an
-  expected failure (a private/unknown board 404s constantly; that's not exceptional). Unlike
-  intel.py this also honors a Retry-After header — ATS APIs research doc Q6 explicitly calls for
-  it ("poll politely... honor 429/Retry-After") — parsed as delta-seconds and used as the sleep
-  instead of the fixed backoff when present, since the server is telling us exactly how long to
-  wait rather than us guessing.
+- fetch_json()/fetch_text()/post_json() share one retry core (_request_with_retry) and mirror
+  pipeline/domains/intel.py's _fetch_json(): module-level _sleep indirection so tests replace it
+  with a list-appending fake instead of waiting, _MAX_ATTEMPTS/_BACKOFF_SECONDS/_RETRYABLE_STATUS
+  constants, and a typed result rather than raising for an expected failure (a private/unknown
+  board 404s constantly; that's not exceptional). Unlike intel.py this also honors a Retry-After
+  header — ATS APIs research doc Q6 explicitly calls for it ("poll politely... honor
+  429/Retry-After") — parsed as delta-seconds and used as the sleep instead of the fixed backoff
+  when present, since the server is telling us exactly how long to wait rather than us guessing.
+  Every adapter routes its HTTP through these three, and tests stub the network at
+  pipeline.jobs.ats.requests and pipeline.jobs.ats._sleep.
 """
 import importlib
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Optional, Protocol
+from typing import Any, Callable, Optional, Protocol
 
 import requests
 
@@ -161,34 +163,28 @@ def _retry_after_seconds(response: "requests.Response") -> Optional[float]:
         return None
 
 
-def fetch_json(
-    url: str, *, params: Optional[dict] = None, headers: Optional[dict] = None
+def _request_with_retry(
+    send: Callable[[], "requests.Response"], parse: Callable[["requests.Response"], Any]
 ) -> tuple[Any, str, Optional[str]]:
     """
-    GETs url with up to _MAX_ATTEMPTS tries, retrying a transient failure with backoff.
-
-    Args:
-        url: The endpoint to GET.
-        params: Query parameters, passed through to requests.get.
-        headers: Extra headers merged over the descriptive User-Agent every request already sends.
+    Runs `send()` up to _MAX_ATTEMPTS times, retrying a transient failure with backoff, then
+    `parse(response)` on a 2xx/3xx response.
 
     Returns:
         (data, status, error), matching pipeline/domains/intel.py's _fetch_json() contract:
-          - status="ok": data is the response's decoded JSON body; error is None.
+          - status="ok": data is parse(response); error is None.
           - status="unavailable": every attempt failed transiently (a timeout, connection error, or
             a retryable 429/5xx status); data is None and error is the last exception class name or
             an "HTTP<code>" marker. A retryable response carrying a Retry-After header sleeps that
             long instead of the fixed backoff before the next attempt.
           - status="error": the request failed for a non-transient reason (a non-retryable HTTP
-            status) or the response body was not valid JSON; data is None and error names it.
+            status) or parse() raised ValueError (a body that is not valid JSON); data is None and
+            error names it.
     """
-    request_headers = {"User-Agent": _USER_AGENT, **(headers or {})}
     last_error: Optional[str] = None
     for attempt in range(_MAX_ATTEMPTS):
         try:
-            response = requests.get(
-                url, params=params, headers=request_headers, timeout=_HTTP_TIMEOUT
-            )
+            response = send()
         except requests.RequestException as exc:
             last_error = type(exc).__name__
             if attempt < _MAX_ATTEMPTS - 1:
@@ -206,8 +202,46 @@ def fetch_json(
             return None, "error", f"HTTP{response.status_code}"
 
         try:
-            return response.json(), "ok", None
+            return parse(response), "ok", None
         except ValueError as exc:
             return None, "error", type(exc).__name__
 
     return None, "unavailable", last_error
+
+
+def fetch_json(
+    url: str, *, params: Optional[dict] = None, headers: Optional[dict] = None
+) -> tuple[Any, str, Optional[str]]:
+    """
+    GETs url and decodes its JSON body; see _request_with_retry() for the (data, status, error)
+    contract. `headers` are merged over the descriptive User-Agent every request already sends.
+    """
+    request_headers = {"User-Agent": _USER_AGENT, **(headers or {})}
+    return _request_with_retry(
+        lambda: requests.get(url, params=params, headers=request_headers, timeout=_HTTP_TIMEOUT),
+        lambda response: response.json(),
+    )
+
+
+def fetch_text(url: str) -> tuple[Optional[str], str, Optional[str]]:
+    """
+    GETs url and returns its raw body (HTML, XML), for the adapters whose feed is not JSON; same
+    (text, status, error) contract as fetch_json().
+    """
+    headers = {"User-Agent": _USER_AGENT}
+    return _request_with_retry(
+        lambda: requests.get(url, headers=headers, timeout=_HTTP_TIMEOUT),
+        lambda response: response.text,
+    )
+
+
+def post_json(url: str, payload: dict) -> tuple[Any, str, Optional[str]]:
+    """
+    POSTs a JSON body to url and decodes the JSON response (Workday's CXS API requires POST); same
+    (data, status, error) contract as fetch_json().
+    """
+    headers = {"User-Agent": _USER_AGENT, "Content-Type": "application/json"}
+    return _request_with_retry(
+        lambda: requests.post(url, json=payload, headers=headers, timeout=_HTTP_TIMEOUT),
+        lambda response: response.json(),
+    )

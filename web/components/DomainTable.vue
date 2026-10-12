@@ -62,7 +62,6 @@
 </template>
 
 <script setup lang="ts">
-import { parseUtc } from '~/composables/useApi'
 import { mailBadges, type MailBadge } from '~/utils/status'
 import type { DomainOut } from '~/composables/useDomainsApi'
 
@@ -110,13 +109,6 @@ const pagination = { rowsPerPage: 25 }
  */
 function sourceLabel(row: DomainOut): string {
   return row.connection_id ? humanize(row.connection_id) : humanize(row.source)
-}
-
-function daysUntil(value: string | null): number | null {
-  if (!value) return null
-  const target = parseUtc(value).getTime()
-  if (Number.isNaN(target)) return null
-  return Math.ceil((target - Date.now()) / 86_400_000)
 }
 
 // Sorting needs a comparable number: unknown expiry sorts last (Infinity), not first.

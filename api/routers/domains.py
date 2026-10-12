@@ -16,7 +16,7 @@ Design decisions:
   for a registrar-sourced "owned" row: that row is still actively synced, so removing it via this
   endpoint would just have it reappear (missing_since cleared) on the next POST /domains/sync. A
   manual row, or any row a user has marked "watched", has no such sync putting it back.
-- Errors are {code, message} (api.routers.connections._coded pattern) and never echo a registrar
+- Errors are {code, message} (api.errors.coded) and never echo a registrar
   response body or raw exception text — only str(ValueError) from normalize_domain/add_manual,
   which is already a fixed, credential-free message.
 - Every module-level pipeline.domains function is imported by module (not by name) so tests can
@@ -28,10 +28,12 @@ import logging
 from dataclasses import asdict
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, HTTPException, Response
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import APIRouter, Response
+from pydantic import BaseModel, ConfigDict
 from sqlmodel import col, select
 
+from api.errors import coded
+from api.schemas import ImportBody, ImportOut
 from api.serialize import iso_z
 from pipeline import db
 from pipeline.db import Domain, DomainSnapshot
@@ -44,9 +46,6 @@ router = APIRouter(tags=["domains"])
 
 _log = logging.getLogger(__name__)
 
-# A pasted CSV import body is capped well above any real portfolio (one line per domain) but far
-# short of a request that could tie up the worker thread parsing it.
-_MAX_IMPORT_CHARS = 200_000
 _MAX_SNAPSHOT_HISTORY = 30
 
 
@@ -99,22 +98,6 @@ class AddBody(BaseModel):
     ownership: Literal["owned", "watched"] = "owned"
 
 
-class ImportBody(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    csv: str = Field(max_length=_MAX_IMPORT_CHARS)
-
-
-class RejectedRow(BaseModel):
-    line: int
-    reason: str
-
-
-class ImportOut(BaseModel):
-    added: list[str]
-    rejected: list[RejectedRow]
-
-
 class EgressIpOut(BaseModel):
     # "unknown" (never null) on lookup failure, matching current_egress_ip()'s own contract; the
     # connection form treats it as "could not detect" and leaves the field for the user to fill in.
@@ -154,10 +137,6 @@ class InspectOut(BaseModel):
     rdap: dict[str, Any]
     data_hash: str
     intel: Optional[dict[str, Any]] = None
-
-
-def _coded(status_code: int, code: str, message: str) -> HTTPException:
-    return HTTPException(status_code, {"code": code, "message": message})
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -231,7 +210,7 @@ def _get_domain(normalized: str) -> Domain:
     with db.get_session() as session:
         row = session.exec(select(Domain).where(Domain.name == normalized)).first()
         if row is None:
-            raise _coded(404, "domain_not_found", "Domain not found")
+            raise coded(404, "domain_not_found", "Domain not found")
         session.expunge(row)
         return row
 
@@ -273,11 +252,11 @@ def get_domain(name: str) -> DomainDetailOut:
     try:
         normalized, _tld = normalize_domain(name)
     except ValueError:
-        raise _coded(404, "domain_not_found", "Domain not found") from None
+        raise coded(404, "domain_not_found", "Domain not found") from None
     with db.get_session() as session:
         row = session.exec(select(Domain).where(Domain.name == normalized)).first()
         if row is None:
-            raise _coded(404, "domain_not_found", "Domain not found")
+            raise coded(404, "domain_not_found", "Domain not found")
         assert row.id is not None  # row came from a select() on the DB, so it always has a primary key
         snapshots = session.exec(
             select(DomainSnapshot)
@@ -302,7 +281,7 @@ def add_domain(body: AddBody) -> DomainOut:
     try:
         row = inventory.add_manual(body.name, body.ownership)
     except ValueError as exc:
-        raise _coded(422, "invalid_domain", str(exc)) from None
+        raise coded(422, "invalid_domain", str(exc)) from None
     with db.get_session() as session:
         return _domain_out(row, session)
 
@@ -316,12 +295,12 @@ def delete_domain(name: str) -> Response:
     try:
         normalized, _tld = normalize_domain(name)
     except ValueError:
-        raise _coded(404, "domain_not_found", "Domain not found") from None
+        raise coded(404, "domain_not_found", "Domain not found") from None
     row = _get_domain(normalized)
     if row.missing_since is not None:
-        raise _coded(404, "domain_not_found", "Domain not found")
+        raise coded(404, "domain_not_found", "Domain not found")
     if row.source != "manual" and row.ownership != "watched":
-        raise _coded(
+        raise coded(
             409,
             "registrar_owned",
             "This domain is owned via a registrar sync; remove the connection or watch it instead",
@@ -333,11 +312,7 @@ def delete_domain(name: str) -> Response:
 @router.post("/domains/import", response_model=ImportOut)
 def import_domains(body: ImportBody) -> ImportOut:
     """Bulk add_manual() from CSV/plain text, one domain (or "domain,ownership") per line."""
-    result = inventory.import_csv(body.csv)
-    return ImportOut(
-        added=result.added,
-        rejected=[RejectedRow(line=line_number, reason=reason) for line_number, reason in result.rejected],
-    )
+    return ImportOut.from_result(inventory.import_csv(body.csv))
 
 
 @router.post("/domains/sync", response_model=SyncOut)
@@ -361,7 +336,7 @@ def inspect_domain(body: InspectBody) -> InspectOut:
     try:
         normalized, _tld = normalize_domain(body.name)
     except ValueError as exc:
-        raise _coded(422, "invalid_domain", str(exc)) from None
+        raise coded(422, "invalid_domain", str(exc)) from None
 
     data = domain_snapshot.inspect(normalized)
     intel_out: Optional[dict[str, Any]] = None

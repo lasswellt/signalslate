@@ -33,6 +33,7 @@ import requests
 
 from pipeline import connections
 from pipeline.domains.registrars import (
+    TIMEOUT,
     AuthFailed,
     Contact,
     PurchaseResult,
@@ -44,7 +45,6 @@ from pipeline.domains.registrars import (
 
 _log = logging.getLogger(__name__)
 
-_TIMEOUT = 30
 _ALL_DOMAINS_URL = "https://public-api.wordpress.com/rest/v1.1/all-domains"
 
 
@@ -121,7 +121,7 @@ class WordPressClient:
 
     def _get(self, url: str) -> Any:
         try:
-            response = requests.get(url, headers=_auth_headers(self._config), timeout=_TIMEOUT)
+            response = requests.get(url, headers=_auth_headers(self._config), timeout=TIMEOUT)
         except requests.RequestException:
             raise RegistrarError("WordPress.com API request failed") from None
         if response.status_code in (401, 403):

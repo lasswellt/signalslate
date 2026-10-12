@@ -44,6 +44,7 @@ from defusedxml.common import DefusedXmlException
 from pipeline import connections
 from pipeline.domains.registrars._egress import current_egress_ip
 from pipeline.domains.registrars import (
+    TIMEOUT,
     AuthFailed,
     Contact,
     IpNotWhitelisted,
@@ -53,21 +54,19 @@ from pipeline.domains.registrars import (
     RateLimited,
     RegistrarDomain,
     RegistrarError,
+    domain_tld,
 )
 
 _log = logging.getLogger(__name__)
 
-_TIMEOUT = 30
 _XML_NS_URI = "http://api.namecheap.com/xml.response"
 _NS = {"nc": _XML_NS_URI}
 _ENDPOINT_PATH = "/xml.response"
 # Namecheap API FAQ (verified 2026-09-21, docs/_research/2026-09-21_domain-collector.md Finding 3):
-# production vs. sandbox hosts, and the 50/min, 700/hour, 8000/day per-key rate limits below.
+# production vs. sandbox hosts. The documented per-key limits (50/min, 700/hour, 8000/day) are not
+# enforced client-side; a 429 surfaces as RateLimited.
 _PRODUCTION_HOST = "https://api.namecheap.com"
 _SANDBOX_HOST = "https://api.sandbox.namecheap.com"
-RATE_LIMIT_PER_MINUTE = 50
-RATE_LIMIT_PER_HOUR = 700
-RATE_LIMIT_PER_DAY = 8000
 
 _CMD_GET_LIST = "namecheap.domains.getList"
 _CMD_CHECK = "namecheap.domains.check"
@@ -202,10 +201,6 @@ def _parse_domain(entry: Any) -> RegistrarDomain:
     )
 
 
-def _domain_tld(name: str) -> str:
-    return name.rsplit(".", 1)[-1] if "." in name else name
-
-
 def _find_tld_price(category: Any, tld: str) -> Optional[tuple[Decimal, str]]:
     """
     Within one <ProductCategory> node, the 1-year price for <Product Name="tld">, or None when the
@@ -265,7 +260,7 @@ class NamecheapClient:
             **params,
         }
         try:
-            response = requests.get(f"{self._host}{_ENDPOINT_PATH}", params=query, timeout=_TIMEOUT)
+            response = requests.get(f"{self._host}{_ENDPOINT_PATH}", params=query, timeout=TIMEOUT)
         except requests.RequestException:
             raise RegistrarError("Namecheap API request failed") from None
         try:
@@ -335,7 +330,7 @@ class NamecheapClient:
             renewal_price: Optional[Decimal] = _to_decimal(entry.get("PremiumRenewalPrice"))
             currency = _ACCOUNT_CURRENCY
         else:
-            tld = _domain_tld(name)
+            tld = domain_tld(name)
             pricing = self._fetch_register_pricing(tld)
             if pricing is None:
                 # Never a Quote carrying Decimal("0"): a purchase price-cap guard comparing

@@ -1,24 +1,11 @@
-from typing import Optional
-
 from fastapi import APIRouter
 
 from api.scheduler import next_run_time
-from api.serialize import iso_z
+from api.serialize import iso_z, scrub
 from pipeline import config_store, connections, health
 from pipeline.db import latest_run, latest_source_health
-from pipeline.redact import redact
 
 router = APIRouter(tags=["status"])
-
-# Free text on a run or a health row can quote a provider response, which can carry a credential.
-_MAX_TEXT = 1000
-
-
-def _scrub(text: Optional[str], known: list[str]) -> Optional[str]:
-    if text is None:
-        return None
-    return redact(text, known, max_len=_MAX_TEXT)
-
 
 @router.get("/status")
 def get_status():
@@ -40,15 +27,15 @@ def get_status():
             "status": run.status,
             "started_at": iso_z(run.started_at),
             "finished_at": iso_z(run.finished_at),
-            "summary": _scrub(run.summary, known),
-            "error": _scrub(run.error, known),
+            "summary": scrub(run.summary, known),
+            "error": scrub(run.error, known),
         },
         "next_scheduled_run": iso_z(next_run_time()),
         "source_health": [
             {
                 "source": h.source,
                 "status": h.status,
-                "detail": _scrub(h.detail, known),
+                "detail": scrub(h.detail, known),
                 "checked_at": iso_z(h.checked_at),
             }
             for h in source_rows

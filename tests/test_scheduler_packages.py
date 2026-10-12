@@ -107,4 +107,4 @@ def test_start_scheduler_registers_packages_job(monkeypatch):
 
 def test_next_packages_run_time_none_when_unscheduled():
     assert scheduler._scheduler.get_job(scheduler.PACKAGES_JOB_ID) is None
-    assert scheduler.next_packages_run_time() is None
+    assert scheduler.next_run_time(scheduler.PACKAGES_JOB_ID) is None

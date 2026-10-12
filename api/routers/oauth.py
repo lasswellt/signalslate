@@ -44,6 +44,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from api.errors import coded
 from api.routers.connections import ConnectionOut, _out_for
 from api.security import normalize_origin
 from api.serialize import iso_z
@@ -130,10 +131,6 @@ class FlowStatusOut(BaseModel):
     reason: Optional[str] = None
 
 
-def _coded(status_code: int, code: str, message: str) -> HTTPException:
-    return HTTPException(status_code, {"code": code, "message": message})
-
-
 # Order matters: a subclass is listed before its base. Microsoft's and WordPress.com's errors subclass
 # the Gmail ones, so matching the Gmail class covers all three providers.
 _FLOW_ERRORS: tuple[tuple[type[FlowError], int, str], ...] = (
@@ -162,16 +159,16 @@ def _translate(exc: Exception) -> HTTPException:
     if isinstance(exc, FlowError):
         for kind, status_code, code in _FLOW_ERRORS:
             if isinstance(exc, kind):
-                return _coded(status_code, code, exc.message)
-        return _coded(400, "sign_in_failed", exc.message)
+                return coded(status_code, code, exc.message)
+        return coded(400, "sign_in_failed", exc.message)
     if isinstance(exc, connections.ConnectionNotFound):
-        return _coded(404, "connection_not_found", "Connection not found")
+        return coded(404, "connection_not_found", "Connection not found")
     if isinstance(exc, connections.ConnectionError):
-        return _coded(409, "connection_error", "The connection could not be updated")
+        return coded(409, "connection_error", "The connection could not be updated")
     if isinstance(exc, SecretKeyMissing):
-        return _coded(503, "secret_key_missing", "No encryption key is configured; secrets cannot be stored")
+        return coded(503, "secret_key_missing", "No encryption key is configured; secrets cannot be stored")
     if isinstance(exc, SecretDecryptError):
-        return _coded(503, "secret_decrypt_failed", "Stored secrets cannot be decrypted with the installed key")
+        return coded(503, "secret_decrypt_failed", "Stored secrets cannot be decrypted with the installed key")
     raise exc
 
 
@@ -247,14 +244,14 @@ def start_sign_in(provider: str, body: StartBody, response: Response) -> StartOu
     """
     expected_kind = _KIND_FOR_PROVIDER.get(provider)
     if expected_kind is None:
-        raise _coded(404, "unknown_provider", "Unknown sign-in provider")
+        raise coded(404, "unknown_provider", "Unknown sign-in provider")
     view = connections.get(body.connection_id)
     if view is None:
-        raise _coded(404, "connection_not_found", "Connection not found")
+        raise coded(404, "connection_not_found", "Connection not found")
     if view.kind != expected_kind:
-        raise _coded(400, "provider_kind_mismatch", "This connection cannot sign in with that provider")
+        raise coded(400, "provider_kind_mismatch", "This connection cannot sign in with that provider")
     if body.mode == "callback" and health.public_base_url() is None:
-        raise _coded(400, "callback_unavailable", oauth_gmail.CallbackUnavailable.message)
+        raise coded(400, "callback_unavailable", oauth_gmail.CallbackUnavailable.message)
     try:
         result = _start(provider, body.connection_id, body.mode)
     except _HANDLED as exc:
@@ -290,7 +287,7 @@ def paste_sign_in(provider: str, body: PasteBody, request: Request, response: Re
     (token endpoint), 503 (secret store, token cache).
     """
     if provider not in _KIND_FOR_PROVIDER:
-        raise _coded(404, "unknown_provider", "Unknown sign-in provider")
+        raise coded(404, "unknown_provider", "Unknown sign-in provider")
     cookie = COOKIE_PREFIX + body.flow_id
     failure: Optional[Exception] = None
     try:

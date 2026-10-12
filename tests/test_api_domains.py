@@ -17,12 +17,13 @@ from sqlmodel import SQLModel, create_engine
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from api import schemas as api_schemas  # noqa: E402
 from api.routers import domains as domains_router  # noqa: E402
 from api.security import install_security  # noqa: E402
 from pipeline import db  # noqa: E402
 from pipeline.clock import utcnow  # noqa: E402
 from pipeline.db import Domain, DomainSnapshot  # noqa: E402
-from pipeline.domains.inventory import ImportResult, SnapshotStatus, SyncStatus  # noqa: E402
+from pipeline.domains.inventory import SnapshotStatus, SyncStatus  # noqa: E402
 from pipeline.domains.intel import ArchivedUrlsResult, SubdomainsResult  # noqa: E402
 
 WRITE = {"X-Requested-With": "signalslate"}
@@ -214,7 +215,7 @@ def test_import_csv_adds_and_rejects_rows(client):
 
 
 def test_import_csv_too_large_is_422(client):
-    resp = client.post("/api/domains/import", json={"csv": "a" * (domains_router._MAX_IMPORT_CHARS + 1)})
+    resp = client.post("/api/domains/import", json={"csv": "a" * (api_schemas.MAX_IMPORT_CHARS + 1)})
     assert resp.status_code == 422
 
 

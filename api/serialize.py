@@ -3,23 +3,22 @@ Output formatting shared by the API routers.
 
 Every stored datetime is naive UTC (pipeline.clock.utcnow). Serialized bare, it becomes
 "2026-09-21T10:00:00" with no zone, and browsers parse that as LOCAL time, so a timestamp shown
-in the UI would be off by the viewer's UTC offset. Sending an explicit Z removes the ambiguity.
+in the UI would be off by the viewer's UTC offset. iso_z (pipeline.clock) sends an explicit Z.
 """
-from datetime import datetime, timezone
 from typing import Optional
 
+from pipeline.clock import iso_z
+from pipeline.redact import redact
 
-def iso_z(dt: Optional[datetime]) -> Optional[str]:
-    """
-    Formats a datetime as YYYY-MM-DDTHH:MM:SSZ.
+__all__ = ["MAX_TEXT", "iso_z", "scrub"]
 
-    dt: a naive UTC datetime (the storage convention), or None. A timezone-aware value is
-    converted to UTC first rather than mislabelled. Sub-second precision is dropped: nothing in
-    the UI needs it and a fixed width keeps the string trivially comparable.
-    Returns None for None.
-    """
-    if dt is None:
+# Same cap the runner applies to text it persists: applied after redaction, never before. Free text
+# on a run, a health row or a dry-run payload can quote a provider response that carries a credential.
+MAX_TEXT = 1000
+
+
+def scrub(text: Optional[str], known: list[str]) -> Optional[str]:
+    """redact() with the known secret values and the MAX_TEXT cap; None passes through. Never raises."""
+    if text is None:
         return None
-    if dt.tzinfo is not None:
-        dt = dt.astimezone(timezone.utc)
-    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return redact(text, known, max_len=MAX_TEXT)

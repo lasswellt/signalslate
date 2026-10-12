@@ -44,6 +44,7 @@ from urllib.parse import quote, urlparse
 import requests
 
 from pipeline import connections
+from pipeline.clock import iso_z
 from pipeline.collectors import CollectionResult, Item, parse_iso
 from pipeline.health import ZoomAuthError, zoom_mode, zoom_token
 
@@ -120,8 +121,8 @@ def list_summaries(token: str, since: datetime, until: datetime) -> list[dict]:
     params = {
         # OpenAPI spec: yyyy-MM-dd'T'HH:mm:ss'Z' UTC, not date-only — a date-only `from`/`to` is
         # silently reinterpreted and can shift the window by up to a day.
-        "from": since.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "to": until.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "from": iso_z(since),
+        "to": iso_z(until),
         "time_filter_field": "summary_created_time",
         "page_size": PAGE_SIZE,
     }

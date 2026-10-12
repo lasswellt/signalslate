@@ -99,11 +99,12 @@ import uuid
 from pathlib import Path
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import col, select
 
+from api.errors import coded
 from api.serialize import iso_z
 from pipeline import db
 from pipeline.clock import utcnow
@@ -125,10 +126,6 @@ _MAX_LIST_ITEMS = 50
 # A single Workday/Greenhouse page can carry far more fillable inputs than _MAX_LIST_ITEMS allows
 # for the small progress-report lists, so the /propose body gets its own, roomier cap.
 _MAX_PROPOSE_FIELDS = 300
-
-
-def _coded(status_code: int, code: str, message: str) -> HTTPException:
-    return HTTPException(status_code, {"code": code, "message": message})
 
 
 def _json_list(value: Optional[str]) -> list[Any]:
@@ -307,11 +304,11 @@ def upload_resume(body: ResumeUploadBody) -> ResumeUploadOut:
     try:
         content = base64.b64decode(body.content_b64, validate=True)
     except (binascii.Error, ValueError):
-        raise _coded(422, "invalid_base64", "content_b64 could not be decoded") from None
+        raise coded(422, "invalid_base64", "content_b64 could not be decoded") from None
     if len(content) > _RESUME_MAX_BYTES:
-        raise _coded(422, "resume_too_large", f"resume exceeds {_RESUME_MAX_BYTES} bytes")
+        raise coded(422, "resume_too_large", f"resume exceeds {_RESUME_MAX_BYTES} bytes")
     if not content.startswith(_PDF_MAGIC):
-        raise _coded(422, "not_a_pdf", "resume must be a PDF file")
+        raise coded(422, "not_a_pdf", "resume must be a PDF file")
 
     resumes_dir = DB_PATH.parent / "jobs" / "resumes"
     resumes_dir.mkdir(parents=True, exist_ok=True)
@@ -537,12 +534,12 @@ def create_application(body: ApplicationCreateBody) -> ApplicationOut:
     with db.get_session() as session:
         posting = session.get(JobPosting, body.posting_id)
         if posting is None:
-            raise _coded(404, "posting_not_found", "Posting not found")
+            raise coded(404, "posting_not_found", "Posting not found")
         existing = session.exec(
             select(JobApplication).where(JobApplication.posting_id == body.posting_id)
         ).first()
         if existing is not None:
-            raise _coded(409, "application_exists", "An application already exists for this posting")
+            raise coded(409, "application_exists", "An application already exists for this posting")
         row = JobApplication(posting_id=body.posting_id)
         session.add(row)
         session.commit()
@@ -558,11 +555,11 @@ def update_application_status(id: int, body: ApplicationStatusBody) -> Applicati
     with db.get_session() as session:
         row = session.get(JobApplication, id)
         if row is None:
-            raise _coded(404, "application_not_found", "Application not found")
+            raise coded(404, "application_not_found", "Application not found")
         try:
             apply.transition(row, body.status)
         except ValueError as exc:
-            raise _coded(422, "illegal_transition", str(exc)) from None
+            raise coded(422, "illegal_transition", str(exc)) from None
         if row.status == "submitted":
             row.submitted_at = utcnow()
         session.add(row)
@@ -580,10 +577,10 @@ def prepare_application_packet(id: int) -> ApplicationOut:
     with db.get_session() as session:
         row = session.get(JobApplication, id)
         if row is None:
-            raise _coded(404, "application_not_found", "Application not found")
+            raise coded(404, "application_not_found", "Application not found")
         ok, reason = packet.prepare_packet(session, id)
         if not ok:
-            raise _coded(422, "packet_failed", reason)
+            raise coded(422, "packet_failed", reason)
         session.refresh(row)
         posting_title, company_name = _posting_title_and_company(session, row.posting_id)
         return _application_out(row, posting_title, company_name)
@@ -595,7 +592,7 @@ def edit_application_packet(id: int, body: PacketEditBody) -> ApplicationOut:
     with db.get_session() as session:
         row = session.get(JobApplication, id)
         if row is None:
-            raise _coded(404, "application_not_found", "Application not found")
+            raise coded(404, "application_not_found", "Application not found")
         packet_data: dict[str, Any] = json.loads(row.packet) if row.packet else {"screening_drafts": []}
         packet_data["cover_letter_text"] = body.cover_letter_text
         row.packet = json.dumps(packet_data, ensure_ascii=False)
@@ -654,11 +651,11 @@ def queue_assist(id: int) -> ApplicationOut:
     with db.get_session() as session:
         row = session.get(JobApplication, id)
         if row is None:
-            raise _coded(404, "application_not_found", "Application not found")
+            raise coded(404, "application_not_found", "Application not found")
         if row.status != "ready":
-            raise _coded(422, "not_ready", "Application status must be 'ready' to queue assist")
+            raise coded(422, "not_ready", "Application status must be 'ready' to queue assist")
         if row.assist_state in _ASSIST_ACTIVE_STATES:
-            raise _coded(409, "assist_already_active", "An assist session is already active for this application")
+            raise coded(409, "assist_already_active", "An assist session is already active for this application")
         row.assist_state = "queued"
         session.add(row)
         session.commit()
@@ -691,9 +688,9 @@ def claim_assist(id: int) -> ApplicationOut:
     with db.get_session() as session:
         row = session.get(JobApplication, id)
         if row is None:
-            raise _coded(404, "application_not_found", "Application not found")
+            raise coded(404, "application_not_found", "Application not found")
         if row.assist_state != "queued":
-            raise _coded(409, "not_queued", "Application is not currently queued for assist")
+            raise coded(409, "not_queued", "Application is not currently queued for assist")
         row.assist_state = "claimed"
         row.assist_session_id = uuid.uuid4().hex
         session.add(row)
@@ -710,13 +707,13 @@ def update_assist_session(session_id: str, body: AssistSessionUpdateBody) -> App
     the fields provided: assist_state (validated), filled_fields (appended to assist_log, never
     replacing it) and approved_answers (upserted into AnswerBank via _insert_answer)."""
     if body.assist_state is not None and body.assist_state not in _ASSIST_STATES:
-        raise _coded(422, "unknown_assist_state", f"assist_state must be one of {sorted(_ASSIST_STATES)}")
+        raise coded(422, "unknown_assist_state", f"assist_state must be one of {sorted(_ASSIST_STATES)}")
     with db.get_session() as session:
         row = session.exec(
             select(JobApplication).where(JobApplication.assist_session_id == session_id)
         ).first()
         if row is None:
-            raise _coded(404, "session_not_found", "No application has this assist session id")
+            raise coded(404, "session_not_found", "No application has this assist session id")
 
         if body.assist_state is not None:
             row.assist_state = body.assist_state
@@ -774,7 +771,7 @@ def propose_session_values(session_id: str, body: ProposeBody) -> list[FieldProp
             select(JobApplication).where(JobApplication.assist_session_id == session_id)
         ).first()
         if row is None:
-            raise _coded(404, "session_not_found", "No application has this assist session id")
+            raise coded(404, "session_not_found", "No application has this assist session id")
         profile = _get_or_create_profile(session)
         proposals = mapping.propose_values(body.fields, profile)
     return [FieldProposalOut(**proposal.model_dump()) for proposal in proposals]
@@ -787,11 +784,11 @@ def get_application_file(id: int, kind: Literal["cover_letter", "resume"]):
     with db.get_session() as session:
         row = session.get(JobApplication, id)
         if row is None:
-            raise _coded(404, "application_not_found", "Application not found")
+            raise coded(404, "application_not_found", "Application not found")
         stored_path = getattr(row, _FILE_PATH_FIELDS[kind])
     if not stored_path:
-        raise _coded(404, "file_not_set", f"No {kind} file recorded for this application")
+        raise coded(404, "file_not_set", f"No {kind} file recorded for this application")
     path = Path(stored_path)
     if not path.exists():
-        raise _coded(404, "file_missing", f"{kind} file missing on disk")
+        raise coded(404, "file_missing", f"{kind} file missing on disk")
     return FileResponse(path, media_type="application/pdf", filename=path.name)

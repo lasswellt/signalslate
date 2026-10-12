@@ -8,7 +8,6 @@ The traps these pin, all from docs/_research/2026-09-13_phase2-collectors.md:
   - Zoom UUIDs containing "/" must be double-encoded.
 """
 import base64
-import copy
 import json
 import os
 import sys

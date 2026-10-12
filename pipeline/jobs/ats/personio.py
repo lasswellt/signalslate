@@ -5,11 +5,8 @@ Design decisions:
 
 - Personio's public XML job feed (`GET https://{company}.jobs.personio.de/xml`, live-verified in
   this project's research doc, root `<workzag-jobs>` with repeated `<position>` children) is XML,
-  not JSON, so this adapter cannot route through pipeline.jobs.ats.fetch_json() (which only
-  decodes JSON bodies). _fetch_text() is a module-local mirror of fetch_json()'s retry/backoff/
-  Retry-After structure (_MAX_ATTEMPTS/_RETRYABLE_STATUS/_sleep pattern), returning the raw
-  response body instead of parsed JSON, matching workday.py's precedent of a module-local helper
-  for a request shape pipeline.jobs.ats.fetch_json() doesn't cover.
+  not JSON, so this adapter routes through pipeline.jobs.ats.fetch_text() (the raw-body sibling
+  of fetch_json(), same retry/backoff/Retry-After core).
 - Parses with defusedxml.ElementTree, never stdlib xml.etree.ElementTree: this project already
   depends on defusedxml==0.7.1 specifically to avoid XXE/billion-laughs-style entity-expansion
   attacks against untrusted XML fetched from arbitrary company subdomains.
@@ -29,84 +26,15 @@ Design decisions:
   description inline, so list_postings() needs exactly one GET.
 """
 import re
-import time
 from typing import Optional
 
-import requests
 from defusedxml.ElementTree import ParseError, fromstring
 
-from pipeline.jobs.ats import BoardInfo, RawPosting
+from pipeline.jobs.ats import BoardInfo, RawPosting, fetch_text
 
 _FEED_URL = "https://{company}.jobs.personio.de/xml"
 
 _URL_PATTERN = re.compile(r"https?://([A-Za-z0-9-]+)\.jobs\.personio\.(?:de|com)", re.IGNORECASE)
-
-_HTTP_TIMEOUT = 15
-_MAX_ATTEMPTS = 3
-_BACKOFF_SECONDS = 5.0
-_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
-
-_USER_AGENT = "SignalSlate JobsCollector/1.0 (+https://github.com/lasswellt/signalslate)"
-
-# Indirection so tests neither wait nor depend on real timing (pipeline/jobs/ats's own pattern).
-_sleep = time.sleep
-
-
-def _retry_after_seconds(response: "requests.Response") -> Optional[float]:
-    """The Retry-After header's value in seconds, or None when absent/unparseable (only the
-    delta-seconds form is handled, matching pipeline.jobs.ats._retry_after_seconds)."""
-    raw = response.headers.get("Retry-After")
-    if not raw:
-        return None
-    try:
-        return max(0.0, float(raw))
-    except ValueError:
-        return None
-
-
-def _fetch_text(url: str) -> tuple[Optional[str], str, Optional[str]]:
-    """
-    GETs url with up to _MAX_ATTEMPTS tries, retrying a transient failure with backoff.
-
-    Args:
-        url: The endpoint to GET.
-
-    Returns:
-        (text, status, error), mirroring pipeline.jobs.ats.fetch_json()'s contract but returning
-        the raw response body instead of decoded JSON:
-          - status="ok": text is the response body; error is None.
-          - status="unavailable": every attempt failed transiently (timeout, connection error, or
-            a retryable 429/5xx status); text is None and error names the last failure. A
-            retryable response carrying a Retry-After header sleeps that long instead of the fixed
-            backoff before the next attempt.
-          - status="error": the request failed for a non-transient reason (a non-retryable HTTP
-            status, e.g. 404); text is None and error names it.
-    """
-    headers = {"User-Agent": _USER_AGENT}
-    last_error: Optional[str] = None
-    for attempt in range(_MAX_ATTEMPTS):
-        try:
-            response = requests.get(url, headers=headers, timeout=_HTTP_TIMEOUT)
-        except requests.RequestException as exc:
-            last_error = type(exc).__name__
-            if attempt < _MAX_ATTEMPTS - 1:
-                _sleep(_BACKOFF_SECONDS)
-            continue
-
-        if response.status_code in _RETRYABLE_STATUS:
-            last_error = f"HTTP{response.status_code}"
-            if attempt < _MAX_ATTEMPTS - 1:
-                retry_after = _retry_after_seconds(response)
-                _sleep(retry_after if retry_after is not None else _BACKOFF_SECONDS)
-            continue
-
-        if response.status_code >= 400:
-            return None, "error", f"HTTP{response.status_code}"
-
-        return response.text, "ok", None
-
-    return None, "unavailable", last_error
-
 
 def _extract_description(position) -> str:
     """Every jobDescriptions <jobDescription><value> text under position, joined with a blank
@@ -186,11 +114,11 @@ class PersonioAdapter:
             that isn't valid XML at all (malformed response).
 
         Raises:
-            RuntimeError: _fetch_text reports "unavailable" (a transient network/5xx flake) —
+            RuntimeError: fetch_text reports "unavailable" (a transient network/5xx flake) —
             distinct from "board doesn't exist", so the caller shouldn't discard company as a bad
             guess.
         """
-        text, status, error = _fetch_text(_FEED_URL.format(company=company))
+        text, status, error = fetch_text(_FEED_URL.format(company=company))
         if status == "unavailable":
             raise RuntimeError(f"personio probe unavailable for {company!r}: {error}")
         if status == "error" or text is None:
@@ -213,10 +141,10 @@ class PersonioAdapter:
             exist, has no current openings, or its response isn't valid XML.
 
         Raises:
-            RuntimeError: _fetch_text reports "unavailable" (a transient network/5xx flake) —
+            RuntimeError: fetch_text reports "unavailable" (a transient network/5xx flake) —
             distinct from "board has no postings".
         """
-        text, status, error = _fetch_text(_FEED_URL.format(company=board_id))
+        text, status, error = fetch_text(_FEED_URL.format(company=board_id))
         if status == "unavailable":
             raise RuntimeError(f"personio list_postings unavailable for {board_id!r}: {error}")
         if status == "error" or text is None:

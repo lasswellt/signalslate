@@ -44,7 +44,7 @@ Design decisions:
 """
 import logging
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import datetime
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
@@ -52,8 +52,10 @@ from typing import Any, Optional
 import requests
 
 from pipeline import connections
+from pipeline.clock import iso_z, utcnow
 from pipeline.domains.registrars._egress import current_egress_ip
 from pipeline.domains.registrars import (
+    TIMEOUT,
     AuthFailed,
     Contact,
     NotEligible,
@@ -62,11 +64,11 @@ from pipeline.domains.registrars import (
     RateLimited,
     RegistrarDomain,
     RegistrarError,
+    domain_tld,
 )
 
 _log = logging.getLogger(__name__)
 
-_TIMEOUT = 30
 _PRODUCTION_HOST = "https://api.godaddy.com"
 _OTE_HOST = "https://api.ote-godaddy.com"
 
@@ -133,14 +135,6 @@ def _auth_headers(config: _Config) -> dict[str, str]:
     if config.auth_mode == "classic":
         return {"Authorization": f"sso-key {config.api_key}:{config.api_secret}"}
     return {"Authorization": f"Bearer {config.api_token}"}
-
-
-def _iso_now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _domain_tld(name: str) -> str:
-    return name.rsplit(".", 1)[-1] if "." in name else name
 
 
 def _error_code(response: Any) -> str:
@@ -253,7 +247,7 @@ class GoDaddyClient:
                 headers=_auth_headers(self._config),
                 params=params,
                 json=json_body,
-                timeout=_TIMEOUT,
+                timeout=TIMEOUT,
             )
         except requests.RequestException:
             raise RegistrarError("GoDaddy API request failed") from None
@@ -314,12 +308,12 @@ class GoDaddyClient:
         Callers must have already enforced purchase guardrails (see registrars/__init__.py's
         Registrar.purchase). privacy is explicitly false and no add-ons are sent (module docstring).
         """
-        tld = _domain_tld(quote.name)
+        tld = domain_tld(quote.name)
         agreement_keys = self._fetch_agreement_keys(tld)
         contact_payload = _contact_payload(contact)
         body = {
             "consent": {
-                "agreedAt": _iso_now(),
+                "agreedAt": iso_z(utcnow()),
                 "agreedBy": current_egress_ip(),
                 "agreementKeys": agreement_keys,
             },

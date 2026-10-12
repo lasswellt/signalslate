@@ -1,8 +1,7 @@
-// Source of truth: api/routers/packages.py (Pydantic Out/Body models). The request helper below is
-// copied from useDomainsApi.ts (itself a copy of useApi.ts's private request()/toApiError()) so this
-// file sends the same CSRF header, JSON body and error normalization, and a coded detail
-// ({code, message}, e.g. package_exists, unrecognized_tracking_number, scan_failed) becomes ApiError.code.
-import { ApiError } from '~/composables/useApi'
+// Source of truth: api/routers/packages.py (Pydantic Out/Body models). The request plumbing lives
+// in utils/api/request.ts; a coded detail ({code, message}, e.g. package_exists,
+// unrecognized_tracking_number, scan_failed) becomes ApiError.code.
+import { request, seg } from '~/utils/api/request'
 
 export type PackageStatus =
   | 'pending'
@@ -96,78 +95,6 @@ export interface AddPackageBody {
   tracking_number: string
   carrier?: string
 }
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
-// FastAPI validation errors: `loc` starts with where the value came from, which is noise to a user.
-const LOC_ORIGINS = new Set(['body', 'query', 'path', 'header', 'cookie'])
-
-function describeValidationEntry(entry: unknown): string | null {
-  if (!isRecord(entry) || typeof entry.msg !== 'string') return null
-  const loc = Array.isArray(entry.loc)
-    ? entry.loc.filter((part): part is string | number => typeof part === 'string' || typeof part === 'number')
-    : []
-  const field = (loc.length > 1 && typeof loc[0] === 'string' && LOC_ORIGINS.has(loc[0]) ? loc.slice(1) : loc).join('.')
-  return field ? `${field}: ${entry.msg}` : entry.msg
-}
-
-function toApiError(error: unknown): ApiError {
-  if (error instanceof ApiError) return error
-  const fetchError = isRecord(error) ? error : {}
-  const response = isRecord(fetchError.response) ? fetchError.response : {}
-  const status = [fetchError.status, fetchError.statusCode, response.status].find(
-    (value): value is number => typeof value === 'number',
-  ) ?? 0
-  const data = fetchError.data ?? response._data
-  const detail = isRecord(data) ? data.detail : undefined
-
-  let message: string | null = null
-  let code: string | undefined
-  if (typeof detail === 'string') {
-    message = detail
-  } else if (Array.isArray(detail)) {
-    message = detail.map(describeValidationEntry).filter((line): line is string => line !== null).join('; ') || null
-  } else if (isRecord(detail)) {
-    if (typeof detail.message === 'string') message = detail.message
-    if (typeof detail.code === 'string') code = detail.code
-  }
-  message ??= status === 0 ? 'The API could not be reached' : `Request failed (${status})`
-  return new ApiError(status, message, code)
-}
-
-type Query = Record<string, string | number | boolean | undefined>
-
-interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
-  body?: unknown
-  params?: Query
-}
-
-/**
- * The one place a request is made from this composable: mirrors useApi.ts's own `request()` so
- * every non-GET carries X-Requested-With and a JSON body, and every failure leaves as an ApiError.
- */
-async function request<T>(url: string, options: RequestOptions = {}): Promise<T> {
-  const method = options.method ?? 'GET'
-  const mutating = method !== 'GET'
-  const params = options.params
-    ? Object.fromEntries(Object.entries(options.params).filter(([, value]) => value !== undefined))
-    : undefined
-  try {
-    return await $fetch<T>(url, {
-      method,
-      params,
-      headers: mutating ? { 'X-Requested-With': 'signalslate', 'Content-Type': 'application/json' } : undefined,
-      body: mutating && options.body !== undefined ? JSON.stringify(options.body) : undefined,
-    })
-  } catch (error) {
-    throw toApiError(error)
-  }
-}
-
-const seg = encodeURIComponent
 
 /**
  * Typed client for the package tracking routes (api/routers/packages.py). Holds no state.

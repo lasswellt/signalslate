@@ -47,6 +47,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import col, select
 
+from api.errors import coded
 from api.serialize import iso_z
 from pipeline import db
 from pipeline.clock import utcnow
@@ -157,27 +158,23 @@ class PurchaseSettingsOut(BaseModel):
     remaining_today: str
 
 
-def _coded(status_code: int, code: str, message: str) -> HTTPException:
-    return HTTPException(status_code, {"code": code, "message": message})
-
-
 def _registrar_error(exc: RegistrarError) -> HTTPException:
     """Maps a typed RegistrarError (or UnknownRegistrar) to a coded HTTP response. Subclasses are
     checked before the RegistrarError base case; see this module's docstring for why str(exc) is
     safe for every branch except AuthFailed."""
     if isinstance(exc, NotEligible):
-        return _coded(409, "not_eligible", str(exc))
+        return coded(409, "not_eligible", str(exc))
     if isinstance(exc, RateLimited):
-        return _coded(429, "rate_limited", str(exc))
+        return coded(429, "rate_limited", str(exc))
     if isinstance(exc, AuthFailed):
-        return _coded(401, "auth_failed", "the registrar rejected this connection's credentials")
+        return coded(401, "auth_failed", "the registrar rejected this connection's credentials")
     if isinstance(exc, IpNotWhitelisted):
-        return _coded(409, "ip_not_whitelisted", str(exc))
+        return coded(409, "ip_not_whitelisted", str(exc))
     if isinstance(exc, Unsupported):
-        return _coded(400, "unsupported", str(exc))
+        return coded(400, "unsupported", str(exc))
     if isinstance(exc, UnknownRegistrar):
-        return _coded(404, "connection_not_found", str(exc))
-    return _coded(502, "registrar_error", str(exc))
+        return coded(404, "connection_not_found", str(exc))
+    return coded(502, "registrar_error", str(exc))
 
 
 def _quote_out(row) -> StoredQuoteOut:
@@ -245,7 +242,7 @@ def check_domains(body: CheckBody) -> list[QuoteOut]:
         try:
             name, _tld = normalize_domain(raw)
         except ValueError as exc:
-            raise _coded(422, "invalid_domain", str(exc)) from None
+            raise coded(422, "invalid_domain", str(exc)) from None
         normalized_names.append(name)
     try:
         registrar = registrar_for(body.connection_id)
@@ -271,7 +268,7 @@ def create_quote(body: CreateQuoteBody) -> StoredQuoteOut:
     try:
         row = domain_purchase.create_quote(body.name, body.connection_id, registrar_factory=registrar_for)
     except ValueError as exc:
-        raise _coded(422, "invalid_domain", str(exc)) from None
+        raise coded(422, "invalid_domain", str(exc)) from None
     except RegistrarError as exc:
         raise _registrar_error(exc) from None
     return _quote_out(row)
@@ -287,7 +284,7 @@ def create_purchase(body: PurchaseBody) -> PurchaseOut:
             body.quote_id, body.confirm_name, body.years, registrar_factory=registrar_for
         )
     except domain_purchase.PurchaseRefused as exc:
-        raise _coded(422, exc.reason_code, exc.detail) from None
+        raise coded(422, exc.reason_code, exc.detail) from None
     return _purchase_out(row, _quotes_by_id([row.quote_id]).get(row.quote_id))
 
 

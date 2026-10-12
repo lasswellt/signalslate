@@ -38,8 +38,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Callable, Optional
 
-from api.serialize import iso_z
-from pipeline.clock import utcnow
+from pipeline.clock import iso_z, utcnow
 from pipeline.db import Domain
 from pipeline.domains import dns as domain_dns
 from pipeline.domains import rdap as domain_rdap

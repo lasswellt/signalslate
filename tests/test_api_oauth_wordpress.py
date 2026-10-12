@@ -4,7 +4,6 @@ true external is WordPress.com's token endpoint (requests.post inside pipeline.o
 FlowStore, oauth_wordpress, the connection store, the vault and the request guard are all real.
 """
 import logging
-import re
 import sys
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit

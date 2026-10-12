@@ -28,12 +28,13 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import and_, func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import col, delete, select
 
+from api.errors import coded
 from api.scheduler import schedule_timezone
 from api.serialize import iso_z
 from pipeline import db
@@ -136,10 +137,6 @@ class CarrierOut(BaseModel):
     configured: bool
 
 
-def _coded(status_code: int, code: str, message: str) -> HTTPException:
-    return HTTPException(status_code, {"code": code, "message": message})
-
-
 def _last_event(session, package_id: int) -> Optional[PackageEvent]:
     return session.exec(select(PackageEvent).where(PackageEvent.package_id == package_id)
                         .order_by(col(PackageEvent.occurred_at).desc(), col(PackageEvent.id).desc())).first()
@@ -180,7 +177,7 @@ def _to_out(package: Package, last: Optional[PackageEvent]) -> PackageOut:
 def _get_or_404(session, package_id: int) -> Package:
     package = session.get(Package, package_id)
     if package is None:
-        raise _coded(404, "package_not_found", "Package not found")
+        raise coded(404, "package_not_found", "Package not found")
     return package
 
 
@@ -280,7 +277,7 @@ def scan_packages() -> list[ScanOut]:
         results = package_scan.scan_all()
     except Exception as exc:
         _log.warning("package scan failed: %s", type(exc).__name__)
-        raise _coded(502, "scan_failed", f"Scan failed ({type(exc).__name__})")
+        raise coded(502, "scan_failed", f"Scan failed ({type(exc).__name__})")
     return [ScanOut(label=r.label, scanned=r.scanned, packages_touched=r.packages_touched,
                     errors=list(r.errors)) for r in results]
 
@@ -299,7 +296,7 @@ def refresh_packages() -> RefreshOut:
         result = poll.refresh_due()
     except Exception as exc:
         _log.warning("package refresh failed: %s", type(exc).__name__)
-        raise _coded(502, "refresh_failed", f"Refresh failed ({type(exc).__name__})")
+        raise coded(502, "refresh_failed", f"Refresh failed ({type(exc).__name__})")
     return RefreshOut(polled=result.polled, changed=result.changed, errors=dict(result.errors))
 
 
@@ -316,14 +313,14 @@ def add_package(body: AddBody) -> PackageOut:
     Raises:
         HTTPException: 422 unrecognized_tracking_number, 409 package_exists (also when archived).
     """
-    exists = _coded(409, "package_exists", "Package already tracked")
+    exists = coded(409, "package_exists", "Package already tracked")
     with db.get_session() as session:
         try:
             package, created = inventory.add_manual(session, body.tracking_number, body.carrier)
             if created:
                 session.commit()
         except ValueError:
-            raise _coded(422, "unrecognized_tracking_number",
+            raise coded(422, "unrecognized_tracking_number",
                          "Tracking number not recognised; specify the carrier")
         except IntegrityError:
             session.rollback()
@@ -331,7 +328,7 @@ def add_package(body: AddBody) -> PackageOut:
             package, created = _existing(session, body), False
         if not created:
             if package is not None and package.archived:
-                raise _coded(409, "package_exists", "Package already tracked (archived)")
+                raise coded(409, "package_exists", "Package already tracked (archived)")
             raise exists
         session.refresh(package)
         return _to_out(package, None)

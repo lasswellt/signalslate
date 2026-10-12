@@ -352,9 +352,3 @@ watch([statusFilter, carrierFilter, textFilter, showArchived], () => load(true))
 
 onMounted(() => load())
 </script>
-
-<style scoped lang="scss">
-.mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-</style>
