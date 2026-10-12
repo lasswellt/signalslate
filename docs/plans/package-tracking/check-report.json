@@ -1,8 +1,8 @@
 {
   "$schema": "blitz-check-report/1.0",
-  "result": "CONDITIONAL",
-  "ts": "2026-10-11T01:48:02Z",
-  "ref": "dc26e87d2d21f36ff6c0fedf4816fa2c8b2e938e",
+  "result": "PASS",
+  "ts": "2026-10-12T03:21:51Z",
+  "ref": "fd828033bdf2e3a4f996092d719dcb10a4ac1593",
   "scope": "plan",
   "plan": "package-tracking",
   "stacks": [
@@ -27,34 +27,16 @@
   },
   "findings": [
     {
-      "id": "posture",
+      "id": "critic",
       "severity": "P3",
-      "where": ".cc-sessions/test-journal.meta.json",
-      "what": "startup-validate schema finding in plugin state file; no injection"
+      "where": "pipeline/packages/poll.py:44",
+      "what": "one-cycle skip after a scan >10 min longer than the next"
     },
     {
       "id": "critic",
       "severity": "P3",
-      "where": "pipeline/packages/poll.py:81",
-      "what": "cycle skip possible once after a scan >10 min longer than the next"
-    },
-    {
-      "id": "critic",
-      "severity": "P3",
-      "where": "api/routers/packages.py:136",
-      "what": "_existing looks up by number only after race (message only)"
-    },
-    {
-      "id": "critic",
-      "severity": "P3",
-      "where": "web/components/PackageDetailDialog.vue:190",
-      "what": "same-id reopen loading flag; actionError unguarded"
-    },
-    {
-      "id": "survey-backend",
-      "severity": "P3",
-      "where": "pipeline/packages/inventory.py:279",
-      "what": "mark_stale flip-flop with poll"
+      "where": "web/components/PackageAddDialog.vue:136",
+      "what": "detected carrier shown after save"
     }
   ],
   "cannot_verify": [],

@@ -62,3 +62,5 @@ Ruling: check --fix — survey/critic logic findings are not auto-fixable; appen
 ## 2026-10-11T01:38:59Z build T-028 start (attempt 1)
 ## 2026-10-11T01:40:06Z verify T-028 ok=true
 ## 2026-10-11T01:48:02Z check CONDITIONAL check-report.md
+Ruling: posture — plugin counters file .cc-sessions/test-journal.meta.json moved to quarantine/ (owner approved); not project code (release gate, main thread)
+## 2026-10-12T03:21:51Z check PASS check-report.md
