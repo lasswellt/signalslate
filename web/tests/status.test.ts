@@ -53,6 +53,14 @@ describe('statusMeta', () => {
     expect(statusMeta('domain', 'anything_else')).toMatchObject({ color: 'grey', label: 'Unknown' })
   })
 
+  it('maps package tracking statuses with icon + label, never teal', () => {
+    expect(statusMeta('package', 'delivered')).toEqual({ color: 'positive', icon: 'check_circle', label: 'Delivered' })
+    expect(statusMeta('package', 'out_for_delivery')).toMatchObject({ color: 'info', label: 'Out for delivery' })
+    expect(statusMeta('package', 'exception')).toMatchObject({ color: 'negative', icon: 'error' })
+    expect(statusMeta('package', 'stale')).toMatchObject({ color: 'warning', label: 'Stale' })
+    expect(statusMeta('package', 'held_at_depot')).toMatchObject({ color: 'grey', icon: 'help', label: 'Held at depot' })
+  })
+
   it('accepts numbers for confidence (0-1) and labels as a percent', () => {
     expect(statusMeta('confidence', 0.9)).toMatchObject({ color: 'positive', label: '90%' })
     expect(statusMeta('confidence', 0.5)).toMatchObject({ color: 'warning', label: '50%' })

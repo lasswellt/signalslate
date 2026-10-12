@@ -552,3 +552,83 @@ design.
    runner will call from (see `ALLOWED_HOSTS` above) — restart the server after changing it.
 5. Run `python -m pipeline.jobs.assist <application_id>` to walk one application, or
    `python -m pipeline.jobs.assist --watch` to keep polling the queue continuously.
+
+## Packages
+
+A **Packages** page (`/packages`) scans every connected Gmail account (read-only, using the existing
+`GMAIL_*` connections) for shipping and order emails, extracts tracking numbers and order ids,
+and tracks each package's status. Tracking numbers are matched with the vendored
+jkeen/tracking_number_data rules, checksums included (MIT; see `pipeline/packages/data/SOURCE.md`).
+It also adds a "packages" source to the morning digest and exposes `GET /api/packages/summary` for
+Home Assistant.
+
+### How status is sourced
+
+Email first. Merchant and carrier notification emails drive status: Walmart, Home Depot, Shopify
+stores, FedEx Delivery Manager, DHL, eBay and similar. The UPS Track API and USPS Tracking v3 are
+polled every 2 hours, and only when their keys are configured. Polling stops 48 hours after
+delivery, and a package with no update for `PACKAGES_STALE_DAYS` becomes stale. There is no
+scraping, no paid aggregator, and Google search is not used.
+
+FedEx and DHL are not polled; their notification emails provide status.
+
+### Carrier developer keys (optional)
+
+- **UPS**: sign in at developer.ups.com, create an app, add the Tracking API product, and copy the
+  client id and secret into `UPS_CLIENT_ID` / `UPS_CLIENT_SECRET`. Tip: a free UPS My Choice account
+  also sends delivery emails, which the scanner picks up without any key.
+- **USPS**: sign in at developers.usps.com, create an app, and copy the client id and secret for the
+  Tracking v3 API into `USPS_CLIENT_ID` / `USPS_CLIENT_SECRET`. The default quota is 60 calls per
+  hour; the poller rate-limits itself under it.
+
+### Configuration
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `PACKAGES_REFRESH_CRON` | `23 */2 * * *` | 5-field cron (in `TZ`) for the scan and carrier poll |
+| `PACKAGES_SCAN_DAYS` | `60` | How many days of mail each scan looks back (1-365) |
+| `PACKAGES_STALE_DAYS` | `30` | Days without an update before a package is marked stale (1-365) |
+| `UPS_CLIENT_ID` / `UPS_CLIENT_SECRET` | unset | UPS Tracking API credentials; UPS polling is off without both |
+| `USPS_CLIENT_ID` / `USPS_CLIENT_SECRET` | unset | USPS Tracking v3 credentials; USPS polling is off without both |
+
+Malformed values fall back to the defaults with a warning.
+
+### API routes
+
+All under `/api`: `GET /packages`, `GET /packages/summary`, `GET /packages/carriers`,
+`POST /packages/scan`, `POST /packages/refresh`, `POST /packages`, `GET|PATCH|DELETE /packages/{id}`.
+
+### Home Assistant
+
+`/api/packages/summary` returns `out_for_delivery_today`, `arriving_today`, `delivered_today`,
+`in_transit`, `exceptions` and `generated_at`, bucketed by the local calendar day:
+
+```yaml
+sensor:
+  - platform: rest
+    name: Packages
+    resource: http://signalslate.local:8000/api/packages/summary
+    value_template: "{{ value_json.in_transit }}"
+    json_attributes:
+      - out_for_delivery_today
+      - arriving_today
+      - delivered_today
+      - in_transit
+      - exceptions
+      - generated_at
+    scan_interval: 600
+```
+
+### Privacy
+
+Email bodies are processed in memory only and are never stored or logged. Stored fields are carrier,
+tracking number, order id, merchant, status and events, plus per email only the subject, sender and
+received time. Redirect links are decoded locally and never followed.
+
+### Limits
+
+- Walmart last-mile `555...` numbers and store or InHome deliveries have no public carrier API: status
+  comes from email only, and the link goes to the Walmart order page.
+- Amazon `TBA` numbers have no public API, so status is email only.
+- eBay-managed shipping depends on what the email says.
+- Freight (SEFL PRO numbers) is link-only.

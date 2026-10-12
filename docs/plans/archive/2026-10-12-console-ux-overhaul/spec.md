@@ -1,5 +1,5 @@
 ---
-status: active
+status: done
 priority: P1
 created: 2026-09-22
 ship: manual

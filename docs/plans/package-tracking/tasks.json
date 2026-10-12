@@ -1,0 +1,1929 @@
+{
+  "$schema": "blitz-tasks/1.0",
+  "plan": "package-tracking",
+  "updated": "2026-10-12T03:18:22Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Vendor jkeen tracking_number_data (MIT) courier JSON + LICENSE under pipeline/packages/data",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/data",
+        "tests/test_packages_data.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "test -f pipeline/packages/data/LICENSE",
+          "timeout": 10
+        },
+        {
+          "cmd": "test -f pipeline/packages/data/couriers/ups.json && test -f pipeline/packages/data/couriers/usps.json && test -f pipeline/packages/data/couriers/fedex.json",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q 'MIT' pipeline/packages/data/LICENSE",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_data.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:10:41Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "test -f pipeline/packages/data/LICENSE",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:40Z"
+          },
+          {
+            "cmd": "test -f pipeline/packages/data/couriers/ups.json && test -f pipeline/packages/data/couriers/usps.json && test -f pipeline/packages/data/couriers/fedex.json",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:40Z"
+          },
+          {
+            "cmd": "grep -q 'MIT' pipeline/packages/data/LICENSE",
+            "exit": 0,
+            "duration_ms": 12,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:40Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_data.py -q",
+            "exit": 0,
+            "duration_ms": 1052,
+            "tail": "...................                                                      [100%]\n19 passed in 0.54s",
+            "recorded_at": "2026-10-12T03:10:41Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research §Q2: vendor the JSON, not the stale 2022 PyPI port. Keep upstream LICENSE and a SOURCE.md with commit sha."
+    },
+    {
+      "id": "T-002",
+      "title": "pipeline/db.py: Package, PackageEvent, PackageEmail tables",
+      "role": "backend",
+      "files": [
+        "pipeline/db.py",
+        "tests/test_package_tables.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qE '^class Package\\(SQLModel, table=True\\)' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^class PackageEvent\\(SQLModel, table=True\\)' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^class PackageEmail\\(SQLModel, table=True\\)' pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/db.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_package_tables.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:10:43Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^class Package\\(SQLModel, table=True\\)' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 14,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:41Z"
+          },
+          {
+            "cmd": "grep -qE '^class PackageEvent\\(SQLModel, table=True\\)' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:41Z"
+          },
+          {
+            "cmd": "grep -qE '^class PackageEmail\\(SQLModel, table=True\\)' pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:41Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/db.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:42Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_package_tables.py -q",
+            "exit": 0,
+            "duration_ms": 1680,
+            "tail": "......                                                                   [100%]\n6 passed in 1.10s",
+            "recorded_at": "2026-10-12T03:10:43Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research Implementation Sketch data model. UNIQUE(carrier,tracking_number) nullable number for order-level packages; PackageEvent dedupe_hash UNIQUE; PackageEmail keyed by account_label+message_id. Never store email bodies."
+    },
+    {
+      "id": "T-003",
+      "title": "pipeline/packages/__init__.py: settings, status enum, env keys",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/__init__.py",
+        "tests/test_packages_settings.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def packages_settings' pipeline/packages/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'PACKAGES_SCAN_DAYS' pipeline/packages/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_settings.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:10:45Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def packages_settings' pipeline/packages/__init__.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:43Z"
+          },
+          {
+            "cmd": "grep -qE 'PACKAGES_SCAN_DAYS' pipeline/packages/__init__.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:43Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/__init__.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:43Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_settings.py -q",
+            "exit": 0,
+            "duration_ms": 1066,
+            "tail": "........                                                                 [100%]\n8 passed in 0.55s",
+            "recorded_at": "2026-10-12T03:10:45Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "scope+tests/conftest.py (add PACKAGES_, UPS_, USPS_ to CONFIG_PREFIXES). Mirror domains/__init__.py domain_settings(). PACKAGES_REFRESH_CRON default '23 */2 * * *', PACKAGES_SCAN_DAYS 60, PACKAGES_STALE_DAYS 30, UPS_CLIENT_ID/SECRET, USPS_CLIENT_ID/SECRET via health.env(); malformed values fall back with a warning."
+    },
+    {
+      "id": "T-004",
+      "title": "pipeline/packages/numbers.py: jkeen matcher with all checksum validators and weak-validator context rule",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/numbers.py",
+        "tests/test_packages_numbers.py"
+      ],
+      "depends_on": [
+        "T-001",
+        "T-003"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def classify' pipeline/packages/numbers.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'sum_product_with_weightings_and_modulo' pipeline/packages/numbers.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/numbers.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_numbers.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:10:47Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def classify' pipeline/packages/numbers.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:45Z"
+          },
+          {
+            "cmd": "grep -qE 'sum_product_with_weightings_and_modulo' pipeline/packages/numbers.py",
+            "exit": 0,
+            "duration_ms": 8,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:45Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/numbers.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:45Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_numbers.py -q",
+            "exit": 0,
+            "duration_ms": 1919,
+            "tail": "........................................................................ [ 25%]\n........................................................................ [ 50%]\n........................................................................ [ 75%]\n...x.x.................................................................  [100%]\n285 passed, 2 xfailed in 1.39s",
+            "recorded_at": "2026-10-12T03:10:47Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Port of docs/_research/assets/2026-10-10_tracking_scan.py classify(): mod10, mod7, s10, luhn, weighted modulo; named-group conversion; DHL Express mod7 and Purolator need carrier context; checksumless need a label. Test vs every courier's test_numbers in the vendored JSON."
+    },
+    {
+      "id": "T-005",
+      "title": "pipeline/packages/html.py: link and text harvester with awstrack/Mandrill decoding",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/html.py",
+        "tests/test_packages_html.py"
+      ],
+      "depends_on": [],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def harvest' pipeline/packages/html.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'awstrack' pipeline/packages/html.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'requests\\.(get|head)|urlopen' pipeline/packages/html.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/html.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_html.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:10:48Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def harvest' pipeline/packages/html.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:47Z"
+          },
+          {
+            "cmd": "grep -qE 'awstrack' pipeline/packages/html.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:47Z"
+          },
+          {
+            "cmd": "! grep -nE 'requests\\.(get|head)|urlopen' pipeline/packages/html.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:47Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/html.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:47Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_html.py -q",
+            "exit": 0,
+            "duration_ms": 1177,
+            "tail": ".............                                                            [100%]\n13 passed in 0.55s",
+            "recorded_at": "2026-10-12T03:10:48Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Research Validation finding 4 + merchant survey: keep a[href] (gmail._TextExtractor drops it), percent-decode awstrack.me/L0 targets, base64 Mandrill p=, extract carrier URL params (tracknum, trknbr, tLabels, tracking_numbers, trackNums, nums) and swiship id=. Never follow redirects. Text output must keep word separators to avoid glued tokens."
+    },
+    {
+      "id": "T-006",
+      "title": "pipeline/packages/links.py: carrier deep-link builder from vendored tracking_url templates",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/links.py",
+        "tests/test_packages_links.py"
+      ],
+      "depends_on": [
+        "T-001"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def tracking_url' pipeline/packages/links.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/links.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_links.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:10:49Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def tracking_url' pipeline/packages/links.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:48Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/links.py",
+            "exit": 0,
+            "duration_ms": 13,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:48Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_links.py -q",
+            "exit": 0,
+            "duration_ms": 968,
+            "tail": ".................                                                        [100%]\n17 passed in 0.49s",
+            "recorded_at": "2026-10-12T03:10:49Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Deep link per carrier for the page; walmart -> walmart.com order page, unknown -> merchant link if captured."
+    },
+    {
+      "id": "T-007",
+      "title": "pipeline/packages/extract.py: tiered extraction passing the 20 fixture cases",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/extract.py",
+        "tests/test_packages_extract.py"
+      ],
+      "depends_on": [
+        "T-004",
+        "T-005"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def extract' pipeline/packages/extract.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -q 'extraction_cases.json' tests/test_packages_extract.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/extract.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_extract.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:10:51Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def extract' pipeline/packages/extract.py",
+            "exit": 0,
+            "duration_ms": 13,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:49Z"
+          },
+          {
+            "cmd": "grep -q 'extraction_cases.json' tests/test_packages_extract.py",
+            "exit": 0,
+            "duration_ms": 200,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:50Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/extract.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:50Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_extract.py -q",
+            "exit": 0,
+            "duration_ms": 1007,
+            "tail": "........................                                                 [100%]\n24 passed in 0.54s",
+            "recorded_at": "2026-10-12T03:10:51Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Order: sender rules (walmart 555, SEFL Pro#, Home Depot labels) > labeled fields > jkeen > URL params. Exclude order/item/phone/shipment/reference-labeled values. Shopify template by subject shape. Order id capture. tests/fixtures/packages/extraction_cases.json is the acceptance set (carrier, tracking_number, order_id)."
+    },
+    {
+      "id": "T-008",
+      "title": "pipeline/packages/email_status.py: per-sender status classifier, ETA parse, noise rejection",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/email_status.py",
+        "tests/test_packages_email_status.py"
+      ],
+      "depends_on": [
+        "T-003"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def classify_status' pipeline/packages/email_status.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/email_status.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_email_status.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:10:52Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def classify_status' pipeline/packages/email_status.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:51Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/email_status.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:51Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_email_status.py -q",
+            "exit": 0,
+            "duration_ms": 981,
+            "tail": "........................................................................ [ 91%]\n.......                                                                  [100%]\n79 passed in 0.58s",
+            "recorded_at": "2026-10-12T03:10:52Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Vocabulary from research Validation finding 9 (Walmart Shipped/Out for delivery/Arrived/Delivered/delayed/Canceled; FedEx; DHL ODD; Home Depot; Shopify; SEFL Dispatched/OFD/Delivered; eBay). Substitution/reminder/refund/review/promo mails -> None. Fixture 'status' and 'eta' fields are acceptance."
+    },
+    {
+      "id": "T-009",
+      "title": "pipeline/packages/inventory.py: upsert, correlation, monotonic status, events, stale/archive",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/inventory.py",
+        "tests/test_packages_inventory.py"
+      ],
+      "depends_on": [
+        "T-002",
+        "T-003",
+        "T-008"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def apply_email' pipeline/packages/inventory.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def apply_carrier_result' pipeline/packages/inventory.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'thread_id ==|threadId ==' pipeline/packages/inventory.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/inventory.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_inventory.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:10:54Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def apply_email' pipeline/packages/inventory.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:52Z"
+          },
+          {
+            "cmd": "grep -qE 'def apply_carrier_result' pipeline/packages/inventory.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:52Z"
+          },
+          {
+            "cmd": "! grep -nE 'thread_id ==|threadId ==' pipeline/packages/inventory.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:52Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/inventory.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:52Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_inventory.py -q",
+            "exit": 0,
+            "duration_ms": 2057,
+            "tail": ".............                                                            [100%]\n13 passed in 1.56s",
+            "recorded_at": "2026-10-12T03:10:54Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Correlate by (carrier, tracking_number), else (merchant domain, order_id); never threadId (Validation finding 3). Status only moves forward except exception; dedupe events by hash; stale after PACKAGES_STALE_DAYS without event."
+    },
+    {
+      "id": "T-010",
+      "title": "pipeline/packages/scan.py: per-account Gmail scan with cursor and 60-day first run",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/scan.py",
+        "tests/test_packages_scan.py"
+      ],
+      "depends_on": [
+        "T-007",
+        "T-009"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def scan_all' pipeline/packages/scan.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'category:purchases' pipeline/packages/scan.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/scan.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_scan.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:10:59Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def scan_all' pipeline/packages/scan.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:54Z"
+          },
+          {
+            "cmd": "grep -qE 'category:purchases' pipeline/packages/scan.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:54Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/scan.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:54Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_scan.py -q",
+            "exit": 0,
+            "duration_ms": 4790,
+            "tail": ".......                                                                  [100%]\n7 passed in 1.18s",
+            "recorded_at": "2026-10-12T03:10:59Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Reuse collectors.gmail _call/list ids/fetch_messages and health.gmail_accounts/gmail_token_response; query = shipping subjects OR category:purchases OR carrier senders, after:<epoch cursor>; keep raw HTML for html.harvest; store only extracted fields, never bodies. Stub requests at import site as tests/test_collectors.py does."
+    },
+    {
+      "id": "T-011",
+      "title": "pipeline/packages/carriers/base.py: CarrierAdapter protocol, TrackResult, OAuth token cache, rate limiter",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/carriers/__init__.py",
+        "pipeline/packages/carriers/base.py",
+        "tests/test_packages_carrier_base.py"
+      ],
+      "depends_on": [
+        "T-003"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'class CarrierAdapter' pipeline/packages/carriers/base.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'class TrackResult' pipeline/packages/carriers/base.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/carriers/base.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_carrier_base.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:11:00Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'class CarrierAdapter' pipeline/packages/carriers/base.py",
+            "exit": 0,
+            "duration_ms": 14,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:59Z"
+          },
+          {
+            "cmd": "grep -qE 'class TrackResult' pipeline/packages/carriers/base.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:59Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/carriers/base.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:10:59Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_carrier_base.py -q",
+            "exit": 0,
+            "duration_ms": 1095,
+            "tail": "..............                                                           [100%]\n14 passed in 0.57s",
+            "recorded_at": "2026-10-12T03:11:00Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Client-credentials token cached until expiry minus 60s; per-carrier min interval and hourly budget (USPS default 60/h); 429 backoff mirroring collectors/gmail.py:80-142; status normalisation to the package enum."
+    },
+    {
+      "id": "T-012",
+      "title": "pipeline/packages/carriers/ups.py: UPS Track API adapter",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/carriers/ups.py",
+        "tests/test_packages_carrier_ups.py"
+      ],
+      "depends_on": [
+        "T-011"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'class UpsAdapter' pipeline/packages/carriers/ups.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'onlinetools\\.ups\\.com' pipeline/packages/carriers/ups.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/carriers/ups.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_carrier_ups.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:11:02Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'class UpsAdapter' pipeline/packages/carriers/ups.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:00Z"
+          },
+          {
+            "cmd": "grep -qE 'onlinetools\\.ups\\.com' pipeline/packages/carriers/ups.py",
+            "exit": 0,
+            "duration_ms": 8,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:00Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/carriers/ups.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:01Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_carrier_ups.py -q",
+            "exit": 0,
+            "duration_ms": 1032,
+            "tail": ".............                                                            [100%]\n13 passed in 0.56s",
+            "recorded_at": "2026-10-12T03:11:02Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "OAuth client credentials at onlinetools.ups.com; dormant when UPS_CLIENT_ID/SECRET absent; activity -> events; response shape from UPS docs, kept behind one parse function with typed errors for 401/403/404/429."
+    },
+    {
+      "id": "T-013",
+      "title": "pipeline/packages/carriers/usps.py: USPS Tracking v3 adapter",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/carriers/usps.py",
+        "tests/test_packages_carrier_usps.py"
+      ],
+      "depends_on": [
+        "T-011"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'class UspsAdapter' pipeline/packages/carriers/usps.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'apis\\.usps\\.com' pipeline/packages/carriers/usps.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/carriers/usps.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_carrier_usps.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:11:03Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'class UspsAdapter' pipeline/packages/carriers/usps.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:02Z"
+          },
+          {
+            "cmd": "grep -qE 'apis\\.usps\\.com' pipeline/packages/carriers/usps.py",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:02Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/carriers/usps.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:02Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_carrier_usps.py -q",
+            "exit": 0,
+            "duration_ms": 983,
+            "tail": "..............                                                           [100%]\n14 passed in 0.50s",
+            "recorded_at": "2026-10-12T03:11:03Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "apis.usps.com OAuth client credentials; 60/h default budget (research Q3, third-party figure); strip IMpb 420+ZIP prefix to the trailing 22 digits before lookup; dormant without USPS_CLIENT_ID/SECRET."
+    },
+    {
+      "id": "T-014",
+      "title": "pipeline/packages/poll.py: refresh_due() polling UPS/USPS packages on cadence",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/poll.py",
+        "tests/test_packages_poll.py"
+      ],
+      "depends_on": [
+        "T-009",
+        "T-012",
+        "T-013"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def refresh_due' pipeline/packages/poll.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/poll.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_poll.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:15:44Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def refresh_due' pipeline/packages/poll.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:15:37Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/packages/poll.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:15:37Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_poll.py -q",
+            "exit": 0,
+            "duration_ms": 6585,
+            "tail": "..............                                                           [100%]\n14 passed in 2.19s",
+            "recorded_at": "2026-10-12T03:15:44Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Due = carrier in configured adapters, not archived, next_check_at <= now; cadence 2h; stop 48h after delivered; walmart/amazon/order-level never polled; errors recorded per carrier, never raised to the scheduler."
+    },
+    {
+      "id": "T-015",
+      "title": "api/scheduler.py: packages_refresh job (scan then poll)",
+      "role": "backend",
+      "files": [
+        "api/scheduler.py",
+        "tests/test_scheduler_packages.py"
+      ],
+      "depends_on": [
+        "T-010",
+        "T-014"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'PACKAGES_JOB_ID = \"packages_refresh\"' api/scheduler.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'def reschedule_packages' api/scheduler.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/scheduler.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_scheduler_packages.py tests/test_scheduler_domains.py -q",
+          "timeout": 180
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:11:08Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'PACKAGES_JOB_ID = \"packages_refresh\"' api/scheduler.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:05Z"
+          },
+          {
+            "cmd": "grep -qE 'def reschedule_packages' api/scheduler.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:05Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/scheduler.py",
+            "exit": 0,
+            "duration_ms": 12,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:05Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_scheduler_packages.py tests/test_scheduler_domains.py -q",
+            "exit": 0,
+            "duration_ms": 2307,
+            "tail": "................                                                         [100%]\n16 passed in 1.53s",
+            "recorded_at": "2026-10-12T03:11:08Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Mirror DOMAINS_JOB_ID / reschedule_domains / next_domains_run_time (api/scheduler.py:59-178); log exception class only."
+    },
+    {
+      "id": "T-016",
+      "title": "Digest: 'packages' source (delivered/out-for-delivery/arriving in window)",
+      "role": "backend",
+      "files": [
+        "pipeline/collectors/packages.py",
+        "pipeline/collectors/__init__.py",
+        "pipeline/health.py",
+        "tests/test_collector_packages.py"
+      ],
+      "depends_on": [
+        "T-009"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'def collect_packages' pipeline/collectors/packages.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'source == \"packages\"' pipeline/collectors/__init__.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '\"packages\"' pipeline/health.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/packages.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_collector_packages.py tests/test_collectors.py tests/test_health.py -q",
+          "timeout": 240
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:11:16Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'def collect_packages' pipeline/collectors/packages.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:08Z"
+          },
+          {
+            "cmd": "grep -qE 'source == \"packages\"' pipeline/collectors/__init__.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:08Z"
+          },
+          {
+            "cmd": "grep -qE '\"packages\"' pipeline/health.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:08Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" pipeline/collectors/packages.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:08Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_collector_packages.py tests/test_collectors.py tests/test_health.py -q",
+            "exit": 0,
+            "duration_ms": 8454,
+            "tail": "........................................................................ [ 25%]\n........................................................................ [ 51%]\n........................................................................ [ 77%]\n...............................................................          [100%]\n279 passed in 7.78s",
+            "recorded_at": "2026-10-12T03:11:16Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Mirror collectors/domains.py and the domains/jobs entries in collectors/__init__.py:86-97 and health.py:752-809 (always-available local source)."
+    },
+    {
+      "id": "T-017",
+      "title": "api/routers/packages.py: list, detail, add, patch/archive, delete, scan, refresh, summary",
+      "role": "backend",
+      "files": [
+        "api/routers/packages.py",
+        "api/main.py",
+        "tests/test_api_packages.py"
+      ],
+      "depends_on": [
+        "T-006",
+        "T-010",
+        "T-014"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '@router\\.get\\(\"/packages\"' api/routers/packages.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '@router\\.get\\(\"/packages/summary\"' api/routers/packages.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'packages\\.router' api/main.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/packages.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_api_packages.py tests/test_api_security.py -q",
+          "timeout": 240
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:11:22Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '@router\\.get\\(\"/packages\"' api/routers/packages.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:17Z"
+          },
+          {
+            "cmd": "grep -qE '@router\\.get\\(\"/packages/summary\"' api/routers/packages.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:17Z"
+          },
+          {
+            "cmd": "grep -qE 'packages\\.router' api/main.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:17Z"
+          },
+          {
+            "cmd": "! grep -nE \"\\bTODO\\b|NotImplementedError|PLACEHOLDER|\\bFIXME\\b\" api/routers/packages.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:17Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_packages.py tests/test_api_security.py -q",
+            "exit": 0,
+            "duration_ms": 5181,
+            "tail": "........................................................................ [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.13/site-packages/starlette/testclient.py:40\n  /home/user/signalslate/venv/lib/python3.13/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n72 passed, 1 warning in 4.18s",
+            "recorded_at": "2026-10-12T03:11:22Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Pattern of api/routers/domains.py (_coded errors, Out models); register in api/main.py:110-126 with static paths before /{id}. /packages/summary for Home Assistant: out_for_delivery_today, arriving_today, delivered_today, in_transit."
+    },
+    {
+      "id": "T-018",
+      "title": "web/composables/usePackagesApi.ts: typed fetchers for packages routes",
+      "role": "frontend",
+      "files": [
+        "web/composables/usePackagesApi.ts",
+        "web/tests/usePackagesApi.test.ts"
+      ],
+      "depends_on": [
+        "T-017"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'export function usePackagesApi' web/composables/usePackagesApi.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '/api/packages/summary' web/composables/usePackagesApi.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/composables/usePackagesApi.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/usePackagesApi.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:11:32Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'export function usePackagesApi' web/composables/usePackagesApi.ts",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:22Z"
+          },
+          {
+            "cmd": "grep -qE '/api/packages/summary' web/composables/usePackagesApi.ts",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:22Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/composables/usePackagesApi.ts",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:22Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/usePackagesApi.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 9854,
+            "tail": "\n RUN  v5.0.1 /home/user/signalslate/web\n\nstdout | tests/usePackagesApi.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n···············\n\n Test Files  1 passed (1)\n      Tests  15 passed (15)\n   Start at  03:11:25\n   Duration  6.68s (tests 85%, environment 9%, transform 4%, setup 1%, import 1%)",
+            "recorded_at": "2026-10-12T03:11:32Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Copy request()/CSRF helper shape from useDomainsApi.ts; interfaces mirror router Out models with a comment pointing at api/routers/packages.py."
+    },
+    {
+      "id": "T-019",
+      "title": "web/components/PackageDetailDialog.vue: event timeline, source emails, deep link, archive",
+      "role": "frontend",
+      "files": [
+        "web/components/PackageDetailDialog.vue",
+        "web/tests/PackageDetailDialog.test.ts"
+      ],
+      "depends_on": [
+        "T-018"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'DialogShell' web/components/PackageDetailDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/PackageDetailDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/PackageDetailDialog.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:11:42Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'DialogShell' web/components/PackageDetailDialog.vue",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:32Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/PackageDetailDialog.vue",
+            "exit": 0,
+            "duration_ms": 11,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:32Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/PackageDetailDialog.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 9781,
+            "tail": "\n RUN  v5.0.1 /home/user/signalslate/web\n\nstdout | tests/PackageDetailDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n·······\n\n Test Files  1 passed (1)\n      Tests  7 passed (7)\n   Start at  03:11:35\n   Duration  6.72s (transform 48%, tests 37%, environment 8%, import 6%, setup 1%)\n\n  Transform  transforming modules took 3.15s · 48% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-10-12T03:11:42Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "DialogShell, StatusChip icon+label per DESIGN.md; never accent teal on status."
+    },
+    {
+      "id": "T-020",
+      "title": "web/components/PackageAddDialog.vue: manual add with live carrier detection",
+      "role": "frontend",
+      "files": [
+        "web/components/PackageAddDialog.vue",
+        "web/tests/PackageAddDialog.test.ts"
+      ],
+      "depends_on": [
+        "T-018"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'DialogShell' web/components/PackageAddDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/PackageAddDialog.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/PackageAddDialog.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:11:52Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'DialogShell' web/components/PackageAddDialog.vue",
+            "exit": 0,
+            "duration_ms": 12,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:42Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/components/PackageAddDialog.vue",
+            "exit": 0,
+            "duration_ms": 12,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:42Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/PackageAddDialog.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 9873,
+            "tail": "\n RUN  v5.0.1 /home/user/signalslate/web\n\nstdout | tests/PackageAddDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n······\n\n Test Files  1 passed (1)\n      Tests  6 passed (6)\n   Start at  03:11:45\n   Duration  6.79s (transform 47%, tests 37%, import 7%, environment 7%, setup 1%)\n\n  Transform  transforming modules took 3.15s · 47% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-10-12T03:11:52Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "POST /api/packages; server returns detected carrier or 422; show it before save."
+    },
+    {
+      "id": "T-021",
+      "title": "web/pages/packages.vue + Tools nav entry: package table with status chips, scan/refresh actions",
+      "role": "frontend",
+      "files": [
+        "web/pages/packages.vue",
+        "web/layouts/default.vue",
+        "web/tests/packages.test.ts"
+      ],
+      "depends_on": [
+        "T-019",
+        "T-020"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE \"to: '/packages'\" web/layouts/default.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'PackageDetailDialog' web/pages/packages.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/pages/packages.vue",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/packages.test.ts tests/smoke.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:12:02Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE \"to: '/packages'\" web/layouts/default.vue",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:52Z"
+          },
+          {
+            "cmd": "grep -qE 'PackageDetailDialog' web/pages/packages.vue",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:52Z"
+          },
+          {
+            "cmd": "! grep -nE 'TODO|PLACEHOLDER' web/pages/packages.vue",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:11:52Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/packages.test.ts tests/smoke.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 9964,
+            "tail": "\n RUN  v5.0.1 /home/user/signalslate/web\n\nstdout | tests/packages.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/smoke.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n···········\n\n Test Files  2 passed (2)\n      Tests  11 passed (11)\n   Start at  03:11:55\n   Duration  7.06s (transform 56%, tests 28%, environment 8%, import 7%, setup 2%)\n\n  Transform  transforming modules took 7.41s · 56% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-10-12T03:12:02Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "scope+web/tests/smoke.test.ts (nav-packages entry)"
+    },
+    {
+      "id": "T-022",
+      "title": "End-to-end backend test: fixture mails to packages, poll, digest item, summary, no body persisted",
+      "role": "test",
+      "files": [
+        "tests/test_packages_e2e.py"
+      ],
+      "depends_on": [
+        "T-015",
+        "T-016",
+        "T-017"
+      ],
+      "verify": [
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_e2e.py -q",
+          "timeout": 300
+        },
+        {
+          "cmd": "venv/bin/python -m pytest -q",
+          "timeout": 900
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:18:19Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_e2e.py -q",
+            "exit": 0,
+            "duration_ms": 3026,
+            "tail": ".                                                                        [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.13/site-packages/starlette/testclient.py:40\n  /home/user/signalslate/venv/lib/python3.13/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 2.01s",
+            "recorded_at": "2026-10-12T03:15:47Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest -q",
+            "exit": 0,
+            "duration_ms": 151952,
+            "tail": "]\n........................................................................ [ 85%]\n........................................................................ [ 87%]\n........................................................................ [ 89%]\n........................................................................ [ 91%]\n........................................................................ [ 93%]\n........................................................................ [ 95%]\n........................................................................ [ 97%]\n........................................................................ [ 99%]\n...............                                                          [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.13/site-packages/starlette/testclient.py:40\n  /home/user/signalslate/venv/lib/python3.13/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/user/signalslate/venv/lib/python3.13/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions\n    warnings.warn(  # deprecated in 14.0 - 2024-11-09\n\ntests/test_api_dockerfile.py::test_callback_code_and_state_never_reach_the_access_log\n  /home/user/signalslate/venv/lib/python3.13/site-packages/uvicorn/protocols/websockets/websockets_impl.py:16: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated\n    from websockets.server import WebSocketServerProtocol\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n3469 passed, 2 xfailed, 3 warnings in 149.62s (0:02:29)",
+            "recorded_at": "2026-10-12T03:18:19Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "Stub Gmail + UPS/USPS HTTP at module import sites; assert no email body text lands in any table; full suite green."
+    },
+    {
+      "id": "T-023",
+      "title": "Docs: README Packages section and .env.example keys",
+      "role": "infra",
+      "files": [
+        "README.md",
+        ".env.example"
+      ],
+      "depends_on": [
+        "T-022"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE '^## Packages' README.md",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^PACKAGES_REFRESH_CRON=' .env.example",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE '^USPS_CLIENT_ID=' .env.example",
+          "timeout": 10
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:14:47Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE '^## Packages' README.md",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:14:46Z"
+          },
+          {
+            "cmd": "grep -qE '^PACKAGES_REFRESH_CRON=' .env.example",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:14:46Z"
+          },
+          {
+            "cmd": "grep -qE '^USPS_CLIENT_ID=' .env.example",
+            "exit": 0,
+            "duration_ms": 8,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:14:47Z"
+          }
+        ]
+      },
+      "origin": "plan",
+      "notes": "How status is sourced (email first), UPS/USPS developer-key signup (UPS My Choice tip), env keys, privacy (bodies never stored), unsupported cases (Walmart 555, Amazon TBA, eBay)."
+    },
+    {
+      "id": "T-024",
+      "title": "check fix: poll cadence tolerance, settings honoured, adapter cache, carrier error handling",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/poll.py",
+        "pipeline/packages/carriers/base.py",
+        "tests/test_packages_poll.py",
+        "tests/test_packages_carriers_base.py"
+      ],
+      "depends_on": [
+        "T-014"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'test_two_hourly_cron_polls_every_run' tests/test_packages_poll.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'DEFAULT_POLL_INTERVAL_HOURS|DEFAULT_STOP_AFTER_DELIVERED_HOURS' pipeline/packages/poll.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_poll.py tests/test_packages_carriers_base.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:18:22Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'test_two_hourly_cron_polls_every_run' tests/test_packages_poll.py",
+            "exit": 0,
+            "duration_ms": 12,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:18:19Z"
+          },
+          {
+            "cmd": "! grep -nE 'DEFAULT_POLL_INTERVAL_HOURS|DEFAULT_STOP_AFTER_DELIVERED_HOURS' pipeline/packages/poll.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:18:19Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_poll.py tests/test_packages_carriers_base.py -q",
+            "exit": 0,
+            "duration_ms": 2388,
+            "tail": "..................                                                       [100%]\n18 passed in 1.88s",
+            "recorded_at": "2026-10-12T03:18:22Z"
+          }
+        ]
+      },
+      "origin": "check",
+      "notes": "check-report P0 + minors"
+    },
+    {
+      "id": "T-025",
+      "title": "check fix: summary ETA day bucket, add_package dup detection/409, input bounds, list N+1",
+      "role": "backend",
+      "files": [
+        "api/routers/packages.py",
+        "pipeline/packages/inventory.py",
+        "tests/test_api_packages.py",
+        "tests/test_packages_inventory.py"
+      ],
+      "depends_on": [
+        "T-017"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'test_summary_arriving_today_date_only_eta_west_of_utc' tests/test_api_packages.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "! grep -nE 'before = len\\(list' api/routers/packages.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_api_packages.py tests/test_packages_inventory.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:14:54Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'test_summary_arriving_today_date_only_eta_west_of_utc' tests/test_api_packages.py",
+            "exit": 0,
+            "duration_ms": 8,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:14:49Z"
+          },
+          {
+            "cmd": "! grep -nE 'before = len\\(list' api/routers/packages.py",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:14:49Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_api_packages.py tests/test_packages_inventory.py -q",
+            "exit": 0,
+            "duration_ms": 4998,
+            "tail": "............................                                             [100%]\n=============================== warnings summary ===============================\nvenv/lib/python3.13/site-packages/starlette/testclient.py:40\n  /home/user/signalslate/venv/lib/python3.13/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n28 passed, 1 warning in 4.16s",
+            "recorded_at": "2026-10-12T03:14:54Z"
+          }
+        ]
+      },
+      "origin": "check",
+      "notes": "check-report P2 x2 + minors"
+    },
+    {
+      "id": "T-026",
+      "title": "check fix: UPS activity times converted to naive UTC",
+      "role": "backend",
+      "files": [
+        "pipeline/packages/carriers/ups.py",
+        "tests/test_packages_carrier_ups.py"
+      ],
+      "depends_on": [
+        "T-012"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'test_activity_times_are_utc' tests/test_packages_carrier_ups.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_carrier_ups.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:14:55Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'test_activity_times_are_utc' tests/test_packages_carrier_ups.py",
+            "exit": 0,
+            "duration_ms": 10,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:14:54Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_carrier_ups.py -q",
+            "exit": 0,
+            "duration_ms": 887,
+            "tail": ".............                                                            [100%]\n13 passed in 0.49s",
+            "recorded_at": "2026-10-12T03:14:55Z"
+          }
+        ]
+      },
+      "origin": "check",
+      "notes": "check-report P2"
+    },
+    {
+      "id": "T-027",
+      "title": "check fix: stale-response guards on packages page and detail dialog; Enter on track link",
+      "role": "frontend",
+      "files": [
+        "web/pages/packages.vue",
+        "web/components/PackageDetailDialog.vue",
+        "web/tests/packages.test.ts",
+        "web/tests/PackageDetailDialog.test.ts"
+      ],
+      "depends_on": [
+        "T-021"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'out of order|stale response' web/tests/packages.test.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "grep -qE 'out of order|stale response' web/tests/PackageDetailDialog.test.ts",
+          "timeout": 10
+        },
+        {
+          "cmd": "cd web && npx vitest run tests/packages.test.ts tests/PackageDetailDialog.test.ts --reporter=dot",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:15:05Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'out of order|stale response' web/tests/packages.test.ts",
+            "exit": 0,
+            "duration_ms": 9,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:14:55Z"
+          },
+          {
+            "cmd": "grep -qE 'out of order|stale response' web/tests/PackageDetailDialog.test.ts",
+            "exit": 0,
+            "duration_ms": 8,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:14:55Z"
+          },
+          {
+            "cmd": "cd web && npx vitest run tests/packages.test.ts tests/PackageDetailDialog.test.ts --reporter=dot",
+            "exit": 0,
+            "duration_ms": 9884,
+            "tail": "\n RUN  v5.0.1 /home/user/signalslate/web\n\nstdout | tests/packages.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\nstdout | tests/PackageDetailDialog.test.ts\n<Suspense> is an experimental feature and its API will likely change.\n\n················\n\n Test Files  2 passed (2)\n      Tests  16 passed (16)\n   Start at  03:14:58\n   Duration  7.07s (transform 55%, tests 29%, environment 8%, import 7%, setup 1%)\n\n  Transform  transforming modules took 7.38s · 55% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns",
+            "recorded_at": "2026-10-12T03:15:05Z"
+          }
+        ]
+      },
+      "origin": "check",
+      "notes": "check-report survey majors"
+    },
+    {
+      "id": "T-028",
+      "title": "check fix: S10 country-code validation; tighten invalid-number and fixture assertions",
+      "role": "test",
+      "files": [
+        "pipeline/packages/numbers.py",
+        "tests/test_packages_numbers.py",
+        "tests/test_packages_extract.py"
+      ],
+      "depends_on": [
+        "T-007"
+      ],
+      "verify": [
+        {
+          "cmd": "grep -qE 'country' pipeline/packages/numbers.py",
+          "timeout": 10
+        },
+        {
+          "cmd": "venv/bin/python -m pytest tests/test_packages_numbers.py tests/test_packages_extract.py tests/test_packages_data.py -q",
+          "timeout": 300
+        }
+      ],
+      "passes": true,
+      "status": "done",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_verify": {
+        "ts": "2026-10-12T03:15:07Z",
+        "ok": true,
+        "failed": "",
+        "tail": "",
+        "runs": [
+          {
+            "cmd": "grep -qE 'country' pipeline/packages/numbers.py",
+            "exit": 0,
+            "duration_ms": 13,
+            "tail": "",
+            "recorded_at": "2026-10-12T03:15:05Z"
+          },
+          {
+            "cmd": "venv/bin/python -m pytest tests/test_packages_numbers.py tests/test_packages_extract.py tests/test_packages_data.py -q",
+            "exit": 0,
+            "duration_ms": 1650,
+            "tail": "........................................................................ [ 21%]\n........................................................................ [ 43%]\n........................................................................ [ 65%]\n...x.x.................................................................. [ 87%]\n..........................................                               [100%]\n328 passed, 2 xfailed in 1.18s",
+            "recorded_at": "2026-10-12T03:15:07Z"
+          }
+        ]
+      },
+      "origin": "check",
+      "notes": "check-report survey minors"
+    }
+  ]
+}

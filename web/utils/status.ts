@@ -15,6 +15,7 @@ export type StatusKind =
   | 'confidence'
   | 'fit'
   | 'domain'
+  | 'package'
 
 export interface StatusMeta {
   color: string
@@ -128,6 +129,22 @@ function domainMeta(value: string): StatusMeta {
   return { color: 'grey', icon: 'help', label: 'Unknown' }
 }
 
+// Package tracking status (pipeline/packages/__init__.py STATUSES; api/routers/packages.py).
+const PACKAGE_META: Record<string, StatusMeta> = {
+  pending: { color: 'grey', icon: 'schedule', label: 'Pending' },
+  in_transit: { color: 'info', icon: 'local_shipping', label: 'In transit' },
+  out_for_delivery: { color: 'info', icon: 'delivery_dining', label: 'Out for delivery' },
+  delivered: { color: 'positive', icon: 'check_circle', label: 'Delivered' },
+  exception: { color: 'negative', icon: 'error', label: 'Exception' },
+  returned: { color: 'warning', icon: 'assignment_return', label: 'Returned' },
+  stale: { color: 'warning', icon: 'hourglass_empty', label: 'Stale' },
+  unknown: { color: 'grey', icon: 'help', label: 'Unknown' },
+}
+
+function packageMeta(value: string): StatusMeta {
+  return PACKAGE_META[value.toLowerCase()] ?? { ...UNKNOWN, label: humanize(value) }
+}
+
 /** Clamps a possibly-out-of-range fraction/score into [0, 1] before scaling to a percent label. */
 function toPercentLabel(fraction: number): string {
   const pct = Math.round(Math.max(0, Math.min(1, fraction)) * 100)
@@ -224,6 +241,8 @@ export function statusMeta(kind: StatusKind, value: string | number | null | und
       return assistMeta(text)
     case 'domain':
       return domainMeta(text)
+    case 'package':
+      return packageMeta(text)
     default:
       return { ...UNKNOWN, label: humanize(text) }
   }

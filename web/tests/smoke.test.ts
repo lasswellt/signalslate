@@ -26,6 +26,7 @@ describe('default layout', () => {
     { testid: 'nav-collectors', href: '/collectors' },
     { testid: 'nav-domains', href: '/domains' },
     { testid: 'nav-jobs', href: '/jobs' },
+    { testid: 'nav-packages', href: '/packages' },
   ]
 
   it('renders all nav items with hrefs, group headers, and the dark toggle', async () => {

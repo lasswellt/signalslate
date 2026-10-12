@@ -10,3 +10,4 @@ web/node_modules/
 web/.nuxt/
 web/.output/
 docs/local/
+!pipeline/packages/data/

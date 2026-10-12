@@ -13,6 +13,7 @@ from api.routers import (
     job_apply,
     jobs,
     oauth,
+    packages,
     runs,
     status,
 )
@@ -118,6 +119,8 @@ app.include_router(connections_router.router, prefix="/api")
 # GET /domains/purchases and GET /domains/purchase-settings, 404ing them as "no such domain".
 app.include_router(domain_buy.router, prefix="/api")
 app.include_router(domains.router, prefix="/api")
+# packages declares its static paths (/packages/summary, /carriers, /scan, /refresh) ahead of /packages/{id}.
+app.include_router(packages.router, prefix="/api")
 app.include_router(collectors.router, prefix="/api")
 app.include_router(oauth.router, prefix="/api")
 # job_apply ahead of jobs: both declare /jobs* paths (different sub-paths, so there is no actual

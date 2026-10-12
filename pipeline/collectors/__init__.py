@@ -87,6 +87,7 @@ def dispatch(source: str, since: datetime, until: datetime) -> "CollectionResult
     from pipeline.collectors.gmail import collect_gmail
     from pipeline.collectors.graph import collect_m365
     from pipeline.collectors.jobs import collect_jobs
+    from pipeline.collectors.packages import collect_packages
     from pipeline.collectors.slack import collect_slack
     from pipeline.collectors.zoom import collect_zoom
     from pipeline.health import gmail_accounts, slack_workspaces
@@ -95,6 +96,8 @@ def dispatch(source: str, since: datetime, until: datetime) -> "CollectionResult
         return collect_domains(since, until)
     if source == "jobs":
         return collect_jobs(since, until)
+    if source == "packages":
+        return collect_packages(since, until)
     if source == "zoom":
         return collect_zoom(since, until)
     if source.startswith("m365_"):

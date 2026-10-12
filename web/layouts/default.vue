@@ -37,6 +37,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: 'Domains', to: '/domains', icon: 'language', slug: 'domains' },
       { label: 'Jobs', to: '/jobs', icon: 'work', slug: 'jobs' },
+      { label: 'Packages', to: '/packages', icon: 'local_shipping', slug: 'packages' },
     ],
   },
 ]

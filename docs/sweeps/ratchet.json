@@ -1,13 +1,13 @@
 {
   "$schema": "blitz-ratchet/1.0",
-  "ref": "531eeb2d6d5a6bdc0ca7805c5dc00f391d789c33",
-  "plan": "console-ux-overhaul",
-  "updated_at": "2026-09-24T01:53:51Z",
+  "ref": "dc26e87d2d21f36ff6c0fedf4816fa2c8b2e938e",
+  "plan": "package-tracking",
+  "updated_at": "2026-10-11T01:48:02Z",
   "metrics": {
     "test_count": {
       "baseline": 404,
-      "current": 414,
-      "min_allowed": 414,
+      "current": 441,
+      "min_allowed": 441,
       "direction": "up",
       "note": "web vitest it()/test() in web/tests; python tests tracked by pytest (2903 passing)"
     },
@@ -53,8 +53,8 @@
     },
     "stale_worktree_branch_count": {
       "baseline": 21,
-      "current": 3,
-      "max_allowed": 3,
+      "current": 0,
+      "max_allowed": 0,
       "direction": "down",
       "note": "agent worktrees left by the console-ux-overhaul build; prune with /blitz:sessions worktrees --apply"
     }
@@ -93,6 +93,17 @@
         "todo_count": 0,
         "stale_worktree_branch_count": 3
       }
+    },
+    {
+      "ref": "ec5ab1c50f7308d4e80e7d86f8c6632c9c7781cd",
+      "plan": "package-tracking",
+      "test_count": 438,
+      "stale_worktree_branch_count": 0
+    },
+    {
+      "ref": "dc26e87d2d21f36ff6c0fedf4816fa2c8b2e938e",
+      "plan": "package-tracking",
+      "test_count": 441
     }
   ]
 }
