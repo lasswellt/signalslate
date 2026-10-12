@@ -1,10 +1,10 @@
 ---
 title: New feature modules must register config prefixes and source lists; scheduled polls need a due tolerance; date-only ETAs are calendar dates
-date: 2026-10-11
+date: 2026-10-12
 tags: [config, scheduler, timezones, carrier-api, gmail, test-expectations]
 stack: [python, fastapi, sqlmodel, apscheduler, nuxt, quasar]
 files: [pipeline/health.py, pipeline/packages/poll.py, api/routers/packages.py, pipeline/packages/carriers/ups.py, pipeline/packages/inventory.py, pipeline/packages/numbers.py, tests/conftest.py, .gitignore, web/utils/status.ts]
-symptoms: ["env var set in container but setting stays default", "known_sources assertion: Left contains one more item", "package polled every 4h instead of 2h", "arriving today counted a day early", "UPS event times off by hours", "vendored data directory missing from commit"]
+symptoms: ["env var set in container but setting stays default", "known_sources assertion: Left contains one more item", "package polled every 4h instead of 2h", "arriving today counted a day early", "UPS event times off by hours", "vendored data directory missing from commit", "git push tag: HTTP 403 from session proxy"]
 plan: package-tracking
 ---
 
@@ -45,6 +45,7 @@ plan: package-tracking
 - Sender rules beat checksums: a Walmart `555…` last-mile number passes the USPS 20 check.
 - Frontend list/detail loads need a request-sequence guard after every await.
 - Cloud container: init `data/digest.db` (`db.init_db()`) and align the Playwright browser revision, or ~27 baseline tests fail for environment reasons.
+- Cloud session git proxy pushes only the session branch: tags (and GitHub releases) must be created by the owner; ship halts at Phase 5 and rolls back the local tag.
 
 ## Related files
 - pipeline/health.py: env merge and known_sources
