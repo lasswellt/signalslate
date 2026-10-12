@@ -147,4 +147,4 @@ def test_reschedule_jobs_adds_then_reschedules_job():
 
 def test_next_jobs_run_time_none_when_unscheduled():
     assert scheduler._scheduler.get_job(scheduler.JOBS_JOB_ID) is None
-    assert scheduler.next_jobs_run_time() is None
+    assert scheduler.next_run_time(scheduler.JOBS_JOB_ID) is None

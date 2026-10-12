@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+### Changed
+- One `request()`/`ApiError` implementation for every web composable (`web/utils/api/request.ts`) instead of four copies
+- One retry core for the ATS adapters (`pipeline.jobs.ats.fetch_json/fetch_text/post_json`) instead of four forks
+- Shared API helpers: `api.errors.coded`, `api.serialize.scrub`, `api.schemas.ImportOut`; scheduler jobs built from one `_cron_trigger`/`_upsert_job` pair
+- `iso_z` lives in `pipeline.clock` (api.serialize re-exports it); registrar timeout and `domain_tld` shared; health checks for local sources share one implementation
+### Fixed
+- `PUT /api/config` rejects an invalid `schedule_cron` with 422 instead of persisting it; a bad stored value no longer stops the scheduler, and the app, at startup
+- Tests run against a per-test database instead of the repository's `data/digest.db`: 26 tests failed on a clean checkout and the suite wrote `data/` files
+- `next_run_time()` returns None for a job pending on a not-yet-started scheduler instead of raising
+### Documentation
+- README: phases and sources reflect the Domains/Jobs/Packages consoles and the unwired triage stage; `MSTODO_ORG_ALIAS` (never read) and the unused `ChannelMessage.Read.All` scope removed; pages list, test prerequisites, Namecheap sandbox host, `ALLOWED_HOSTS` wording corrected
+
 ## [1.3.0] - 2026-10-12
 ### Added
 - Vendored jkeen tracking_number_data courier rules (MIT) for tracking number detection ([3a4da66](https://github.com/lasswellt/signalslate/commit/3a4da66))

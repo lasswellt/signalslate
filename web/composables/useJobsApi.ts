@@ -1,8 +1,6 @@
-// Mirrors api/routers/jobs.py and api/routers/job_apply.py. Split from useApi.ts the same way
-// useDomainsApi.ts was: the request helper below is copied from useApi.ts's own (not exported)
-// `request()`/`toApiError()` pair so this file stays independent of useApi.ts's internals while
-// sending the exact same CSRF header, JSON body and error normalization.
-import { ApiError } from '~/composables/useApi'
+// Mirrors api/routers/jobs.py and api/routers/job_apply.py. Split from useApi.ts to keep that file
+// from growing; the request plumbing lives in utils/api/request.ts.
+import { request, seg } from '~/utils/api/request'
 
 // api/routers/jobs.py BoardOut
 export interface BoardOut {
@@ -222,78 +220,6 @@ export interface FieldProposalOut {
 }
 
 export type ApplicationFileKind = 'cover_letter' | 'resume'
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
-// FastAPI validation errors: `loc` starts with where the value came from, which is noise to a user.
-const LOC_ORIGINS = new Set(['body', 'query', 'path', 'header', 'cookie'])
-
-function describeValidationEntry(entry: unknown): string | null {
-  if (!isRecord(entry) || typeof entry.msg !== 'string') return null
-  const loc = Array.isArray(entry.loc)
-    ? entry.loc.filter((part): part is string | number => typeof part === 'string' || typeof part === 'number')
-    : []
-  const field = (loc.length > 1 && typeof loc[0] === 'string' && LOC_ORIGINS.has(loc[0]) ? loc.slice(1) : loc).join('.')
-  return field ? `${field}: ${entry.msg}` : entry.msg
-}
-
-function toApiError(error: unknown): ApiError {
-  if (error instanceof ApiError) return error
-  const fetchError = isRecord(error) ? error : {}
-  const response = isRecord(fetchError.response) ? fetchError.response : {}
-  const status = [fetchError.status, fetchError.statusCode, response.status].find(
-    (value): value is number => typeof value === 'number',
-  ) ?? 0
-  const data = fetchError.data ?? response._data
-  const detail = isRecord(data) ? data.detail : undefined
-
-  let message: string | null = null
-  let code: string | undefined
-  if (typeof detail === 'string') {
-    message = detail
-  } else if (Array.isArray(detail)) {
-    message = detail.map(describeValidationEntry).filter((line): line is string => line !== null).join('; ') || null
-  } else if (isRecord(detail)) {
-    if (typeof detail.message === 'string') message = detail.message
-    if (typeof detail.code === 'string') code = detail.code
-  }
-  message ??= status === 0 ? 'The API could not be reached' : `Request failed (${status})`
-  return new ApiError(status, message, code)
-}
-
-type Query = Record<string, string | number | boolean | undefined>
-
-interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
-  body?: unknown
-  params?: Query
-}
-
-/**
- * The one place a request is made from this composable: mirrors useApi.ts's own `request()` so
- * every non-GET carries X-Requested-With and a JSON body, and every failure leaves as an ApiError.
- */
-async function request<T>(url: string, options: RequestOptions = {}): Promise<T> {
-  const method = options.method ?? 'GET'
-  const mutating = method !== 'GET'
-  const params = options.params
-    ? Object.fromEntries(Object.entries(options.params).filter(([, value]) => value !== undefined))
-    : undefined
-  try {
-    return await $fetch<T>(url, {
-      method,
-      params,
-      headers: mutating ? { 'X-Requested-With': 'signalslate', 'Content-Type': 'application/json' } : undefined,
-      body: mutating && options.body !== undefined ? JSON.stringify(options.body) : undefined,
-    })
-  } catch (error) {
-    throw toApiError(error)
-  }
-}
-
-const seg = encodeURIComponent
 
 /**
  * Typed client for the jobs-collector and apply-assist routes (api/routers/jobs.py,

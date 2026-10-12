@@ -31,7 +31,7 @@
           </div>
           <div v-if="pkg.tracking_number" class="text-body2" data-testid="package-tracking-number">
             <span class="text-grey-8">{{ carrierLabel }}</span>
-            <span class="q-ml-sm text-mono" style="font-family: monospace">{{ pkg.tracking_number }}</span>
+            <span class="q-ml-sm mono">{{ pkg.tracking_number }}</span>
           </div>
           <div class="text-body2 text-grey-8" data-testid="package-eta">ETA: {{ formatDate(pkg.eta) }}</div>
           <div class="text-body2 text-grey-8" data-testid="package-last-checked">

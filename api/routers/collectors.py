@@ -33,10 +33,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Query
 from pydantic import BaseModel, ConfigDict, Field
 
-from api.serialize import iso_z
+from api.errors import coded
+from api.serialize import MAX_TEXT, iso_z, scrub
 from pipeline import collect, config_store, connections, db, health, runner
 from pipeline.clock import utcnow
 from pipeline.redact import redact
@@ -45,8 +46,6 @@ router = APIRouter(tags=["collectors"])
 
 _log = logging.getLogger(__name__)
 
-# Same cap the runner applies to text it persists: applied after redaction, never before.
-_MAX_TEXT = 1000
 _MAX_PAYLOAD_BYTES = 20 * 1024
 _DEFAULT_PAGE = 50
 
@@ -161,24 +160,14 @@ class ItemDetail(BaseModel):
     truncated: bool
 
 
-def _coded(status_code: int, code: str, message: str) -> HTTPException:
-    return HTTPException(status_code, {"code": code, "message": message})
-
-
 def _require_source(source: str) -> None:
     if source not in health.known_sources():
-        raise _coded(404, "unknown_source", "Unknown source")
+        raise coded(404, "unknown_source", "Unknown source")
 
 
 def _z(dt: datetime) -> str:
     """iso_z for a value that is never None."""
     return iso_z(dt) or ""
-
-
-def _scrub(text: Optional[str], known: list[str]) -> Optional[str]:
-    if text is None:
-        return None
-    return redact(text, known, max_len=_MAX_TEXT)
 
 
 def _state(source: str, active: dict[str, bool], known: list[str]) -> CollectorState:
@@ -188,7 +177,7 @@ def _state(source: str, active: dict[str, bool], known: list[str]) -> CollectorS
         last_attempt = LastAttempt(
             at=_z(cursor.last_attempt_at),
             status=cursor.last_status,
-            detail=_scrub(cursor.last_detail, known),
+            detail=scrub(cursor.last_detail, known),
             item_count=cursor.last_item_count,
         )
     return CollectorState(
@@ -238,7 +227,7 @@ def _register_job(now: datetime) -> str:
         if len(_jobs) >= _MAX_JOBS:
             oldest_finished = next((job_id for job_id, job in _jobs.items() if job.finished_at is not None), None)
             if oldest_finished is None:
-                raise _coded(429, "too_many_dry_runs", "Too many dry runs are in progress; try again shortly")
+                raise coded(429, "too_many_dry_runs", "Too many dry runs are in progress; try again shortly")
             del _jobs[oldest_finished]
         job_id = uuid.uuid4().hex
         _jobs[job_id] = _Job(created_at=now)
@@ -260,7 +249,7 @@ def _wire(value: Any, known: list[str]) -> Any:
     if isinstance(value, datetime):
         return iso_z(value)
     if isinstance(value, str):
-        return redact(value, known, max_len=_MAX_TEXT)
+        return redact(value, known, max_len=MAX_TEXT)
     if isinstance(value, dict):
         return {key: _wire(item, known) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
@@ -308,7 +297,7 @@ def get_dry_run(job_id: str) -> DryRunJob:
         _purge_locked(utcnow())
         job = _jobs.get(job_id)
         if job is None:
-            raise _coded(404, "dry_run_not_found", "Dry run not found or expired")
+            raise coded(404, "dry_run_not_found", "Dry run not found or expired")
         return DryRunJob(status=job.status, result=job.result)
 
 
@@ -325,7 +314,7 @@ def run_source(source: str, background_tasks: BackgroundTasks) -> Accepted:
     """
     _require_source(source)
     if db.has_running_run():
-        raise _coded(409, "run_in_progress", "A run is already in progress")
+        raise coded(409, "run_in_progress", "A run is already in progress")
     background_tasks.add_task(runner.execute_run, trigger="manual", only=source)
     return Accepted(accepted=True)
 
@@ -368,7 +357,7 @@ def _preview(payload_text: str, known: list[str]) -> str:
     except (ValueError, RecursionError):
         parsed = None
     text = collect.preview(parsed if isinstance(parsed, dict) else {})
-    return redact(text, known, max_len=_MAX_TEXT)
+    return redact(text, known, max_len=MAX_TEXT)
 
 
 @router.get("/collectors/{source}/items", response_model=ItemPage)
@@ -419,7 +408,7 @@ def get_source_item(source: str, item_id: int) -> ItemDetail:
     with db.get_session() as session:
         row = session.get(db.CollectedItem, item_id)
     if row is None or row.source != source:
-        raise _coded(404, "item_not_found", "Item not found")
+        raise coded(404, "item_not_found", "Item not found")
 
     try:
         text = json.dumps(json.loads(row.payload), indent=2, ensure_ascii=False)

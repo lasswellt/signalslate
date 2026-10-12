@@ -2,10 +2,10 @@
 Unit tests for pipeline.jobs.ats.personio and pipeline.jobs.ats.jsonld (match_url/probe/
 list_postings).
 
-No network: each module's own requests.get is stubbed (both route entirely through their
-module-local _fetch_text(), never pipeline.jobs.ats.fetch_json(), since Personio's feed is XML and
-a careers page's body is raw HTML, not JSON), following tests/test_ats_greenhouse_lever.py's
-route()/sequence() convention. Each module's own _sleep is stubbed the same way so
+No network: pipeline.jobs.ats.requests.get is stubbed (both adapters route through
+pipeline.jobs.ats.fetch_text(), the raw-body sibling of fetch_json(), since Personio's feed is
+XML and a careers page's body is raw HTML, not JSON), following tests/test_ats_greenhouse_lever.py's
+route()/sequence() convention. pipeline.jobs.ats._sleep is stubbed the same way so
 unavailable-status retries never actually wait.
 """
 import hashlib
@@ -16,6 +16,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from pipeline.jobs import ats  # noqa: E402
 from pipeline.jobs.ats import jsonld, personio  # noqa: E402
 
 
@@ -29,26 +30,27 @@ class FakeResponse:
 @pytest.fixture
 def sleeps_personio(monkeypatch):
     calls = []
-    monkeypatch.setattr(personio, "_sleep", calls.append)
+    monkeypatch.setattr(ats, "_sleep", calls.append)
     return calls
 
 
 @pytest.fixture
 def sleeps_jsonld(monkeypatch):
     calls = []
-    monkeypatch.setattr(jsonld, "_sleep", calls.append)
+    monkeypatch.setattr(ats, "_sleep", calls.append)
     return calls
 
 
 def route(monkeypatch, module, handler):
-    """Stub module.requests.get with handler(url, headers) -> FakeResponse; returns calls."""
+    """Stub pipeline.jobs.ats.requests.get with handler(url, headers) -> FakeResponse; returns calls.
+    `module` is kept for call-site symmetry with the other ATS test files."""
     calls = []
 
     def fake_get(url, headers=None, timeout=None):
         calls.append({"url": url, "headers": headers or {}})
         return handler(url, headers or {})
 
-    monkeypatch.setattr(module.requests, "get", fake_get)
+    monkeypatch.setattr(ats.requests, "get", fake_get)
     return calls
 
 
@@ -141,7 +143,7 @@ def test_personio_probe_raises_on_unavailable(monkeypatch, sleeps_personio):
     route(
         monkeypatch,
         personio,
-        sequence(*([FakeResponse(status_code=503)] * personio._MAX_ATTEMPTS)),
+        sequence(*([FakeResponse(status_code=503)] * ats._MAX_ATTEMPTS)),
     )
     with pytest.raises(RuntimeError):
         personio.adapter.probe("acme")
@@ -199,7 +201,7 @@ def test_personio_list_postings_raises_on_unavailable(monkeypatch, sleeps_person
     route(
         monkeypatch,
         personio,
-        sequence(*([FakeResponse(status_code=503)] * personio._MAX_ATTEMPTS)),
+        sequence(*([FakeResponse(status_code=503)] * ats._MAX_ATTEMPTS)),
     )
     with pytest.raises(RuntimeError):
         personio.adapter.list_postings("acme")
@@ -268,7 +270,7 @@ def test_jsonld_probe_raises_on_unavailable(monkeypatch, sleeps_jsonld):
     route(
         monkeypatch,
         jsonld,
-        sequence(*([FakeResponse(status_code=503)] * jsonld._MAX_ATTEMPTS)),
+        sequence(*([FakeResponse(status_code=503)] * ats._MAX_ATTEMPTS)),
     )
     with pytest.raises(RuntimeError):
         jsonld.adapter.probe("https://example.com/careers")
@@ -323,7 +325,7 @@ def test_jsonld_list_postings_raises_on_unavailable(monkeypatch, sleeps_jsonld):
     route(
         monkeypatch,
         jsonld,
-        sequence(*([FakeResponse(status_code=503)] * jsonld._MAX_ATTEMPTS)),
+        sequence(*([FakeResponse(status_code=503)] * ats._MAX_ATTEMPTS)),
     )
     with pytest.raises(RuntimeError):
         jsonld.adapter.list_postings("https://example.com/careers")

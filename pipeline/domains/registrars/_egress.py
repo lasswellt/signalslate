@@ -8,14 +8,15 @@ before the third caller made deduplicating it worth doing.
 """
 import requests
 
+from pipeline.domains.registrars import TIMEOUT
+
 _IPIFY_URL = "https://api.ipify.org"
-_TIMEOUT = 30
 
 
 def current_egress_ip() -> str:
     """Never raises; "unknown" on any failure, matching how every caller already displays it."""
     try:
-        response = requests.get(_IPIFY_URL, params={"format": "text"}, timeout=_TIMEOUT)
+        response = requests.get(_IPIFY_URL, params={"format": "text"}, timeout=TIMEOUT)
         response.raise_for_status()
         return response.text.strip()
     except requests.RequestException:

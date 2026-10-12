@@ -100,6 +100,18 @@ export function formatNumber(n: number | null | undefined, fallback = FALLBACK):
 }
 
 /**
+ * Whole days from now until an ISO timestamp, rounded up; negative when it is in the past.
+ * @param value - An ISO timestamp (parsed as UTC when it carries no zone), or null.
+ * @returns Days until the instant, or null when value is missing or not a timestamp.
+ */
+export function daysUntil(value: string | null | undefined): number | null {
+  if (!value) return null
+  const target = parseUtc(value).getTime()
+  if (Number.isNaN(target)) return null
+  return Math.ceil((target - Date.now()) / 86_400_000)
+}
+
+/**
  * Converts a snake_case or kebab-case key into a Sentence case label, e.g.
  * "last_seen" -> "Last seen", "manual-source" -> "Manual source". Only the first
  * word is capitalized.

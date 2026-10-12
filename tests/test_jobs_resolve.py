@@ -13,7 +13,6 @@ the real pipeline.jobs.ats.match_any_url() is used unmocked against a real ATS-s
 import sys
 from pathlib import Path
 
-import pytest
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))

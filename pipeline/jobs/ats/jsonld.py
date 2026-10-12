@@ -11,10 +11,8 @@ Design decisions:
 - match_url() always returns None: unlike Greenhouse/Lever/etc., an arbitrary company careers page
   has no distinctive URL shape to pattern-match on. This adapter is only ever reached via the
   resolver ladder's HTML-fingerprint step, never via match_any_url()'s URL-pattern pass.
-- The response here is HTML, not JSON, so this cannot route through pipeline.jobs.ats.fetch_json()
-  (JSON-only). _fetch_text() is a module-local mirror of fetch_json()'s retry/backoff/Retry-After
-  structure, returning the raw response body, matching workday.py's/personio.py's precedent of a
-  module-local helper for a request shape pipeline.jobs.ats.fetch_json() doesn't cover.
+- The response here is HTML, not JSON, so this routes through pipeline.jobs.ats.fetch_text()
+  (the raw-body sibling of fetch_json(), same retry/backoff/Retry-After core).
 - No BeautifulSoup/lxml/extruct dependency: this project has none, and the research doc flags
   extruct as an unverified library claim. _JsonLdExtractor is a stdlib html.parser.HTMLParser
   subclass that collects the raw text of every <script type="application/ld+json"> block, the same
@@ -27,88 +25,18 @@ Design decisions:
   with the same code path.
 - probe() reports confidence=0.6 (below the 1.0 every ATS-API-confirmed adapter reports): this is
   a heuristic HTML scrape, not a confirmed API match, so resolve.py should weight it lower.
-- Same non-conflation as the other adapters: _fetch_text()'s "unavailable" status (transient
+- Same non-conflation as the other adapters: fetch_text()'s "unavailable" status (transient
   network/5xx flake) raises RuntimeError rather than being treated as "no JobPosting present"; a
   404/error, or a 2xx page with no JSON-LD JobPosting block at all, is a routine "not found".
 """
 import hashlib
 import json
-import time
 from html.parser import HTMLParser
 from typing import Any, Optional
 
-import requests
-
-from pipeline.jobs.ats import BoardInfo, RawPosting
-
-_HTTP_TIMEOUT = 15
-_MAX_ATTEMPTS = 3
-_BACKOFF_SECONDS = 5.0
-_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
-
-_USER_AGENT = "SignalSlate JobsCollector/1.0 (+https://github.com/lasswellt/signalslate)"
+from pipeline.jobs.ats import BoardInfo, RawPosting, fetch_text
 
 _PROBE_CONFIDENCE = 0.6
-
-# Indirection so tests neither wait nor depend on real timing (pipeline/jobs/ats's own pattern).
-_sleep = time.sleep
-
-
-def _retry_after_seconds(response: "requests.Response") -> Optional[float]:
-    """The Retry-After header's value in seconds, or None when absent/unparseable (only the
-    delta-seconds form is handled, matching pipeline.jobs.ats._retry_after_seconds)."""
-    raw = response.headers.get("Retry-After")
-    if not raw:
-        return None
-    try:
-        return max(0.0, float(raw))
-    except ValueError:
-        return None
-
-
-def _fetch_text(url: str) -> tuple[Optional[str], str, Optional[str]]:
-    """
-    GETs url with up to _MAX_ATTEMPTS tries, retrying a transient failure with backoff.
-
-    Args:
-        url: The page to GET.
-
-    Returns:
-        (text, status, error), mirroring pipeline.jobs.ats.fetch_json()'s contract but returning
-        the raw response body instead of decoded JSON:
-          - status="ok": text is the response body; error is None.
-          - status="unavailable": every attempt failed transiently (timeout, connection error, or
-            a retryable 429/5xx status); text is None and error names the last failure. A
-            retryable response carrying a Retry-After header sleeps that long instead of the fixed
-            backoff before the next attempt.
-          - status="error": the request failed for a non-transient reason (a non-retryable HTTP
-            status, e.g. 404); text is None and error names it.
-    """
-    headers = {"User-Agent": _USER_AGENT}
-    last_error: Optional[str] = None
-    for attempt in range(_MAX_ATTEMPTS):
-        try:
-            response = requests.get(url, headers=headers, timeout=_HTTP_TIMEOUT)
-        except requests.RequestException as exc:
-            last_error = type(exc).__name__
-            if attempt < _MAX_ATTEMPTS - 1:
-                _sleep(_BACKOFF_SECONDS)
-            continue
-
-        if response.status_code in _RETRYABLE_STATUS:
-            last_error = f"HTTP{response.status_code}"
-            if attempt < _MAX_ATTEMPTS - 1:
-                retry_after = _retry_after_seconds(response)
-                _sleep(retry_after if retry_after is not None else _BACKOFF_SECONDS)
-            continue
-
-        if response.status_code >= 400:
-            return None, "error", f"HTTP{response.status_code}"
-
-        return response.text, "ok", None
-
-    return None, "unavailable", last_error
-
 
 class _JsonLdExtractor(HTMLParser):
     """Collects the raw text content of every <script type="application/ld+json"> block in an
@@ -264,11 +192,11 @@ class JsonLdAdapter:
             fetch fails (a 404/non-2xx) or no JobPosting JSON-LD is found.
 
         Raises:
-            RuntimeError: _fetch_text reports "unavailable" (a transient network/5xx flake) —
+            RuntimeError: fetch_text reports "unavailable" (a transient network/5xx flake) —
             distinct from "no JobPosting present", so the caller shouldn't discard url as a bad
             guess.
         """
-        text, status, error = _fetch_text(url)
+        text, status, error = fetch_text(url)
         if status == "unavailable":
             raise RuntimeError(f"jsonld probe unavailable for {url!r}: {error}")
         if status == "error" or text is None:
@@ -290,10 +218,10 @@ class JsonLdAdapter:
             [] when the fetch fails or no JobPosting JSON-LD is present.
 
         Raises:
-            RuntimeError: _fetch_text reports "unavailable" (a transient network/5xx flake) —
+            RuntimeError: fetch_text reports "unavailable" (a transient network/5xx flake) —
             distinct from "no postings present".
         """
-        text, status, error = _fetch_text(board_id)
+        text, status, error = fetch_text(board_id)
         if status == "unavailable":
             raise RuntimeError(f"jsonld list_postings unavailable for {board_id!r}: {error}")
         if status == "error" or text is None:

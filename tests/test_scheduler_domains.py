@@ -78,4 +78,4 @@ def test_reschedule_domains_adds_then_reschedules_job():
 
 def test_next_domains_run_time_none_when_unscheduled():
     assert scheduler._scheduler.get_job(scheduler.DOMAINS_JOB_ID) is None
-    assert scheduler.next_domains_run_time() is None
+    assert scheduler.next_run_time(scheduler.DOMAINS_JOB_ID) is None

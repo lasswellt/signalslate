@@ -163,6 +163,7 @@
 <script setup lang="ts">
 import { useQuasar } from 'quasar'
 import { useJobsApi } from '~/composables/useJobsApi'
+import { isRecord } from '~/utils/api/request'
 import type { ApplicationOut } from '~/composables/useJobsApi'
 import DialogShell from '~/components/ui/DialogShell.vue'
 import StatusChip from '~/components/ui/StatusChip.vue'
@@ -224,10 +225,6 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const submitting = ref(false)
 const submitError = ref<string | null>(null)
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
 
 /** Pulls the editable fields out of an ApplicationOut's loosely-typed `packet` JSON
  * (pipeline/jobs/packet.py's {cover_letter_text, screening_drafts} shape). */

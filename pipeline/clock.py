@@ -12,8 +12,25 @@ Collectors computing a "last 24h" window MUST use this, not datetime.now(timezon
 comparison against a stored watermark raises.
 """
 from datetime import datetime, timezone
+from typing import Optional
 
 
 def utcnow() -> datetime:
     """Current UTC time as a naive datetime, matching what's stored in the DB."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def iso_z(dt: Optional[datetime]) -> Optional[str]:
+    """
+    Formats a datetime as YYYY-MM-DDTHH:MM:SSZ, the literal the API returns and Graph/Zoom accept.
+
+    dt: a naive UTC datetime (the storage convention), or None. A timezone-aware value is
+    converted to UTC first rather than mislabelled. Sub-second precision is dropped: nothing in
+    the UI needs it and a fixed width keeps the string trivially comparable.
+    Returns None for None.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc)
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")

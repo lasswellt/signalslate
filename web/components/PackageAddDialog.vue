@@ -78,6 +78,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { usePackagesApi } from '~/composables/usePackagesApi'
 import type { AddPackageBody, PackageOut } from '~/composables/usePackagesApi'
 import { ApiError } from '~/composables/useApi'
+import { errorText } from '~/utils/errors'
 import DialogShell from '~/components/ui/DialogShell.vue'
 
 interface CarrierOption {
@@ -155,7 +156,7 @@ async function submit() {
     } else if (err instanceof ApiError && err.code === 'package_exists') {
       errorMessage.value = 'Already tracked'
     } else {
-      errorMessage.value = err instanceof Error ? err.message : 'Failed to add package'
+      errorMessage.value = errorText(err, 'Failed to add package')
     }
   } finally {
     pending.value = false

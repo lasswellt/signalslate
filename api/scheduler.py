@@ -1,6 +1,7 @@
 """
-One BackgroundScheduler job, re-read from config on every (re)schedule call so the config
-editor's schedule field takes effect without a container restart.
+One BackgroundScheduler, four cron jobs: the daily digest run (cron from config.json, re-read on
+every reschedule() so the config editor's schedule field takes effect without a restart) and the
+domains, jobs and packages refreshes (cron from .env, read at startup).
 
 The cron expression is interpreted in TZ (from .env), not the container's clock. A container with
 no TZ set runs UTC, so "0 6 * * *" meant as 6am local would fire at 6am UTC — the wrong hour, and a
@@ -17,7 +18,7 @@ from dotenv import dotenv_values
 from sqlmodel import select
 
 from pipeline import db
-from pipeline.config_store import load_config
+from pipeline.config_store import STATIC_DEFAULTS, load_config
 from pipeline.db import JobsProfile
 from pipeline.domains import DEFAULT_REFRESH_CRON, domain_settings
 from pipeline.domains.inventory import refresh_snapshots, sync_all
@@ -127,74 +128,57 @@ def _run_packages_scheduled() -> None:
         _log.warning("packages scheduled poll failed: %s", type(exc).__name__)
 
 
-def reschedule() -> None:
-    config = load_config()
+def _cron_trigger(cron: str, default: str, env_name: str) -> CronTrigger:
+    """
+    CronTrigger for `cron` in the schedule timezone. A value that fails cron parsing (not just the
+    already-defaulted empty case each settings() reader handles) falls back to `default` with a
+    warning naming `env_name` rather than taking the scheduler down.
+    """
     # "or UTC" is load-bearing: CronTrigger with timezone=None calls get_localzone() itself and
     # does NOT inherit the scheduler's default, because add_job receives a built trigger instance.
-    trigger = CronTrigger.from_crontab(config["schedule_cron"], timezone=schedule_timezone() or UTC)
-    if _scheduler.get_job(JOB_ID):
-        _scheduler.reschedule_job(JOB_ID, trigger=trigger)
+    tz = schedule_timezone() or UTC
+    try:
+        return CronTrigger.from_crontab(cron, timezone=tz)
+    except ValueError:
+        _log.warning("invalid %s %r, using default %r", env_name, cron, default)
+        return CronTrigger.from_crontab(default, timezone=tz)
+
+
+def _upsert_job(job_id: str, func, trigger: CronTrigger) -> None:
+    if _scheduler.get_job(job_id):
+        _scheduler.reschedule_job(job_id, trigger=trigger)
     else:
-        _scheduler.add_job(_run_scheduled, trigger=trigger, id=JOB_ID, replace_existing=True)
+        _scheduler.add_job(func, trigger=trigger, id=job_id, replace_existing=True)
+
+
+def reschedule() -> None:
+    """Digest job from config.json's schedule_cron; an unparseable value falls back to the default."""
+    config = load_config()
+    _upsert_job(JOB_ID, _run_scheduled, _cron_trigger(config["schedule_cron"], STATIC_DEFAULTS["schedule_cron"], "schedule_cron"))
 
 
 def _domains_trigger() -> CronTrigger:
-    """CronTrigger from domain_settings().refresh_cron; a value that fails cron parsing (not just
-    the already-defaulted empty case domain_settings() handles) falls back to DEFAULT_REFRESH_CRON
-    with a warning rather than taking the scheduler down."""
-    cron = domain_settings().refresh_cron
-    try:
-        return CronTrigger.from_crontab(cron, timezone=schedule_timezone() or UTC)
-    except ValueError:
-        _log.warning("invalid DOMAINS_REFRESH_CRON %r, using default %r", cron, DEFAULT_REFRESH_CRON)
-        return CronTrigger.from_crontab(DEFAULT_REFRESH_CRON, timezone=schedule_timezone() or UTC)
+    return _cron_trigger(domain_settings().refresh_cron, DEFAULT_REFRESH_CRON, "DOMAINS_REFRESH_CRON")
 
 
 def reschedule_domains() -> None:
-    trigger = _domains_trigger()
-    if _scheduler.get_job(DOMAINS_JOB_ID):
-        _scheduler.reschedule_job(DOMAINS_JOB_ID, trigger=trigger)
-    else:
-        _scheduler.add_job(_run_domains_scheduled, trigger=trigger, id=DOMAINS_JOB_ID, replace_existing=True)
+    _upsert_job(DOMAINS_JOB_ID, _run_domains_scheduled, _domains_trigger())
 
 
 def _jobs_trigger() -> CronTrigger:
-    """CronTrigger from jobs_settings().refresh_cron; a value that fails cron parsing (not just the
-    already-defaulted empty case jobs_settings() handles) falls back to pipeline.jobs's own
-    DEFAULT_REFRESH_CRON with a warning rather than taking the scheduler down."""
-    cron = jobs_settings().refresh_cron
-    try:
-        return CronTrigger.from_crontab(cron, timezone=schedule_timezone() or UTC)
-    except ValueError:
-        _log.warning("invalid JOBS_REFRESH_CRON %r, using default %r", cron, JOBS_DEFAULT_REFRESH_CRON)
-        return CronTrigger.from_crontab(JOBS_DEFAULT_REFRESH_CRON, timezone=schedule_timezone() or UTC)
+    return _cron_trigger(jobs_settings().refresh_cron, JOBS_DEFAULT_REFRESH_CRON, "JOBS_REFRESH_CRON")
 
 
 def reschedule_jobs() -> None:
-    trigger = _jobs_trigger()
-    if _scheduler.get_job(JOBS_JOB_ID):
-        _scheduler.reschedule_job(JOBS_JOB_ID, trigger=trigger)
-    else:
-        _scheduler.add_job(_run_jobs_scheduled, trigger=trigger, id=JOBS_JOB_ID, replace_existing=True)
+    _upsert_job(JOBS_JOB_ID, _run_jobs_scheduled, _jobs_trigger())
 
 
 def _packages_trigger() -> CronTrigger:
-    """CronTrigger from packages_settings().refresh_cron; a value that fails cron parsing falls back
-    to pipeline.packages's DEFAULT_REFRESH_CRON with a warning rather than taking the scheduler down."""
-    cron = packages_settings().refresh_cron
-    try:
-        return CronTrigger.from_crontab(cron, timezone=schedule_timezone() or UTC)
-    except ValueError:
-        _log.warning("invalid PACKAGES_REFRESH_CRON %r, using default %r", cron, PACKAGES_DEFAULT_REFRESH_CRON)
-        return CronTrigger.from_crontab(PACKAGES_DEFAULT_REFRESH_CRON, timezone=schedule_timezone() or UTC)
+    return _cron_trigger(packages_settings().refresh_cron, PACKAGES_DEFAULT_REFRESH_CRON, "PACKAGES_REFRESH_CRON")
 
 
 def reschedule_packages() -> None:
-    trigger = _packages_trigger()
-    if _scheduler.get_job(PACKAGES_JOB_ID):
-        _scheduler.reschedule_job(PACKAGES_JOB_ID, trigger=trigger)
-    else:
-        _scheduler.add_job(_run_packages_scheduled, trigger=trigger, id=PACKAGES_JOB_ID, replace_existing=True)
+    _upsert_job(PACKAGES_JOB_ID, _run_packages_scheduled, _packages_trigger())
 
 
 def start_scheduler() -> None:
@@ -206,21 +190,11 @@ def start_scheduler() -> None:
     reschedule_packages()
 
 
-def next_run_time():
-    job = _scheduler.get_job(JOB_ID)
-    return job.next_run_time if job else None
-
-
-def next_domains_run_time():
-    job = _scheduler.get_job(DOMAINS_JOB_ID)
-    return job.next_run_time if job else None
-
-
-def next_jobs_run_time():
-    job = _scheduler.get_job(JOBS_JOB_ID)
-    return job.next_run_time if job else None
-
-
-def next_packages_run_time():
-    job = _scheduler.get_job(PACKAGES_JOB_ID)
-    return job.next_run_time if job else None
+def next_run_time(job_id: str = JOB_ID):
+    """
+    The job's next fire time (aware datetime), or None when it is not scheduled. A job added to a
+    scheduler that has not started yet has no next_run_time attribute at all (APScheduler sets it on
+    start), so that case reads as None too.
+    """
+    job = _scheduler.get_job(job_id)
+    return getattr(job, "next_run_time", None) if job else None

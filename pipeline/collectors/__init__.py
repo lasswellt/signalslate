@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from pipeline.clock import iso_z
+
 # How far back to look beyond the digest window. Covers a missed run and items that arrive late
 # (Zoom widens this further — its summaries are generated well after a meeting ends).
 DEFAULT_LOOKBACK = timedelta(hours=24)
@@ -72,8 +74,8 @@ def parse_slack_ts(value: str) -> Optional[datetime]:
 
 
 def to_graph_time(value: datetime) -> str:
-    """Naive UTC to the literal Graph wants in $filter and calendarView params."""
-    return value.strftime("%Y-%m-%dT%H:%M:%SZ")
+    """Naive UTC to the literal Graph wants in $filter and calendarView params (clock.iso_z)."""
+    return iso_z(value) or ""
 
 
 def dispatch(source: str, since: datetime, until: datetime) -> "CollectionResult":

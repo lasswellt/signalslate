@@ -25,7 +25,7 @@ Design decisions:
   a worker thread with a wall-clock timeout here: one slow/hung research call must never hang this
   request forever. A timeout degrades to "no hit", the same shape research_company itself already
   returns on a call failure — it never surfaces as a 5xx.
-- Errors are {code, message} (api.routers.domains._coded pattern), never raw exception text.
+- Errors are {code, message} (api.errors.coded), never raw exception text.
 - PUT /jobs/boards/{id} is the manual override: it always sets resolved_by="manual",
   confidence=1.0 and a fresh verified_at, on the theory that a human confirming a board by hand is
   the most trustworthy signal available.
@@ -35,10 +35,12 @@ import logging
 from datetime import timedelta
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import APIRouter
+from pydantic import BaseModel, ConfigDict
 from sqlmodel import col, select
 
+from api.errors import coded
+from api.schemas import ImportBody, ImportOut
 from api.serialize import iso_z
 from pipeline import db
 from pipeline.clock import utcnow
@@ -49,10 +51,6 @@ router = APIRouter(tags=["jobs"])
 
 _log = logging.getLogger(__name__)
 
-# A pasted CSV import body is capped well above any real watchlist (one line per company) but far
-# short of a request that could tie up the worker thread parsing it (api.routers.domains.
-# ImportBody's own _MAX_IMPORT_CHARS reasoning).
-_MAX_IMPORT_CHARS = 200_000
 
 # Wall-clock cap on one rescan's research_company() call: web_search/web_fetch tool round-trips can
 # be slow, and this endpoint must return in a bounded time even when the LLM step hangs or is slow.
@@ -63,10 +61,6 @@ _rescan_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_n
 # How far back import-inbox scans CollectedItem for job-alert emails, each call. Wide enough to
 # catch anything missed by a prior run without re-scanning a whole mailbox's history every click.
 _INBOX_IMPORT_WINDOW_DAYS = 30
-
-
-def _coded(status_code: int, code: str, message: str) -> HTTPException:
-    return HTTPException(status_code, {"code": code, "message": message})
 
 
 class BoardOut(BaseModel):
@@ -96,22 +90,6 @@ class AddCompanyBody(BaseModel):
 
     name: str
     domain: Optional[str] = None
-
-
-class ImportBody(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    csv: str = Field(max_length=_MAX_IMPORT_CHARS)
-
-
-class RejectedRow(BaseModel):
-    line: int
-    reason: str
-
-
-class ImportOut(BaseModel):
-    added: list[str]
-    rejected: list[RejectedRow]
 
 
 class BoardOverrideBody(BaseModel):
@@ -214,7 +192,7 @@ def add_company(body: AddCompanyBody) -> CompanyOut:
         try:
             row = seeds.add_company(session, body.name, body.domain, source="manual")
         except ValueError as exc:
-            raise _coded(422, "invalid_company", str(exc)) from None
+            raise coded(422, "invalid_company", str(exc)) from None
         session.commit()
         session.refresh(row)
         return _company_out(row, session)
@@ -227,10 +205,7 @@ def import_companies(body: ImportBody) -> ImportOut:
     with db.get_session() as session:
         result = seeds.import_csv(session, body.csv)
         session.commit()
-        return ImportOut(
-            added=result.added,
-            rejected=[RejectedRow(line=line_number, reason=reason) for line_number, reason in result.rejected],
-        )
+        return ImportOut.from_result(result)
 
 
 @router.post("/jobs/companies/import-yc", response_model=ImportOut)
@@ -240,10 +215,7 @@ def import_companies_yc() -> ImportOut:
     with db.get_session() as session:
         result = seeds.import_yc(session)
         session.commit()
-        return ImportOut(
-            added=result.added,
-            rejected=[RejectedRow(line=line_number, reason=reason) for line_number, reason in result.rejected],
-        )
+        return ImportOut.from_result(result)
 
 
 @router.post("/jobs/companies/import-hn", response_model=ImportOut)
@@ -254,10 +226,7 @@ def import_companies_hn() -> ImportOut:
     with db.get_session() as session:
         result = seeds.import_hn(session)
         session.commit()
-        return ImportOut(
-            added=result.added,
-            rejected=[RejectedRow(line=line_number, reason=reason) for line_number, reason in result.rejected],
-        )
+        return ImportOut.from_result(result)
 
 
 @router.post("/jobs/companies/import-inbox", response_model=ImportOut)
@@ -270,10 +239,7 @@ def import_companies_inbox() -> ImportOut:
         until = utcnow()
         result = inbox_seed.seed_from_inbox(session, until - timedelta(days=_INBOX_IMPORT_WINDOW_DAYS), until)
         session.commit()
-        return ImportOut(
-            added=result.added,
-            rejected=[RejectedRow(line=line_number, reason=reason) for line_number, reason in result.rejected],
-        )
+        return ImportOut.from_result(result)
 
 
 @router.post("/jobs/companies/{id}/rescan", response_model=CompanyOut)
@@ -287,7 +253,7 @@ def rescan_company(id: int) -> CompanyOut:
     with db.get_session() as session:
         company = session.get(JobCompany, id)
         if company is None:
-            raise _coded(404, "company_not_found", "Company not found")
+            raise coded(404, "company_not_found", "Company not found")
 
         boards = session.exec(select(JobBoard).where(JobBoard.company_id == id)).all()
         if not boards:
@@ -341,7 +307,7 @@ def override_board(id: int, body: BoardOverrideBody) -> BoardOut:
     with db.get_session() as session:
         row = session.get(JobBoard, id)
         if row is None:
-            raise _coded(404, "board_not_found", "Board not found")
+            raise coded(404, "board_not_found", "Board not found")
         row.ats_kind = body.ats_kind
         row.board_id = body.board_id
         row.resolved_by = "manual"

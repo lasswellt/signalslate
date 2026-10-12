@@ -56,7 +56,6 @@
 <script setup lang="ts">
 import AsyncState from '~/components/ui/AsyncState.vue'
 import DomainTable from '~/components/DomainTable.vue'
-import { parseUtc } from '~/composables/useApi'
 import { useDomainsApi } from '~/composables/useDomainsApi'
 import type { DomainOut } from '~/composables/useDomainsApi'
 
@@ -83,13 +82,6 @@ const ownedDomains = computed(() => {
   if (hideMissing.value) list = list.filter((d) => d.missing_since === null)
   return list
 })
-
-function daysUntil(value: string | null): number | null {
-  if (!value) return null
-  const target = parseUtc(value).getTime()
-  if (Number.isNaN(target)) return null
-  return Math.ceil((target - Date.now()) / 86_400_000)
-}
 
 // No expires_at (null) is "unknown", never "expired": a domain the registrar reports no date for
 // must not vanish behind the hide-expired filter.

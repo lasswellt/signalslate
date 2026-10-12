@@ -19,7 +19,8 @@ Self-hosted, LAN-only, runs anywhere Docker runs.
 | Zoom | Yesterday's meetings, participants, AI Companion summaries | Sign in with Zoom (OAuth), or Server-to-Server |
 | Slack (any number of workspaces) | Channels, group DMs, threads since the last run | User token per workspace |
 | Gmail (any number of accounts) | Mail | OAuth Desktop client, one-time interactive sign-in per account |
-| reMarkable | Delivery target for the rendered PDF | One-time device pairing via `rmapi` |
+| Domains, Jobs, Packages | Local tables the daily refresh jobs fill (see below); always on, no credentials |
+| reMarkable | Delivery target for the rendered PDF (planned, Phase 5) | One-time device pairing via `rmapi` |
 
 Sources are declared in `.env` or added in the web UI's [Management UI](#management-ui), and
 toggled per-run there. Adding a tenant, workspace or account is one more block of environment
@@ -31,12 +32,17 @@ variables or one more connection; nothing in the code is fixed to a count.
    awaiting sign-off against live tenants)*
 2. **Collectors** — pull the last 24h from each source (Microsoft 365, Zoom, Slack, Gmail).
    *(built; never yet run against a live API)*
-3. Synthesis — digest + todo extraction.
-4. Render — PDF.
-5. Deliver — push to reMarkable.
+3. Synthesis — digest + todo extraction. *(the map/triage stage exists in `pipeline/triage.py` and
+   can be dry-run with `python -m pipeline.triage_cli <source> --dry`; it is not yet wired into a
+   run)*
+4. Render — PDF. *(not started; `GET /api/runs/{id}/pdf` answers 404 until it exists)*
+5. Deliver — push to reMarkable. *(not started)*
 
-The web UI and API are already in place. A "run" today checks every active source's auth, then
-collects that source's last 24h into the `collecteditem` table. Later phases extend
+The web UI and API are already in place, as are the three consoles that grew beside the digest:
+[Domains](#domains), [Jobs](#jobs) and [Packages](#packages), each with its own scheduled refresh.
+A "run" today checks every active source's auth, then collects each source's items since its
+last successful run (24h on the first run, at most 7 days of backfill after an outage) into the
+`collecteditem` table, one source after another. Later phases extend
 `pipeline/runner.py::execute_run()` without changing the API or UI.
 
 Every collector's knowledge of its API's response shape comes from documentation, not from live
@@ -63,8 +69,8 @@ Azure Portal > App registrations > New registration:
 - Supported account types: **Accounts in any organizational directory**
 - Redirect URI: **Mobile and desktop applications** > `http://localhost`
 - Authentication > **Allow public client flows: Yes**
-- API permissions (delegated): `Mail.Read`, `Calendars.Read`, `Tasks.Read`, `Chat.Read`.
-  Add `ChannelMessage.Read.All` only if you want Teams channel posts (needs admin consent).
+- API permissions (delegated): `Mail.Read`, `Calendars.Read`, `Tasks.Read`, `Chat.Read`. Teams
+  channel posts are not collected, only chats, so `ChannelMessage.Read.All` is not needed.
   Decide the full list now; adding a scope later forces re-consent in every tenant.
 
 Put the Application (client) ID in `M365_CLIENT_ID` and one `M365_ORG<n>_ALIAS` /
@@ -95,8 +101,8 @@ https://login.microsoftonline.com/<TENANT_ID>/v2.0/adminconsent?client_id=<CLIEN
 
 ### Microsoft To Do
 
-`MSTODO_ORG_ALIAS` names which tenant's mailbox holds your To Do lists. `Tasks.Read` is already in
-the scope list above.
+To Do lists are read from every tenant you sign in to; `Tasks.Read` is already in the scope list
+above. There is no per-tenant switch.
 
 ### Zoom
 
@@ -214,8 +220,9 @@ One OAuth Desktop client, one refresh token per account. Only `gmail.readonly` i
    Paste the printed `GMAIL_<LABEL>_REFRESH_TOKEN=...` line into `.env` on the server; the label
    becomes the source id (`gmail_<label>`). On a headless box use `--no-browser` (and `--port` to
    pin the port): open the printed URL on any machine. The redirect goes to `127.0.0.1` on the box
-   running the script, so SSH-forward that port. Every run mints a new token and Google keeps only
-   100 per account per client, so do not re-run it casually.
+   running the script, so SSH-forward that port. A run that signs in mints a new token and Google
+   keeps only 100 per account per client, so do not re-run it casually; with a working token the
+   script exits 0 without signing in unless you pass `--force`.
 
 What kills the token: a Google account password change, revoked access, six months unused, or the
 consent screen left in Testing. The dashboard shows `invalid_grant`; re-running the bootstrap for
@@ -277,6 +284,8 @@ confirms those names are right.
 ### Tests
 
 ```
+pip install -r requirements-assist.txt   # the apply-assist tests drive a real headless Chromium
+python -m playwright install chromium
 pytest
 ```
 
@@ -324,7 +333,7 @@ website pointing its own name at your server to read the API from your browser),
 `PUBLIC_BASE_URL`. If you reach the API by any other name, or a reverse proxy forwards a different
 `Host` (for example the compose service name `api`), list those names in the new optional
 `ALLOWED_HOSTS`. It is not authentication: anyone who can reach the ports can still use the API.
-`ALLOWED_HOSTS` is comma-separated, hostnames only (no scheme, path or port; ports are ignored),
+`ALLOWED_HOSTS` is comma-separated, hostnames only (no scheme or path; a `:port` suffix is ignored),
 case-insensitive, and IPv6 works with or without brackets. Wildcards are dropped, and the number
 dropped is logged at startup. `WEB_ORIGINS` and `ALLOWED_HOSTS` are read once at startup, so
 changing either needs a restart.
@@ -428,6 +437,13 @@ npm test
   render phase exists.
 - **Config** (`/config`) — schedule (cron), active sources, tracker choice. Saving reschedules
   immediately.
+- **Domains** (`/domains`, plus `/domains/watchlist`, `/domains/ideas`, `/domains/purchases`) — see
+  [Domains](#domains).
+- **Jobs** (`/jobs`, plus `/jobs/companies`, `/jobs/applications`, `/jobs/profile`) — see
+  [Jobs](#jobs).
+- **Packages** (`/packages`) — see [Packages](#packages).
+
+The sidebar labels the first four Overview, Runs, Schedule and Accounts; the routes are as listed.
 
 No auth on the interface or the API — LAN-only by design. Put it behind your network or an
 authenticating reverse proxy before exposing it anywhere else; see the
@@ -458,7 +474,7 @@ the server's own public **IPv4** address, which you must *also* add to Namecheap
 same page — the connection dialog's Detect button fills the field for you, but the whitelist entry
 on Namecheap's side is a separate, manual step. Calls silently fail if the whitelist and the
 server's actual egress address drift apart (common on a home connection with a dynamic IP).
-Namecheap accepts IPv4 only. There is a sandbox (`sandbox.namecheap.com`) with its own account and
+Namecheap accepts IPv4 only. There is a sandbox (`www.sandbox.namecheap.com`) with its own account and
 test-registry data; use it to test the purchase flow first.
 
 ### GoDaddy
@@ -526,6 +542,7 @@ that publishes structured job data without matching any known ATS.
 
 ### Cost controls
 
+Claude calls use `ANTHROPIC_API_KEY` from `.env` (the model id is `SIGNALSLATE_MAP_MODEL`, optional).
 Two settings cap the only two places a run can spend on the Anthropic API: `JOBS_MAX_LLM_RESOLVES_PER_RUN`
 caps how many companies per run may escalate to the resolver ladder's Claude web-research step, and
 `JOBS_MAX_SCORE_PER_RUN` caps how many postings per run Claude scores for fit. Postings that don't

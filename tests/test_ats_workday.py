@@ -1,10 +1,10 @@
 """
 Unit tests for pipeline.jobs.ats.workday (match_url/probe/list_postings).
 
-No network: workday.requests.post (the jobs-list POST) and pipeline.jobs.ats.requests.get (the
-per-posting description GET, via fetch_json) are both stubbed, following
-tests/test_ats_greenhouse_lever.py's route()/sequence() convention. Both modules' _sleep are
-stubbed the same way so unavailable-status retries never actually wait.
+No network: pipeline.jobs.ats.requests.post (the jobs-list POST, via post_json) and
+pipeline.jobs.ats.requests.get (the per-posting description GET, via fetch_json) are both
+stubbed, following tests/test_ats_greenhouse_lever.py's route()/sequence() convention.
+pipeline.jobs.ats._sleep is stubbed the same way so unavailable-status retries never actually wait.
 """
 import sys
 from pathlib import Path
@@ -33,20 +33,19 @@ class FakeResponse:
 @pytest.fixture
 def sleeps(monkeypatch):
     calls = []
-    monkeypatch.setattr(workday, "_sleep", calls.append)
     monkeypatch.setattr(ats, "_sleep", calls.append)
     return calls
 
 
 def route_post(monkeypatch, handler):
-    """Stub workday.requests.post with handler(url, payload, headers) -> FakeResponse."""
+    """Stub pipeline.jobs.ats.requests.post with handler(url, payload, headers) -> FakeResponse."""
     calls = []
 
     def fake_post(url, json=None, headers=None, timeout=None):
         calls.append({"url": url, "payload": json or {}, "headers": headers or {}})
         return handler(url, json or {}, headers or {})
 
-    monkeypatch.setattr(workday.requests, "post", fake_post)
+    monkeypatch.setattr(ats.requests, "post", fake_post)
     return calls
 
 
@@ -122,7 +121,7 @@ def test_probe_returns_none_on_malformed_board_id(monkeypatch, sleeps):
 
 
 def test_probe_raises_on_unavailable(monkeypatch, sleeps):
-    route_post(monkeypatch, sequence(*([FakeResponse(status_code=503)] * workday._MAX_ATTEMPTS)))
+    route_post(monkeypatch, sequence(*([FakeResponse(status_code=503)] * ats._MAX_ATTEMPTS)))
     with pytest.raises(RuntimeError):
         workday.adapter.probe("acme|wd5|External")
 
@@ -265,6 +264,6 @@ def test_list_postings_returns_empty_on_malformed_board_id(monkeypatch, sleeps):
 
 
 def test_list_postings_raises_on_unavailable(monkeypatch, sleeps):
-    route_post(monkeypatch, sequence(*([FakeResponse(status_code=503)] * workday._MAX_ATTEMPTS)))
+    route_post(monkeypatch, sequence(*([FakeResponse(status_code=503)] * ats._MAX_ATTEMPTS)))
     with pytest.raises(RuntimeError):
         workday.adapter.list_postings("acme|wd5|External")

@@ -26,6 +26,15 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional, Protocol
 
+# One HTTP timeout for every registrar call (and the egress-IP lookup): registrar APIs are slow
+# but bounded, and a hung call must not stall a sync or a purchase indefinitely.
+TIMEOUT = 30
+
+
+def domain_tld(name: str) -> str:
+    """The text after the last dot (normalize_domain() output), or the whole name without one."""
+    return name.rsplit(".", 1)[-1] if "." in name else name
+
 
 @dataclass(frozen=True)
 class RegistrarDomain:

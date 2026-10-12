@@ -31,7 +31,6 @@ import requests
 from pipeline import connections, oauth_gmail
 from pipeline.oauth_flows import (
     MODES,
-    FlowError,
     FlowStore,
     PendingFlow,
     build_callback_url,

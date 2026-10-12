@@ -210,6 +210,7 @@
 
 <script setup lang="ts">
 import { ApiError } from '~/composables/useApi'
+import { isRecord } from '~/utils/api/request'
 import { useDomainsApi } from '~/composables/useDomainsApi'
 import type { InspectOut, SnapshotSummary } from '~/composables/useDomainsApi'
 import DialogShell from '~/components/ui/DialogShell.vue'
@@ -298,10 +299,6 @@ const intelLoading = ref(false)
 const intelError = ref<string | null>(null)
 const subdomainsExpanded = ref(false)
 const archivedExpanded = ref(false)
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
 
 function asString(value: unknown): string | null {
   return typeof value === 'string' ? value : null
