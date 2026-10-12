@@ -79,3 +79,5 @@ Concern (T-023, med): connections.test.ts test-result assertions moved from raw 
 Ruling: spec-defect — T-008 verify[] pins web/pages/history.vue, relocated by T-024 to fix the /history/:id routing bug; T-008 checks re-expressed at the new path as T-025 (passes). T-008 is superseded, not regressed (T-008, check)
 ## 2026-09-24T02:45:44Z check CONDITIONAL check-report.md
 ## 2026-09-24T03:01:22Z verify T-026 ok=true (19 merged worktrees removed; 3 kept: T-018 ahead-1 superseded commit, T-015 and T-003 dirty scratch)
+Ruling: descope — T-008 superseded by T-025 (relocated history page, T-024); plan closed by owner, CONDITIONAL check 2026-09-24 stands (T-008, build)
+## 2026-10-12T03:04:18Z plan closed by owner; status done, archived
