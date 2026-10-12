@@ -64,3 +64,4 @@ Ruling: check --fix — survey/critic logic findings are not auto-fixable; appen
 ## 2026-10-11T01:48:02Z check CONDITIONAL check-report.md
 Ruling: posture — plugin counters file .cc-sessions/test-journal.meta.json moved to quarantine/ (owner approved); not project code (release gate, main thread)
 ## 2026-10-12T03:21:51Z check PASS check-report.md
+## 2026-10-12T03:23:42Z ship v1.3.0 halted: tag push refused by session git proxy (branch-only); local tag rolled back; prep commit bfbcbdb pushed. Owner to tag + release locally.
