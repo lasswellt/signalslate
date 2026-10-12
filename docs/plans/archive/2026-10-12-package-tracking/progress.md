@@ -65,3 +65,4 @@ Ruling: check --fix — survey/critic logic findings are not auto-fixable; appen
 Ruling: posture — plugin counters file .cc-sessions/test-journal.meta.json moved to quarantine/ (owner approved); not project code (release gate, main thread)
 ## 2026-10-12T03:21:51Z check PASS check-report.md
 ## 2026-10-12T03:23:42Z ship v1.3.0 halted: tag push refused by session git proxy (branch-only); local tag rolled back; prep commit bfbcbdb pushed. Owner to tag + release locally.
+## 2026-10-12T03:38:24Z ship v1.3.0 tag=v1.3.0 (owner tagged main 51f3ef8, merge of #13) release=https://github.com/lasswellt/signalslate/releases/tag/v1.3.0
